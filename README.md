@@ -38,9 +38,8 @@ Or install as a service to start with the RPI.
 ## Hardware requirements:
 ### Backend:
 - Raspberry Pi
-- Adafruit PCA9685 on I2C channel 40 and IRF540 mosfet driver boards to run your LEDs
+- Arduino Mega 2560 and IRLZ234N mosfets to run your LEDs and the analog inputs for measuring battery voltage and water tank level respectively
 - Adafruit Ultimate GPS Breakout PA1616S
-- 2 x ADS1115 4 channel I2C analog to digital converter at addresses 48 and 49. I used solderable breadboard with jumpers
 - 4 channel 5VDC relay module
 - DS18B20 Temperature Sensor
 - fuel level sensor that scales from 240ohm (full) to 33ohm (empty)
@@ -52,8 +51,8 @@ Or install as a service to start with the RPI.
 
 ### Connections
 See config.json for lighting, relay and reed switch connections.
-- Battery level sensor: ADS1115 address 49 channel A0.
-- Water sensor: ADS1115 address 49 channel A1.
+- Battery level sensor: Arduino Mega channel A0.
+- Water sensor: Arduino Mega channel A1.
 - Temperature Sensor: Pin 7 on the RPI.
 
 ## Development Path
@@ -80,13 +79,14 @@ See config.json for lighting, relay and reed switch connections.
 - Installation of remaining hardware reed switches, battery voltage etc) to confirm real world functionality.
 - Completion of shutdown button to cleanly shutdown RPI before cutting power.
 
-### Beta 1 (In Development)
+### Beta 1
 - Implementation of scene editor.
 - Better handling of disconnected hardware.
 - Bug fixes, graphical and functionality refinement.
 
-### Beta 2
-- Implementation of event scheduler.
+### Beta 2 (In Development)
+- Finalisation of dimming, switching and sensor readings.
+- Refinement of functionality.
 - Field testing.
 
 ### Release v2.0
