@@ -3,7 +3,41 @@ All notable changes to the PCCS project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.0-beta 1] - 18-06-2025
+## 1.5.0-beta 2 build 19072025-1430
+
+### Added & Changed
+- Removed PCA9685 board and replaced with Arduino mega for mosfet/gate driving capabilities
+- Updated code to suit Arduino USB connection
+- Implemented reed switch logic
+- Back end refinements
+- Green LED channel follows red channel level at a multiplier of 0.1 to get a nice red-orange hue
+- Added Ardunio sketch to repo
+- Updates requirements.txt
+
+### Fixed
+- Lighting channels now ramp silky smooth
+- Scenes trigger each channel (almost) at the same time and the sliders ramp in sync with their channel levels
+- Squished all communications issues between RPI and Arduino
+- Removed reed switch writes to config.json as it's redundant
+
+## 1.4.0-beta 1 build 22062025-1445
+
+### Added & Changed
+Moved scripts from index.html to script.js
+Bug Fixes
+
+### Fixed
+
+
+## 1.4.0-beta 1 build 19062025-1705
+
+### Added & Changed
+Added option to dim brightness at night
+
+### Fixed
+- Auto theme does theme check on page load
+
+## 1.4.0-beta 1 build 18062025-2300
 
 ### Added & Changed
 - Shutdown and setting low/medium/high brightness on remote display

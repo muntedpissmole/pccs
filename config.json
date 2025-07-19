@@ -1,6 +1,6 @@
 {
     "channels": {
-        "pca9685": {
+        "arduino": {
             "1": {
                 "name": "Kitchen LED Strip",
                 "type": "dimmer"
@@ -30,30 +30,22 @@
                 "type": "dimmer"
             },
             "8": {
-                "name": "Accent Lights Red",
-                "type": "dimmer"
-            },
-            "9": {
-                "name": "Accent Lights Green",
-                "type": "dimmer"
-            },
-            "10": {
                 "name": "Rear Drawer Lights",
                 "type": "dimmer"
             },
-            "11": {
+            "9": {
                 "name": "Fairy Lights",
                 "type": "dimmer"
             },
-            "12": {
+            "10": {
                 "name": "Awning Lights",
                 "type": "dimmer"
             },
-            "13": {
+            "11": {
                 "name": "Tent Lights",
                 "type": "dimmer"
             },
-            "14": {
+            "12": {
                 "name": "Ensuite Lights",
                 "type": "dimmer"
             }
@@ -79,14 +71,14 @@
     },
     "scenes": {
         "evening": {
-            "pca9685": {
+            "arduino": {
                 "1": 80,
                 "4": 80,
                 "7": 100,
-                "11": 50,
-                "12": 65,
-                "13": 30,
-                "14": 100
+                "9": 50,
+                "10": 65,
+                "11": 30,
+                "12": 100
             },
             "relays": {
                 "17": 0,
@@ -96,14 +88,13 @@
             }
         },
         "night": {
-            "pca9685": {
+            "arduino": {
                 "1": 0,
                 "2": 50,
                 "4": 0,
-                "8": 10,
-                "11": 0,
-                "12": 0,
-                "14": 5
+                "9": 0,
+                "10": 0,
+                "12": 5
             },
             "relays": {
                 "17": 0,
@@ -113,9 +104,9 @@
             }
         },
         "bathroom": {
-            "pca9685": {
-                "13": 5,
-                "14": 5,
+            "arduino": {
+                "11": 5,
+                "12": 5,
                 "7": 10
             },
             "relays": {
@@ -126,7 +117,7 @@
             }
         },
         "all_off": {
-            "pca9685": {
+            "arduino": {
                 "1": 0,
                 "2": 0,
                 "3": 0,
@@ -138,9 +129,7 @@
                 "9": 0,
                 "10": 0,
                 "11": 0,
-                "12": 0,
-                "13": 0,
-                "14": 0
+                "12": 0
             },
             "relays": {
                 "17": 0,
@@ -154,32 +143,32 @@
         "23": {
             "name": "Kitchen Panel",
             "type": "sensor",
-            "state": "closed",
             "trigger_channels": [
-                "pca9685:1",
-                "pca9685:2",
-                "pca9685:3"
+                "arduino:1",
+                "arduino:2",
+                "arduino:3"
             ],
-            "display": false
+            "display": false,
+            "state": "open"
         },
         "24": {
             "name": "Storage Panel",
             "type": "sensor",
-            "state": "closed",
             "trigger_channels": [
-                "pca9685:5",
-                "pca9685:6"
+                "arduino:5",
+                "arduino:6"
             ],
-            "display": true
+            "display": true,
+            "state": "open"
         },
         "25": {
             "name": "Rear Drawer",
             "type": "sensor",
-            "state": "closed",
             "trigger_channels": [
-                "pca9685:10"
+                "arduino:8"
             ],
-            "display": true
+            "display": true,
+            "state": "closed"
         }
     },
     "relay_states": {
@@ -191,7 +180,8 @@
     "theme": {
         "darkMode": "off",
         "autoTheme": "on",
-        "defaultTheme": "dark",
-        "screenBrightness": "medium"
+        "autoBrightness": "off",
+        "defaultTheme": "light",
+        "screen brightness": "medium"
     }
 }

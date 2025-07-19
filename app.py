@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-import board
-import busio
-from adafruit_pca9685 import PCA9685
+from logging.handlers import RotatingFileHandler
 import lgpio
 import json
 import time
@@ -15,12 +13,12 @@ from datetime import datetime, date
 import pytz
 import subprocess
 import threading
+
+# Global serial lock
+serial_lock = threading.Lock()
 import os
 from w1thermsensor import W1ThermSensor, NoSensorFoundError, SensorNotReadyError
-import adafruit_ads1x15.ads1115 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
-from logging.handlers import RotatingFileHandler
-from threading import Lock
+import tempfile
 
 app = Flask(__name__)
 
@@ -44,7 +42,6 @@ logging.basicConfig(
 # Global GPIO handle
 h = None
 gps_lock = threading.Lock()
-config_lock = Lock()
 
 # GPS setup
 try:
@@ -54,27 +51,30 @@ except Exception as e:
     logging.error(f"Error initializing GPS: {e}")
     ser = None
 
-# Initialize I2C bus
-try:
-    i2c = busio.I2C(board.SCL, board.SDA)
-    logging.info("Initialized I2C bus")
-except Exception as e:
-    logging.error(f"Error initializing I2C bus: {e}")
-    i2c = None
+# Serial setup for Arduino
+ser_arduino = None
+arduino_available = False
 
-# Initialize ADS1115
-try:
-    if i2c:
-        ads = ADS.ADS1115(i2c, address=0x49)
-        ads.gain = 2/3
-        chan = AnalogIn(ads, ADS.P0)
-        chan_tank = AnalogIn(ads, ADS.P1)
-        logging.info("Initialized ADS1115")
-    else:
-        ads = chan = chan_tank = None
-except Exception as e:
-    logging.error(f"Error initializing ADS1115: {e}")
-    ads = chan = chan_tank = None
+def init_serial():
+    global ser_arduino, arduino_available
+    try:
+        ser_arduino = serial.Serial('/dev/ttyACM0', 500000, timeout=2)  # Increased timeout
+        time.sleep(2)  # Wait for Arduino reset
+        ser_arduino.flushInput()
+        ser_arduino.flushOutput()
+        # Test ping
+        ser_arduino.write(b'P\n')
+        response = ser_arduino.readline().decode().strip()
+        if response == 'AA':
+            logging.info("Initialized USB Serial and confirmed Arduino")
+            arduino_available = True
+            return True
+        else:
+            logging.error(f"Serial init failed: ping response {response}")
+            return False
+    except Exception as e:
+        logging.error(f"Serial init failed: {e}")
+        return False
 
 # Sensor caches
 last_battery_voltage = last_battery_voltage_time = None
@@ -82,33 +82,78 @@ last_tank_level = last_tank_level_time = None
 last_temperature = last_temperature_time = None
 CACHE_DURATION = 10
 
-# Initialize GPIO
+def write_config_atomically(config_data, config_path):
+    logging.debug(f"Writing to {config_path}")
+    try:
+        with tempfile.NamedTemporaryFile('w', dir=os.path.dirname(config_path), delete=False) as temp_file:
+            json.dump(config_data, temp_file, indent=4)
+            temp_file_path = temp_file.name
+        os.replace(temp_file_path, config_path)
+        logging.debug(f"Atomically wrote config to {config_path}")
+    except Exception as e:
+        logging.error(f"Error writing config to {config_path}: {e}")
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        raise
+
+def send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value=None):
+    try:
+        cmd = ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}"]
+        if command[0] == "xdotool":
+            cmd.append("DISPLAY=:0 " + " ".join(command))
+        else:
+            cmd.append(" ".join(command))
+        logging.debug(f"Executing SSH command: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd, check=True, timeout=20, capture_output=True, text=True
+        )
+        logging.info(f"Successfully sent {action_desc} command to display-pi: {result.stdout.strip()}")
+        if brightness_value is not None:
+            ssh_command = f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
+            logging.debug(f"Executing brightness SSH command: {ssh_command}")
+            result = subprocess.run(
+                ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
+                check=True, timeout=20, capture_output=True, text=True
+            )
+            logging.info(f"Restored brightness to {brightness_value}: {result.stdout.strip()}")
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        error_msg = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
+        logging.error(f"Failed to send {action_desc} command to display-pi: {error_msg}")
+        if command[0] in ["xset", "xdotool"]:
+            fallback_value = 0 if command[0] == "xset" and command[-1] == "off" else (brightness_value if brightness_value else 127)
+            logging.info(f"Attempting fallback: set backlight to {fallback_value}")
+            try:
+                ssh_command = f"echo {fallback_value} | sudo tee /sys/class/backlight/*/brightness"
+                result = subprocess.run(
+                    ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
+                    check=True, timeout=20, capture_output=True, text=True
+                )
+                logging.info(f"Fallback succeeded: set backlight to {fallback_value}")
+                return True
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                logging.error(f"Fallback failed: {e}")
+        return False
+
 def init_gpio():
     global h
     try:
-        h = lgpio.gpiochip_open(0)  # Open GPIO chip
+        h = lgpio.gpiochip_open(0)
         logging.info("Initialized GPIO chip")
-        
-        # Configure reed switch pins as inputs
         reed_switch_pins = [int(pin) for pin in config['reed_switches'].keys()]
         for pin in reed_switch_pins:
             lgpio.gpio_claim_input(h, pin, lgpio.SET_PULL_UP)
-            logging.debug(f"Configured GPIO pin {pin} as input with pull-up")
-        
-        # Configure relay pins as outputs
+            logging.debug(f"Configured GPIO pin {pin} as input")
         relay_pins = [int(pin) for pin in config['channels']['relays'].keys()]
         for pin in relay_pins:
-            lgpio.gpio_claim_output(h, pin, 1)  # Default to off (relays are active-low)
+            lgpio.gpio_claim_output(h, pin, 1)
             logging.debug(f"Configured GPIO pin {pin} as output")
-        
-        # Apply saved relay states
         relay_states = load_relay_states()
         for pin, state in relay_states.items():
             if pin in config['channels']['relays']:
-                lgpio.gpio_write(h, int(pin), 0 if state == 1 else 1)  # Active-low
-                logging.debug(f"Restored relay state for pin {pin}: {'on' if state == 1 else 'off'}")
-        
-        atexit.register(cleanup_gpio)  # Register cleanup on exit
+                lgpio.gpio_write(h, int(pin), 0 if state == 1 else 1)
+                logging.debug(f"Restored relay state for pin {pin}")
+        atexit.register(cleanup_gpio)
     except Exception as e:
         logging.error(f"Error initializing GPIO: {e}")
         h = None
@@ -117,7 +162,6 @@ def cleanup_gpio():
     global h
     if h is not None:
         try:
-            # Release all claimed pins
             reed_switch_pins = [int(pin) for pin in config['reed_switches'].keys()]
             relay_pins = [int(pin) for pin in config['channels']['relays'].keys()]
             for pin in reed_switch_pins + relay_pins:
@@ -128,16 +172,62 @@ def cleanup_gpio():
             logging.error(f"Error cleaning up GPIO: {e}")
         h = None
 
+def read_arduino_analog(pin):
+    if not arduino_available:
+        logging.error("Serial not initialized")
+        return None
+    if not (0 <= pin <= 1):
+        logging.error(f"Invalid analog pin: A{pin}")
+        return None
+    
+    retries = 3
+    for attempt in range(retries):
+        with serial_lock:
+            try:
+                logging.debug(f"Reading analog pin A{pin}")
+                ser_arduino.flushInput()
+                ser_arduino.flushOutput()
+                time.sleep(0.05)
+                
+                ser_arduino.write(f'A{pin}\n'.encode())
+                response = ser_arduino.readline().decode().strip()
+                if response.isdigit():
+                    value = int(response)
+                    if 0 <= value <= 1023:
+                        logging.debug(f"Read analog value from A{pin}: {value} (attempt {attempt+1})")
+                        return value
+                    else:
+                        logging.warning(f"Invalid analog reading on attempt {attempt+1} from pin A{pin}: {value}")
+                else:
+                    logging.warning(f"Non-digit response on attempt {attempt+1}: {response}")
+            except Exception as e:
+                logging.warning(f"Error on attempt {attempt+1} reading analog pin A{pin}: {e}")
+        
+        if attempt < retries - 1:
+            time.sleep(0.1)
+    
+    logging.error(f"Failed to read analog pin A{pin} after {retries} attempts")
+    return None
+
 def get_battery_voltage():
     global last_battery_voltage, last_battery_voltage_time
-    if chan is None:
-        return None
     current_time = time.time()
     if last_battery_voltage is not None and (current_time - last_battery_voltage_time) < CACHE_DURATION:
         return last_battery_voltage
     try:
-        battery_voltage = round(chan.voltage * 5.0, 2)
-        if battery_voltage < 0.5 or battery_voltage > 15.0:
+        raw_value = read_arduino_analog(0)
+        if raw_value is None or raw_value < 0 or raw_value > 1023:
+            logging.error(f"Invalid ADC reading from A0: {raw_value}")
+            last_battery_voltage = None
+            last_battery_voltage_time = current_time
+            return None
+        logging.debug(f"Raw ADC value from A0: {raw_value}")
+        V_REF = 4.98
+        a0_voltage = (raw_value / 1023.0) * V_REF
+        logging.debug(f"Voltage at A0: {a0_voltage:.2f}V")
+        SCALING_FACTOR = 13.02 / 2.686
+        battery_voltage = round(a0_voltage * SCALING_FACTOR, 2)
+        if battery_voltage < 9.0 or battery_voltage > 15.0:
             logging.warning(f"Battery voltage out of range: {battery_voltage}V")
             last_battery_voltage = None
             last_battery_voltage_time = current_time
@@ -151,28 +241,37 @@ def get_battery_voltage():
 
 def get_tank_level():
     global last_tank_level, last_tank_level_time
-    if chan_tank is None:
-        return None
     current_time = time.time()
     if last_tank_level is not None and (current_time - last_tank_level_time) < CACHE_DURATION:
         return last_tank_level
     try:
-        v_out = chan_tank.voltage
-        v_in = 5.0
+        raw_value = read_arduino_analog(1)
+        if raw_value is None or raw_value < 0 or raw_value > 1023:
+            logging.error(f"Invalid ADC reading from A1: {raw_value}")
+            last_tank_level = None
+            last_tank_level_time = current_time
+            return None
+        logging.debug(f"Raw ADC value from A1: {raw_value}")
+        v_in = 4.98
+        v_out = (raw_value / 1023.0) * v_in
+        logging.debug(f"Voltage at A1: {v_out:.2f}V")
         if v_out < 0.5 or v_out > 3.0:
             logging.warning(f"Tank level sensor fault: V_out={v_out:.3f}V")
             last_tank_level = None
             last_tank_level_time = current_time
             return None
         r1 = 100.0
-        r2 = r1 * (v_in - v_out) / v_out if v_out > 0 else float('inf')
+        r2 = r1 * v_out / (v_in - v_out) if v_out < v_in else float('inf')
+        logging.debug(f"Calculated r2: {r2:.1f}Ω")
         if r2 < 30 or r2 > 250:
             logging.warning(f"Tank level sensor fault: r2={r2:.1f}Ω")
             last_tank_level = None
             last_tank_level_time = current_time
             return None
         r2 = max(33, min(240, r2))
-        percentage = round(((r2 - 33) / (240 - 33)) * 100)
+        percentage = round(((240 - r2) / (240 - 33)) * 100)
+        percentage = max(0, min(100, percentage))
+        logging.debug(f"Tank level percentage: {percentage}%")
         last_tank_level = percentage
         last_tank_level_time = current_time
         return percentage
@@ -200,6 +299,7 @@ def get_ds18b20_temperature():
         logging.error(f"Error reading DS18B20: {e}")
         return None
 
+# GPS and sun times
 gps_data = {
     "fix": "No",
     "quality": "0 satellites",
@@ -245,16 +345,14 @@ def set_system_clock(dt):
         logging.error(f"Error setting system clock: {e}")
 
 def save_relay_states(states):
-    with config_lock:
-        try:
-            with open('config.json', 'r') as f:
-                current_config = json.load(f)
-            current_config['relay_states'] = states
-            with open('config.json', 'w') as f:
-                json.dump(current_config, f, indent=4)
-            logging.debug(f"Saved relay states: {states}")
-        except Exception as e:
-            logging.error(f"Error saving relay states: {e}")
+    try:
+        with open('config.json', 'r') as f:
+            current_config = json.load(f)
+        current_config['relay_states'] = states
+        write_config_atomically(current_config, 'config.json')
+        logging.debug(f"Saved relay states: {states}")
+    except Exception as e:
+        logging.error(f"Error saving relay states: {e}")
 
 def load_relay_states():
     try:
@@ -331,9 +429,6 @@ def update_gps_data():
     except Exception as e:
         logging.error(f"Error updating GPS data: {e}")
 
-gps_thread = threading.Thread(target=update_gps_data, daemon=True)
-gps_thread.start()
-
 # Load config
 config_path = 'config.json'
 try:
@@ -342,129 +437,450 @@ try:
             "theme": {
                 "darkMode": "off",
                 "autoTheme": "off",
+                "autoBrightness": "off",
                 "defaultTheme": "light",
-                "screenBrightness": "50"
+                "screenBrightness": "medium"
             },
             "channels": {
-                "pca9685": {},
+                "arduino": {},
                 "relays": {}
             },
             "scenes": {},
             "reed_switches": {
-                "17": {
-                    "name": "Storage Panel",
-                    "icon": "fa-box",
-                    "display": true
+                "23": {
+                    "name": "Kitchen Panel",
+                    "type": "sensor",
+                    "state": "open",
+                    "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
+                    "display": False
                 },
-                "18": {
+                "24": {
+                    "name": "Storage Panel",
+                    "type": "sensor",
+                    "state": "closed",
+                    "trigger_channels": ["arduino:5", "arduino:6"],
+                    "display": True
+                },
+                "25": {
                     "name": "Rear Drawer",
-                    "icon": "fa-box-open",
-                    "display": true
+                    "type": "sensor",
+                    "state": "closed",
+                    "trigger_channels": ["arduino:8"],
+                    "display": True
                 }
             },
             "relay_states": {}
         }
-        with open(config_path, 'w') as f:
-            json.dump(default_config, f, indent=4)
-        logging.info(f"Created default config.json with reed switches")
+        write_config_atomically(default_config, config_path)
+        logging.info("Created default config.json")
     with open(config_path, 'r') as f:
         config = json.load(f)
-    # Ensure required fields exist
     if 'theme' not in config:
         config['theme'] = {
             "darkMode": "off",
             "autoTheme": "off",
+            "autoBrightness": "off",
             "defaultTheme": "light",
-            "screenBrightness": "50"
+            "screenBrightness": "medium"
         }
     if 'channels' not in config:
-        config['channels'] = {"pca9685": {}, "relays": {}}
+        config['channels'] = {"arduino": {}, "relays": {}}
+    if 'arduino' not in config['channels']:
+        config['channels']['arduino'] = {}
     if 'relays' not in config['channels']:
         config['channels']['relays'] = {}
-    if 'pca9685' not in config['channels']:
-        config['channels']['pca9685'] = {}
     if 'scenes' not in config:
         config['scenes'] = {}
     if 'reed_switches' not in config:
         config['reed_switches'] = {
-            "17": {
-                "name": "Storage Panel",
-                "icon": "fa-box",
-                "display": true
+            "23": {
+                "name": "Kitchen Panel",
+                "type": "sensor",
+                "state": "open",
+                "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
+                "display": False
             },
-            "18": {
+            "24": {
+                "name": "Storage Panel",
+                "type": "sensor",
+                "state": "closed",
+                "trigger_channels": ["arduino:5", "arduino:6"],
+                "display": True
+            },
+            "25": {
                 "name": "Rear Drawer",
-                "icon": "fa-box-open",
-                "display": true
+                "type": "sensor",
+                "state": "closed",
+                "trigger_channels": ["arduino:8"],
+                "display": True
             }
         }
     if 'relay_states' not in config:
         config['relay_states'] = {}
-    # Log reed_switches for debugging
-    logging.info(f"Loaded reed_switches: {config['reed_switches']}")
-    with config_lock:
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-        logging.info(f"Updated config.json with required fields")
+    write_config_atomically(config, config_path)
+    logging.info("Loaded and validated config")
 except Exception as e:
     logging.error(f"Error loading config.json: {e}")
     config = {
         "theme": {
             "darkMode": "off",
             "autoTheme": "off",
+            "autoBrightness": "off",
             "defaultTheme": "light",
-            "screenBrightness": "50"
+            "screenBrightness": "medium"
         },
         "channels": {
-            "pca9685": {},
+            "arduino": {},
             "relays": {}
         },
         "scenes": {},
         "reed_switches": {
-            "17": {
-                "name": "Storage Panel",
-                "icon": "fa-box",
-                "display": true
+            "23": {
+                "name": "Kitchen Panel",
+                "type": "sensor",
+                "state": "open",
+                "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
+                "display": False
             },
-            "18": {
+            "24": {
+                "name": "Storage Panel",
+                "type": "sensor",
+                "state": "closed",
+                "trigger_channels": ["arduino:5", "arduino:6"],
+                "display": True
+            },
+            "25": {
                 "name": "Rear Drawer",
-                "icon": "fa-box-open",
-                "display": true
+                "type": "sensor",
+                "state": "closed",
+                "trigger_channels": ["arduino:8"],
+                "display": True
             }
         },
         "relay_states": {}
     }
-    logging.info(f"Falling back to default config with reed switches: {config['reed_switches']}")
+    write_config_atomically(config, config_path)
+    logging.info("Created fallback config.json")
 
-# Initialize GPIO after config is loaded
+def check_arduino_alive():
+    if not arduino_available:
+        return False
+    try:
+        ser_arduino.write(b'P\n')
+        response = ser_arduino.readline().decode().strip()
+        return response == 'AA'
+    except Exception as e:
+        logging.error(f"Alive check failed: {e}")
+        return False
+
+def monitor_arduino():
+    global arduino_available
+    failure_count = 0
+    MAX_FAILURES = 3
+    while True:
+        if not check_arduino_alive():
+            failure_count += 1
+            logging.warning(f"Arduino unresponsive (failure {failure_count}/{MAX_FAILURES})")
+            if failure_count >= MAX_FAILURES:
+                arduino_available = False
+                logging.error("Arduino offline - disabling features")
+        else:
+            if not arduino_available:
+                logging.info("Arduino back online")
+                arduino_available = True
+            failure_count = 0
+        time.sleep(30)  # Check every 30s
+
+GREEN_FACTOR = 0.1  # Green PWM = % of red for red-orange mix
+
+def set_arduino_pwm(channel, value, ramp_time=1000):
+    """Send PWM value (0-255) to Arduino for the specified channel via serial, with optional ramp."""
+    if not arduino_available:
+        logging.error("Serial not initialized")
+        return False
+    if not (1 <= channel <= 12):
+        logging.error(f"Invalid PWM channel: {channel}")
+        return False
+    value = max(0, min(255, int(value)))
+    logging.debug(f"Setting PWM: channel={channel}, value={value}, ramp_time={ramp_time}ms")
+    
+    retries = 3
+    for attempt in range(retries):
+        with serial_lock:
+            try:
+                ser_arduino.flushInput()
+                ser_arduino.flushOutput()
+                time.sleep(0.05)
+                
+                if ramp_time > 0:
+                    ser_arduino.write(f'R{channel} {value} {ramp_time}\n'.encode())
+                else:
+                    ser_arduino.write(f'S{channel} {value}\n'.encode())
+                
+                response = ser_arduino.readline().decode().strip()
+                if response.isdigit():
+                    read_value = int(response)
+                    if abs(read_value - value) <= 5:
+                        logging.debug(f"Set and verified Arduino channel {channel} to PWM {value} (attempt {attempt+1})")
+                        return True
+                    else:
+                        logging.warning(f"PWM verification failed on attempt {attempt+1}: set {value}, read {read_value}")
+                else:
+                    logging.warning(f"Non-digit response on attempt {attempt+1}: {response}")
+            except Exception as e:
+                logging.warning(f"Error on attempt {attempt+1} setting PWM for channel {channel}: {e}")
+        
+        if attempt < retries - 1:
+            time.sleep(0.1)
+    
+    logging.error(f"Failed to set PWM for channel {channel} after {retries} attempts")
+    return False
+
+def get_arduino_pwm(channel):
+    if not arduino_available:
+        logging.error("Serial not initialized")
+        return None
+    if not (1 <= channel <= 12):
+        logging.error(f"Invalid PWM channel: {channel}")
+        return None
+    
+    retries = 3
+    for attempt in range(retries):
+        with serial_lock:
+            try:
+                logging.debug(f"Reading PWM for channel {channel}")
+                ser_arduino.flushInput()
+                ser_arduino.flushOutput()
+                time.sleep(0.05)
+                
+                ser_arduino.write(f'G{channel}\n'.encode())
+                response = ser_arduino.readline().decode().strip()
+                if response.isdigit():
+                    value = int(response)
+                    if 0 <= value <= 255:
+                        logging.debug(f"Read Arduino channel {channel}: PWM {value} (attempt {attempt+1})")
+                        return value
+                    else:
+                        logging.warning(f"Invalid PWM value on attempt {attempt+1}: {value}")
+                else:
+                    logging.warning(f"Non-digit response on attempt {attempt+1}: {response}")
+            except Exception as e:
+                logging.warning(f"Error on attempt {attempt+1} reading PWM for channel {channel}: {e}")
+        
+        if attempt < retries - 1:
+            time.sleep(0.1)
+    
+    logging.error(f"Failed to read PWM for channel {channel} after {retries} attempts")
+    return None
+
+def check_initial_reed_states():
+    if h is None:
+        logging.error("GPIO not initialized")
+        return {}
+    initial_states = {}
+    for pin_str, switch_info in config['reed_switches'].items():
+        pin = int(pin_str)
+        try:
+            initial_state = lgpio.gpio_read(h, pin)
+            state_str = "closed" if initial_state == 0 else "open"
+            logging.info(f"Initial state for {switch_info['name']}: {state_str}")
+            config['reed_switches'][pin_str]['state'] = state_str
+            initial_states[pin] = initial_state
+
+            # Kitchen-specific screen and light control
+            if pin == 23:
+                display_pi_user = "pi"
+                display_pi_ip = "10.10.10.20"
+                ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+                if initial_state == 0:  # Closed
+                    command = ["xset", "dpms", "force", "off"]
+                    action_desc = "screen off"
+                    brightness_value = None
+                    # Turn off kitchen lights
+                    set_arduino_pwm(1, 0, ramp_time=1000)
+                    set_arduino_pwm(2, 0, ramp_time=1000)
+                    set_arduino_pwm(3, 0, ramp_time=1000)
+                else:  # Open
+                    command = ["xdotool", "key", "Shift"]
+                    action_desc = "screen wake"
+                    brightness_level = config['theme'].get('screenBrightness', 'medium')
+                    brightness_map = {'low': 25, 'medium': 127, 'high': 255}
+                    brightness_value = brightness_map.get(brightness_level, 127)
+                    # Compute and set kitchen lights based on time
+                    local_tz = pytz.timezone("Australia/Melbourne")
+                    current_local = datetime.now(local_tz)
+                    if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+                        loc = LocationInfo("Current", "", "Australia/Melbourne", gps_data["latitude"], gps_data["longitude"])
+                    else:
+                        loc = MELBOURNE_LOCATION
+                    today = current_local.date()
+                    s = sun(loc.observer, date=today, tzinfo=local_tz)
+                    sunrise = s["sunrise"]
+                    sunset = s["sunset"]
+                    ten_pm = current_local.replace(hour=22, minute=0, second=0, microsecond=0)
+                    white_pwm = 0
+                    red_pwm = 0
+                    if sunrise <= current_local < sunset:
+                        white_pwm = 255
+                    else:
+                        if sunset <= current_local < ten_pm:
+                            red_pwm = 255
+                        else:
+                            red_pwm = int(0.3 * 255)
+                    green_pwm = int(red_pwm * GREEN_FACTOR)
+                    set_arduino_pwm(1, white_pwm, ramp_time=1000)
+                    set_arduino_pwm(2, red_pwm, ramp_time=1000)
+                    set_arduino_pwm(3, green_pwm, ramp_time=1000)
+                max_attempts = 3
+                retry_interval = 10
+                for attempt in range(max_attempts):
+                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
+                        break
+                    logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed")
+                    time.sleep(retry_interval)
+                else:
+                    logging.error("All SSH attempts failed")
+
+            # For storage and rear drawer, set initial lights based on state
+            elif pin in [24, 25]:
+                trigger_channels = switch_info.get('trigger_channels', [])
+                target_pwm = 255 if initial_state == 1 else 0  # Open: on, Closed: off
+                for ch in trigger_channels:
+                    if ch.startswith('arduino:'):
+                        channel_idx = int(ch.split(':')[1])
+                        if not set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000):
+                            logging.error(f"Failed to set initial PWM for channel {channel_idx} to {target_pwm}")
+        except Exception as e:
+            logging.error(f"Error reading initial state for pin {pin}: {e}")
+            initial_states[pin] = None
+    return initial_states
+
+def monitor_reed_switch(pin, initial_state):
+    if h is None:
+        logging.error("GPIO not initialized")
+        return
+    switch_info = config['reed_switches'].get(str(pin))
+    if switch_info is None:
+        logging.error(f"Reed switch pin {pin} not found in config")
+        return
+    last_state = initial_state
+    debounce_count = 0
+    DEBOUNCE_THRESHOLD = 2
+    last_read_state = None
+    logging.info(f"Starting monitor for {switch_info['name']} on GPIO {pin}")
+    while True:
+        try:
+            current_read = lgpio.gpio_read(h, pin)
+            if current_read == last_read_state:
+                debounce_count += 1
+            else:
+                debounce_count = 0
+                last_read_state = current_read
+            if debounce_count >= DEBOUNCE_THRESHOLD and current_read != last_state:
+                state_str = "closed" if current_read == 0 else "open"
+                logging.info(f"{switch_info['name']} {state_str}")
+                config['reed_switches'][str(pin)]['state'] = state_str
+
+                # Kitchen-specific: control screen and lights
+                if pin == 23:
+                    display_pi_user = "pi"
+                    display_pi_ip = "10.10.10.20"
+                    ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+                    if current_read == 0:  # Closed
+                        command = ["xset", "dpms", "force", "off"]
+                        action_desc = "screen off"
+                        brightness_value = None
+                        # Turn off kitchen lights
+                        set_arduino_pwm(1, 0, ramp_time=1000)
+                        set_arduino_pwm(2, 0, ramp_time=1000)
+                        set_arduino_pwm(3, 0, ramp_time=1000)
+                    else:  # Open
+                        command = ["xdotool", "key", "Shift"]
+                        action_desc = "screen wake"
+                        brightness_level = config['theme'].get('screenBrightness', 'medium')
+                        brightness_map = {'low': 25, 'medium': 127, 'high': 255}
+                        brightness_value = brightness_map.get(brightness_level, 127)
+                        # Compute and set kitchen lights based on time
+                        local_tz = pytz.timezone("Australia/Melbourne")
+                        current_local = datetime.now(local_tz)
+                        if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+                            loc = LocationInfo("Current", "", "Australia/Melbourne", gps_data["latitude"], gps_data["longitude"])
+                        else:
+                            loc = MELBOURNE_LOCATION
+                        today = current_local.date()
+                        s = sun(loc.observer, date=today, tzinfo=local_tz)
+                        sunrise = s["sunrise"]
+                        sunset = s["sunset"]
+                        ten_pm = current_local.replace(hour=22, minute=0, second=0, microsecond=0)
+                        white_pwm = 0
+                        red_pwm = 0
+                        if sunrise <= current_local < sunset:
+                            white_pwm = 255
+                        else:
+                            if sunset <= current_local < ten_pm:
+                                red_pwm = 255
+                            else:
+                                red_pwm = int(0.3 * 255)
+                        green_pwm = int(red_pwm * GREEN_FACTOR)
+                        set_arduino_pwm(1, white_pwm, ramp_time=1000)
+                        set_arduino_pwm(2, red_pwm, ramp_time=1000)
+                        set_arduino_pwm(3, green_pwm, ramp_time=1000)
+                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
+                        last_state = current_read
+
+                # Storage and rear drawer: control lights
+                else:
+                    trigger_channels = switch_info.get('trigger_channels', [])
+                    target_pwm = 255 if current_read == 1 else 0  # Open: on, Closed: off
+                    success = True
+                    for ch in trigger_channels:
+                        if ch.startswith('arduino:'):
+                            channel_idx = int(ch.split(':')[1])
+                            if not set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000):
+                                logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
+                                success = False
+                    if success:
+                        last_state = current_read
+
+            time.sleep(0.5)
+        except Exception as e:
+            logging.error(f"Error monitoring reed switch pin {pin}: {e}")
+            time.sleep(5)
+
+# Initialize GPIO
 init_gpio()
 
-# Global PCA9685 status
-pca_available = False
+# Serial init after GPIO
+arduino_available = init_serial()
 
-# Initialize PCA9685
-try:
-    if i2c:
-        pca = PCA9685(i2c, address=0x40)
-        pca.frequency = 60
-        pca_available = True
-        logging.info("Initialized PCA9685")
-    else:
-        pca = None
-        logging.error("I2C bus not initialized, PCA9685 unavailable")
-except Exception as e:
-    pca = None
-    logging.error(f"Error initializing PCA9685: {e}")
+# Perform initial reed switch checks for all
+initial_states = check_initial_reed_states()
+
+# Start monitoring threads for all reed switches
+for pin_str in config['reed_switches']:
+    pin = int(pin_str)
+    initial_state = initial_states.get(pin, None)
+    if initial_state is not None:
+        thread = threading.Thread(target=monitor_reed_switch, args=(pin, initial_state), daemon=True)
+        thread.start()
+
+# Start GPS thread
+gps_thread = threading.Thread(target=update_gps_data, daemon=True)
+gps_thread.start()
+
+if arduino_available:
+    arduino_monitor_thread = threading.Thread(target=monitor_arduino, daemon=True)
+    arduino_monitor_thread.start()
 
 @app.route('/')
 def index():
     try:
         return render_template('index.html',
                               scenes=config['scenes'].keys(),
-                              pca9685_channels=config['channels']['pca9685'],
+                              arduino_channels=config['channels']['arduino'],
                               relay_channels=config['channels']['relays'],
                               reed_switches=config['reed_switches'],
-                              pca_available=pca_available)
+                              arduino_available=arduino_available)
     except Exception as e:
         logging.error(f"Error rendering index: {e}")
         return f"Error rendering page: {e}", 500
@@ -472,26 +888,69 @@ def index():
 @app.route('/set_brightness', methods=['POST'])
 def set_brightness():
     try:
-        if not pca_available:
-            logging.error("set_brightness called but PCA9685 not detected")
-            return jsonify({"error": "PCA9685 not detected"}), 503
+        if not arduino_available:
+            logging.error("set_brightness called but Arduino not detected")
+            return jsonify({"error": "Arduino not detected"}), 503
         data = request.json
-        channel_type = data['type']
-        channel = data['channel']
-        brightness = int(data['brightness'])
-        if channel_type == 'pca9685' and pca:
-            target_pwm = int(brightness * 4095 / 100)
-            channel_idx = int(channel) - 1
-            current_pwm = pca.channels[channel_idx].duty_cycle
-            steps = 10
-            step_size = (target_pwm - current_pwm) / steps
-            step_time = 0.05
-            for i in range(steps):
-                new_pwm = int(current_pwm + step_size * (i + 1))
-                pca.channels[channel_idx].duty_cycle = max(0, min(4095, new_pwm))
-                time.sleep(step_time)
-            return jsonify({"message": f"Brightness set to {brightness}%"})
-        return jsonify({"error": "Invalid channel type or PCA9685 not initialized"}), 400
+        logging.debug(f"Received set_brightness request: {data}")
+        if not data:
+            logging.error("Empty request body")
+            return jsonify({"error": "Empty request body"}), 400
+        
+        channel_type = data.get('type')
+        channel = data.get('channel')
+        brightness = data.get('brightness')
+
+        if not all([channel_type, channel, brightness is not None]):
+            logging.error(f"Missing required fields: type={channel_type}, channel={channel}, brightness={brightness}")
+            return jsonify({"error": "Missing required fields"}), 400
+
+        if channel_type != 'arduino':
+            logging.error(f"Invalid channel type: {channel_type}")
+            return jsonify({"error": "Invalid channel type, expected 'arduino'"}), 400
+
+        try:
+            channel_idx = int(channel)
+        except (ValueError, TypeError):
+            logging.error(f"Invalid channel format: {channel}")
+            return jsonify({"error": "Channel must be an integer"}), 400
+
+        if str(channel_idx) not in config['channels']['arduino']:
+            logging.error(f"Channel {channel_idx} not in config")
+            return jsonify({"error": f"Channel {channel_idx} not configured"}), 400
+
+        if not 1 <= channel_idx <= 12:
+            logging.error(f"Invalid Arduino channel: {channel_idx}")
+            return jsonify({"error": "Channel must be between 1 and 12"}), 400
+
+        try:
+            brightness = int(brightness)
+            if not 0 <= brightness <= 100:
+                raise ValueError
+        except (ValueError, TypeError):
+            logging.error(f"Invalid brightness value: {brightness}")
+            return jsonify({"error": "Brightness must be an integer between 0 and 100"}), 400
+
+        target_pwm = int(brightness * 255 / 100)
+        logging.debug(f"Attempting to set channel {channel_idx} to PWM {target_pwm}")
+
+        # Use ramping via Arduino with 1-second total duration
+        if not set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000):
+            logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
+            return jsonify({"error": "Failed to set PWM"}), 500
+
+        if channel_idx == 2:
+            green_value = int(target_pwm * GREEN_FACTOR)
+            if not set_arduino_pwm(3, green_value, ramp_time=1000):
+                logging.warning(f"Failed to auto-set green channel 3 to {green_value}")
+
+        # Optional final verification
+        final_pwm = get_arduino_pwm(channel_idx)
+        if final_pwm is None or abs(final_pwm - target_pwm) > 10:
+            logging.error(f"PWM verification failed for channel {channel_idx}: expected {target_pwm}, got {final_pwm}")
+            return jsonify({"error": "PWM verification failed"}), 500
+        logging.debug(f"Successfully set channel {channel_idx} to PWM {final_pwm}")
+        return jsonify({"message": f"Brightness set to {brightness}%"})
     except Exception as e:
         logging.error(f"Error in set_brightness: {e}")
         return jsonify({"error": str(e)}), 500
@@ -500,34 +959,72 @@ def set_brightness():
 def toggle():
     try:
         data = request.json
-        channel_type = data['type']
-        channel = data['channel']
-        state = data['state']
-        if channel_type == 'pca9685':
-            if not pca_available:
-                logging.error("toggle called for PCA9685 but not detected")
-                return jsonify({"error": "PCA9685 not detected"}), 503
-            if pca:
-                target_pwm = 4095 if state == 'on' else 0
-                channel_idx = int(channel) - 1
-                current_pwm = pca.channels[channel_idx].duty_cycle
-                steps = 10
-                step_size = (target_pwm - current_pwm) / steps
-                step_time = 0.05
-                for i in range(steps):
-                    new_pwm = int(current_pwm + step_size * (i + 1))
-                    pca.channels[channel_idx].duty_cycle = max(0, min(4095, new_pwm))
-                    time.sleep(step_time)
-                return jsonify({"message": f"Channel {channel} set to {state.upper()}"})
+        logging.debug(f"Received toggle request: {data}")
+        if not data:
+            logging.error("Empty request body")
+            return jsonify({"error": "Empty request body"}), 400
+
+        channel_type = data.get('type')
+        channel = data.get('channel')
+        state = data.get('state')
+
+        if not all([channel_type, channel, state]):
+            logging.error(f"Missing required fields: type={channel_type}, channel={channel}, state={state}")
+            return jsonify({"error": "Missing required fields"}), 400
+
+        if channel_type != 'arduino' and channel_type != 'relays':
+            logging.error(f"Invalid channel type: {channel_type}")
+            return jsonify({"error": "Invalid channel type"}), 400
+
+        if channel_type == 'arduino':
+            if not arduino_available:
+                logging.error("toggle called but Arduino not detected")
+                return jsonify({"error": "Arduino not detected"}), 503
+            try:
+                channel_idx = int(channel)
+            except (ValueError, TypeError):
+                logging.error(f"Invalid channel format: {channel}")
+                return jsonify({"error": "Channel must be an integer"}), 400
+            if str(channel_idx) not in config['channels']['arduino']:
+                logging.error(f"Channel {channel_idx} not in config")
+                return jsonify({"error": f"Channel {channel_idx} not configured"}), 400
+            if not 1 <= channel_idx <= 12:
+                logging.error(f"Invalid Arduino channel: {channel_idx}")
+                return jsonify({"error": "Channel must be between 1 and 12"}), 400
+            target_pwm = 255 if state == 'on' else 0  # Use 50% for 'on' to match observed behavior
+            logging.debug(f"Attempting to set channel {channel_idx} to PWM {target_pwm}")
+            if not set_arduino_pwm(channel_idx, target_pwm):
+                logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
+                return jsonify({"error": "Failed to set PWM"}), 500
+
+            if channel_idx == 2:
+                green_value = int(target_pwm * GREEN_FACTOR)
+                if not set_arduino_pwm(3, green_value):
+                    logging.warning(f"Failed to auto-set green channel 3 to {green_value}")
+
+            final_pwm = get_arduino_pwm(channel_idx)
+            if final_pwm is None or abs(final_pwm - target_pwm) > 10:
+                logging.error(f"PWM verification failed for channel {channel_idx}: expected {target_pwm}, got {final_pwm}")
+                return jsonify({"error": "PWM verification failed"}), 500
+            logging.debug(f"Successfully set channel {channel_idx} to PWM {final_pwm}")
+            return jsonify({"message": f"Channel {channel} set to {state.upper()}"})
         elif channel_type == 'relays':
             if not h:
-                logging.error("toggle called for relay but GPIO not initialized")
+                logging.error("toggle called but GPIO not initialized")
                 return jsonify({"error": "GPIO not initialized"}), 503
-            lgpio.gpio_write(h, int(channel), 0 if state == 'on' else 1)  # Active-low
-            config['relay_states'][channel] = 1 if state == 'on' else 0
+            try:
+                channel_idx = int(channel)
+            except (ValueError, TypeError):
+                logging.error(f"Invalid channel format: {channel}")
+                return jsonify({"error": "Channel must be an integer"}), 400
+            if str(channel_idx) not in config['channels']['relays']:
+                logging.error(f"Relay channel {channel_idx} not in config")
+                return jsonify({"error": f"Relay channel {channel_idx} not configured"}), 400
+            lgpio.gpio_write(h, channel_idx, 0 if state == 'on' else 1)
+            config['relay_states'][str(channel_idx)] = 1 if state == 'on' else 0
             save_relay_states(config['relay_states'])
+            logging.debug(f"Set relay channel {channel_idx} to {state.upper()}")
             return jsonify({"message": f"Relay {channel} set to {state.upper()}"})
-        return jsonify({"error": "Invalid channel type or hardware not initialized"}), 400
     except Exception as e:
         logging.error(f"Error in toggle: {e}")
         return jsonify({"error": str(e)}), 500
@@ -535,81 +1032,106 @@ def toggle():
 @app.route('/activate_scene', methods=['POST'])
 def activate_scene():
     try:
-        if not pca_available:
-            logging.warning("activate_scene called but PCA9685 not detected, only applying relay actions")
+        if not arduino_available:
+            logging.warning("activate_scene called but Arduino not detected")
         data = request.json
         scene_name = data['scene']
         scene = config['scenes'][scene_name]
-        steps = 20
-        step_time = 2.0 / steps
-        current_pwm = {ch: pca.channels[int(ch) - 1].duty_cycle for ch in config['channels']['pca9685']} if pca else {}
-        target_pwm = {ch: 0 for ch in config['channels']['pca9685']}
-        for channel, brightness in scene.get('pca9685', {}).items():
-            if channel in config['channels']['pca9685']:
-                target_pwm[channel] = int(brightness * 4095 / 100)
-        if pca_available and pca:
-            for step in range(steps + 1):
-                for channel in config['channels']['pca9685']:
-                    channel_idx = int(channel) - 1
-                    current = current_pwm[channel]
-                    target = target_pwm[channel]
-                    new_pwm = int(current + (target - current) * (step / steps))
-                    pca.channels[channel_idx].duty_cycle = max(0, min(4095, new_pwm))
-                time.sleep(step_time)
+        target_pwm = {ch: 0 for ch in config['channels']['arduino']}
+        for channel, brightness in scene.get('arduino', {}).items():
+            if channel in config['channels']['arduino']:
+                target_pwm[channel] = int(brightness * 255 / 100)
+        if '2' in config['channels']['arduino']:
+            target_pwm['3'] = int(target_pwm.get('2', 0) * GREEN_FACTOR)
+        if arduino_available:
+            # Batch ramp all Arduino channels to their targets (or 0) over 1s for simultaneous starts
+            with serial_lock:
+                ser_arduino.flushInput()
+                ser_arduino.flushOutput()
+                time.sleep(0.05)  # Single settle time for all channels
+                channels_to_set = list(config['channels']['arduino'].keys())
+                # Send all ramp commands with small delay to pace processing
+                for channel in channels_to_set:
+                    channel_idx = int(channel)
+                    target = target_pwm.get(channel, 0)
+                    ser_arduino.write(f'R{channel_idx} {target} 1000\n'.encode())
+                    time.sleep(0.02)  # Pace sends to avoid overwhelming Arduino parser/buffer
+                # Read all responses (echoed targets) in order, with retry for empties
+                for channel in channels_to_set:
+                    target = target_pwm.get(channel, 0)
+                    response = ser_arduino.readline().decode().strip()
+                    if not response:  # If empty, try one more read (delayed line)
+                        logging.warning(f"Empty response for channel {channel}, retrying readline")
+                        response = ser_arduino.readline().decode().strip()
+                    if response.isdigit():
+                        read_value = int(response)
+                        if read_value != target:
+                            logging.warning(f"Batch ramp echo mismatch for channel {channel}: expected {target}, got {read_value}")
+                    else:
+                        logging.warning(f"Invalid batch ramp response for channel {channel}: {response}")
         config['relay_states'] = config.get('relay_states', {})
         if h:
             for pin, state in scene.get('relays', {}).items():
                 if pin in config['channels']['relays']:
-                    lgpio.gpio_write(h, int(pin), 1 if state == 0 else 0)  # Active-low
+                    lgpio.gpio_write(h, int(pin), 1 if state == 0 else 0)
                     config['relay_states'][pin] = state
             for pin in config['channels']['relays']:
                 if pin not in scene.get('relays', {}):
-                    lgpio.gpio_write(h, int(pin), 1)  # Turn off relays not in scene
+                    lgpio.gpio_write(h, int(pin), 1)
                     config['relay_states'][pin] = 0
             save_relay_states(config['relay_states'])
         else:
-            logging.error("activate_scene called but GPIO not initialized")
+            logging.error("GPIO not initialized")
             return jsonify({"error": "GPIO not initialized"}), 503
         return jsonify({"message": f"Scene {scene_name} activated"})
     except Exception as e:
         logging.error(f"Error in activate_scene: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/get_pca_states', methods=['GET'])
-def get_pca_states():
+@app.route('/get_arduino_states', methods=['GET'])
+def get_arduino_states():
     try:
-        if not pca_available:
-            logging.error("get_pca_states called but PCA9685 not detected")
-            return jsonify({"error": "PCA9685 not detected"}), 503
+        if not arduino_available:
+            logging.error("get_arduino_states called but Arduino not detected")
+            return jsonify({"error": "Arduino not detected"}), 503
         states = {}
-        if pca:
-            for channel in config['channels']['pca9685']:
-                duty_cycle = pca.channels[int(channel) - 1].duty_cycle
-                brightness = int(round(duty_cycle / 4095 * 100))
-                states[channel] = brightness
+        with serial_lock:
+            try:
+                ser_arduino.flushInput()
+                ser_arduino.flushOutput()
+                time.sleep(0.05)
+                ser_arduino.write(b'B\n')
+                response = ser_arduino.readline().decode().strip()
+                values = response.split()
+                if len(values) == 12 and all(v.isdigit() for v in values):
+                    for i, val in enumerate(values, 1):
+                        brightness = int(round(int(val) / 255 * 100)) if val else 0
+                        states[str(i)] = brightness
+                else:
+                    logging.error(f"Invalid batch response: {response}")
+                    return jsonify({"error": "Invalid response"}), 500
+            except Exception as e:
+                logging.error(f"Error in get_arduino_states: {e}")
+                return jsonify({"error": str(e)}), 500
         return jsonify(states)
     except Exception as e:
-        logging.error(f"Error in get_pca_states: {e}")
+        logging.error(f"Error in get_arduino_states: {e}")
         return jsonify({"error": str(e)}), 500
-        
+
 @app.route('/get_relay_states', methods=['GET'])
 def get_relay_states():
     try:
         if not h:
             logging.error("get_relay_states called but GPIO not initialized")
             return jsonify({"error": "GPIO not initialized"}), 503
-        
         states = {}
         for pin in config['channels']['relays']:
             try:
                 gpio_state = lgpio.gpio_read(h, int(pin))
-                states[pin] = 1 if gpio_state == 0 else 0  # Active-low: 0=on, 1=off
-                logging.debug(f"Relay pin {pin} ({config['channels']['relays'][pin]['name']}): {'on' if states[pin] == 1 else 'off'}")
+                states[pin] = 1 if gpio_state == 0 else 0
             except Exception as e:
                 logging.error(f"Error reading relay pin {pin}: {e}")
-                states[pin] = config['relay_states'].get(pin, 0)  # Fallback to saved state
-                logging.warning(f"Falling back to saved state for pin {pin}: {'on' if states[pin] == 1 else 'off'}")
-        
+                states[pin] = config['relay_states'].get(pin, 0)
         return jsonify(states)
     except Exception as e:
         logging.error(f"Error in get_relay_states: {e}")
@@ -659,7 +1181,6 @@ def get_data():
             "latitude": gps_data["latitude"],
             "longitude": gps_data["longitude"]
         }
-        # Add reed switch states dynamically
         if h:
             for pin, switch_info in config['reed_switches'].items():
                 name = switch_info['name'].lower().replace(" ", "_")
@@ -680,15 +1201,15 @@ def shutdown():
         data = request.json or {}
         if data.get('token') != SHUTDOWN_TOKEN:
             return jsonify({"error": "Unauthorized"}), 403
-        display_pi_user = "pi"  # Username for display-pi
-        display_pi_ip = "10.10.10.20"  # IP for display-pi
-        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"  # SSH key for pi user
+        display_pi_user = "pi"
+        display_pi_ip = "10.10.10.20"
+        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
         try:
             subprocess.run([
                 "ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}",
                 "sudo", "shutdown", "now"
             ], check=True, timeout=10)
-            logging.info(f"Successfully sent shutdown command to display-pi at {display_pi_ip}")
+            logging.info("Sent shutdown command to display-pi")
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logging.warning(f"Failed to shut down display-pi: {e}")
         cleanup_gpio()
@@ -705,33 +1226,37 @@ def shutdown():
 def save_config():
     try:
         config_data = request.json
-        logging.debug(f"Received save_config request: {config_data}")
-        with config_lock:
-            config_path = 'config.json'
-            if not os.access(config_path, os.W_OK):
-                logging.error(f"No write permissions for {config_path}")
-                return jsonify({"error": "Cannot write to config file"}), 500
-            with open(config_path, 'r') as f:
-                current_config = json.load(f)
-            # Update theme
-            if 'theme' in config_data:
-                new_theme = {
-                    "darkMode": config_data['theme'].get('darkMode', current_config['theme'].get('darkMode', 'off')),
-                    "autoTheme": config_data['theme'].get('autoTheme', current_config['theme'].get('autoTheme', 'off')),
-                    "defaultTheme": config_data['theme'].get('defaultTheme', current_config['theme'].get('defaultTheme', 'light')),
-                    "screenBrightness": str(config_data['theme'].get('screenBrightness', current_config['theme'].get('screenBrightness', '50')))
-                }
-                logging.debug(f"Updating theme: {new_theme}")
-                current_config['theme'] = new_theme
-            else:
-                logging.warning("No theme data in config_data, preserving existing theme")
-            # Log the config before saving
-            logging.debug(f"Config to be saved: {current_config}")
-            # Save updated config
-            with open(config_path, 'w') as f:
-                json.dump(current_config, f, indent=4)
-            logging.info(f"Saved theme config: {current_config['theme']}")
-            return jsonify({"message": "Config saved"})
+        config_path = 'config.json'
+        if not os.access(config_path, os.W_OK):
+            logging.error(f"No write permissions for {config_path}")
+            return jsonify({"error": "Cannot write to config file"}), 500
+        with open(config_path, 'r') as f:
+            current_config = json.load(f)
+        if 'theme' not in current_config:
+            current_config['theme'] = {
+                "darkMode": "off",
+                "autoTheme": "off",
+                "autoBrightness": "off",
+                "defaultTheme": "light",
+                "screenBrightness": "medium"
+            }
+        new_theme = {
+            "darkMode": config_data.get('theme', {}).get('darkMode', current_config['theme'].get('darkMode', 'off')),
+            "autoTheme": config_data.get('theme', {}).get('autoTheme', current_config['theme'].get('autoTheme', 'off')),
+            "autoBrightness": config_data.get('theme', {}).get('autoBrightness', current_config['theme'].get('autoBrightness', 'off')),
+            "defaultTheme": config_data.get('theme', {}).get('defaultTheme', current_config['theme'].get('defaultTheme', 'light')),
+            "screenBrightness": config_data.get('theme', {}).get('screenBrightness', current_config['theme'].get('screenBrightness', 'medium'))
+        }
+        current_config['theme'] = new_theme
+        if 'scenes' in config_data:
+            current_config['scenes'] = config_data['scenes']
+        for key in ['channels', 'reed_switches', 'relay_states']:
+            if key in config_data:
+                current_config[key] = config_data[key]
+        write_config_atomically(current_config, config_path)
+        config.update(current_config)
+        logging.info("Saved config")
+        return jsonify({"message": "Config saved"})
     except Exception as e:
         logging.error(f"Error saving config: {e}")
         return jsonify({"error": str(e)}), 500
@@ -739,321 +1264,97 @@ def save_config():
 @app.route('/load_config', methods=['GET'])
 def load_config():
     try:
-        with config_lock:
-            config_path = 'config.json'
-            if not os.access(config_path, os.R_OK):
-                logging.error(f"No read permissions for {config_path}")
-                return jsonify({
-                    "theme": {
-                        "darkMode": "off",
-                        "autoTheme": "off",
-                        "defaultTheme": "light",
-                        "screenBrightness": "50"
-                    },
-                    "screenBrightness": 50
-                }), 500
-            with open(config_path, 'r') as f:
-                config_data = json.load(f)
-            theme = config_data.get('theme', {
-                "darkMode": "off",
-                "autoTheme": "off",
-                "defaultTheme": "light",
-                "screenBrightness": "50"
-            })
-            try:
-                screen_brightness = int(theme.get('screenBrightness', '50'))
-                screen_brightness = max(10, min(100, screen_brightness))
-            except (ValueError, TypeError):
-                screen_brightness = 50
-            response = {
+        config_path = 'config.json'
+        if not os.access(config_path, os.R_OK):
+            logging.error(f"No read permissions for {config_path}")
+            return jsonify({
                 "theme": {
-                    "darkMode": theme.get("darkMode", "off"),
-                    "autoTheme": theme.get("autoTheme", "off"),
-                    "defaultTheme": theme.get("defaultTheme", "light"),
-                    "screenBrightness": str(screen_brightness)
+                    "darkMode": "off",
+                    "autoTheme": "off",
+                    "autoBrightness": "off",
+                    "defaultTheme": "light",
+                    "screenBrightness": "medium"
                 },
-                "screenBrightness": screen_brightness  # For backward compatibility
-            }
-            logging.debug(f"Returning config: {response}")
-            return jsonify(response)
+                "screenBrightness": "medium"
+            }), 500
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        theme = config_data.get('theme', {
+            "darkMode": "off",
+            "autoTheme": "off",
+            "autoBrightness": "off",
+            "defaultTheme": "light",
+            "screenBrightness": "medium"
+        })
+        screen_brightness = theme.get('screen brightness', 'medium')
+        response = {
+            "theme": {
+                "darkMode": theme.get("darkMode", "off"),
+                "autoTheme": theme.get("autoTheme", "off"),
+                "autoBrightness": theme.get("autoBrightness", "off"),
+                "defaultTheme": theme.get("defaultTheme", "light"),
+                "screenBrightness": screen_brightness
+            },
+            "screenBrightness": screen_brightness
+        }
+        logging.info("Loaded config")
+        return jsonify(response)
     except Exception as e:
         logging.error(f"Error in load_config: {e}")
         return jsonify({
             "theme": {
                 "darkMode": "off",
                 "autoTheme": "off",
+                "autoBrightness": "off",
                 "defaultTheme": "light",
-                "screenBrightness": "50"
+                "screenBrightness": "medium"
             },
-            "screenBrightness": 50
+            "screenBrightness": "medium"
         }), 500
 
 @app.route('/get_scenes', methods=['GET'])
 def get_scenes():
     try:
-        with config_lock:
-            config_path = 'config.json'
-            if not os.access(config_path, os.R_OK):
-                logging.error(f"No read permissions for {config_path}")
-                return jsonify({}), 500
-            with open(config_path, 'r') as f:
-                config_data = json.load(f)
-            scenes = config_data.get('scenes', {})
-            logging.debug(f"Returning scenes: {scenes}")
-            return jsonify(scenes)
+        config_path = 'config.json'
+        if not os.access(config_path, os.R_OK):
+            logging.error(f"No read permissions for {config_path}")
+            return jsonify({}), 500
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        scenes = config_data.get('scenes', {})
+        return jsonify(scenes)
     except Exception as e:
         logging.error(f"Error in get_scenes: {e}")
         return jsonify({}), 500
-        
+
 @app.route('/set_screen_brightness', methods=['POST'])
 def set_screen_brightness():
     try:
         data = request.json
         brightness_level = data.get('brightness')
-        
-        # Map brightness levels to values (0-255 range)
-        brightness_map = {
-            'low': 25,    # 10% of 255
-            'medium': 127, # 50% of 255
-            'high': 255   # 100% of 255
-        }
-        
+        auto_brightness = config['theme'].get('autoBrightness', 'off')
+        brightness_map = {'low': 25, 'medium': 127, 'high': 255}
         if brightness_level not in brightness_map:
             logging.error(f"Invalid brightness level: {brightness_level}")
             return jsonify({"error": "Invalid brightness level"}), 400
-        
         brightness_value = brightness_map[brightness_level]
-        display_pi_user = "pi"  # Username for display-pi
-        display_pi_ip = "10.10.10.20"  # IP for display-pi
-        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"  # SSH key for pi user
-        
-        # Construct the SSH command
-        ssh_command = (
-            f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
-        )
-        
+        display_pi_user = "pi"
+        display_pi_ip = "10.10.10.20"
+        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+        ssh_command = f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
         try:
-            # Execute SSH command to set brightness on display-pi
             subprocess.run([
                 "ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}",
                 ssh_command
             ], check=True, timeout=10, capture_output=True, text=True)
-            logging.info(f"Successfully set display-pi brightness to {brightness_level} ({brightness_value})")
-            return jsonify({"message": f"Brightness set to {brightness_level} ({brightness_value})"})
+            logging.info(f"Set display-pi brightness to {brightness_level}")
+            return jsonify({"message": f"Brightness set to {brightness_level}"})
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logging.error(f"Failed to set brightness on display-pi: {e}")
+            logging.error(f"Failed to set brightness: {e}")
             return jsonify({"error": f"Failed to set brightness: {str(e)}"}), 500
-            
     except Exception as e:
         logging.error(f"Error in set_screen_brightness: {e}")
         return jsonify({"error": str(e)}), 500
-        
-import time
-import subprocess
-from threading import Lock
-
-def send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value=None):
-    """
-    Sends an SSH command to the display-pi, handling screen off (xset) or wake (xdotool) and optional brightness restore.
-    Returns True on success, False on failure.
-    """
-    try:
-        cmd = ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}"]
-        # Only prepend DISPLAY=:0 for xdotool, not for xset
-        if command[0] == "xdotool":
-            cmd.append("DISPLAY=:0 " + " ".join(command))
-        else:
-            cmd.append(" ".join(command))
-        
-        logging.debug(f"Executing SSH command: {' '.join(cmd)}")
-        result = subprocess.run(
-            cmd, check=True, timeout=20, capture_output=True, text=True
-        )
-        logging.info(f"Successfully sent {action_desc} command to display-pi: {result.stdout.strip()}")
-        
-        # If brightness_value is provided (for wake), restore brightness
-        if brightness_value is not None:
-            ssh_command = f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
-            logging.debug(f"Executing brightness SSH command: {ssh_command}")
-            result = subprocess.run(
-                ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
-                check=True, timeout=20, capture_output=True, text=True
-            )
-            logging.info(f"Restored brightness to {brightness_value}: {result.stdout.strip()}")
-        
-        return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        error_msg = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
-        logging.error(f"Failed to send {action_desc} command to display-pi: {error_msg}, cmd: {' '.join(cmd)}")
-        
-        # Fallback to backlight control if xset or xdotool fails
-        if command[0] in ["xset", "xdotool"]:
-            fallback_value = 0 if command[0] == "xset" and command[-1] == "off" else (brightness_value if brightness_value else 127)
-            logging.info(f"Attempting fallback: set backlight to {fallback_value}")
-            try:
-                ssh_command = f"echo {fallback_value} | sudo tee /sys/class/backlight/*/brightness"
-                logging.debug(f"Executing fallback SSH command: {ssh_command}")
-                result = subprocess.run(
-                    ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
-                    check=True, timeout=20, capture_output=True, text=True
-                )
-                logging.info(f"Fallback succeeded: set backlight to {fallback_value}: {result.stdout.strip()}")
-                return True
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                error_msg = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
-                logging.error(f"Fallback failed: {error_msg}, cmd: {ssh_command}")
-        return False
-
-def check_initial_reed_state():
-    """
-    Checks the initial state of the Kitchen Panel reed switch after GPIO initialization
-    and sends an SSH command to sync the display-pi screen state.
-    """
-    kitchen_pin = None
-    for pin, switch_info in config['reed_switches'].items():
-        if switch_info['name'].lower() == "kitchen panel":
-            kitchen_pin = int(pin)
-            break
-    
-    if kitchen_pin is None:
-        logging.error("Kitchen Panel reed switch not found in config")
-        return None
-    
-    if h is None:
-        logging.error("GPIO not initialized, cannot check Kitchen Panel reed switch")
-        return None
-    
-    display_pi_user = "pi"
-    display_pi_ip = "10.10.10.20"
-    ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-    
-    # Read initial state
-    try:
-        initial_state = lgpio.gpio_read(h, kitchen_pin)
-        logging.info(f"Initial Kitchen Panel state: {'closed' if initial_state == 0 else 'open'} (GPIO {kitchen_pin})")
-        
-        with config_lock:
-            # Prepare command based on state
-            if initial_state == 0:  # Closed
-                command = ["xset", "dpms", "force", "off"]
-                action_desc = "screen off"
-                brightness_value = None
-                config['reed_switches'][str(kitchen_pin)]['state'] = "closed"
-            else:  # Open
-                command = ["xdotool", "key", "Shift"]
-                action_desc = "screen wake"
-                brightness_level = config['theme'].get('screenBrightness', 'medium')
-                brightness_map = {'low': 25, 'medium': 127, 'high': 255}
-                brightness_value = brightness_map.get(brightness_level, 127)
-                config['reed_switches'][str(kitchen_pin)]['state'] = "open"
-            
-            # Try sending the command with retries
-            max_attempts = 3
-            retry_interval = 10  # Seconds between retries
-            for attempt in range(max_attempts):
-                if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
-                    break
-                logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed, retrying in {retry_interval} seconds")
-                time.sleep(retry_interval)
-            else:
-                logging.error("All SSH attempts failed, could not sync initial screen state")
-            
-            # Save updated config
-            try:
-                with open('config.json', 'w') as f:
-                    json.dump(config, f, indent=4)
-                logging.debug(f"Updated config with initial Kitchen Panel state: {config['reed_switches'][str(kitchen_pin)]['state']}")
-            except Exception as e:
-                logging.error(f"Failed to save config.json: {e}")
-        
-        return initial_state
-    except Exception as e:
-        logging.error(f"Error reading initial Kitchen Panel reed switch state: {e}")
-        return None
-
-def monitor_kitchen_reed_switch(initial_state):
-    """
-    Monitors the Kitchen Panel reed switch (GPIO 23) and sends SSH commands to turn off the
-    display-pi screen when closed and wake it with last brightness when opened.
-    """
-    kitchen_pin = None
-    for pin, switch_info in config['reed_switches'].items():
-        if switch_info['name'].lower() == "kitchen panel":
-            kitchen_pin = int(pin)
-            break
-    
-    if kitchen_pin is None:
-        logging.error("Kitchen Panel reed switch not found in config")
-        return
-    
-    if h is None:
-        logging.error("GPIO not initialized, cannot monitor Kitchen Panel reed switch")
-        return
-    
-    display_pi_user = "pi"
-    display_pi_ip = "10.10.10.20"
-    ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-    last_state = initial_state  # Use initial state from check
-    debounce_count = 0
-    DEBOUNCE_THRESHOLD = 2  # Require 2 consistent readings
-    last_read_state = None
-    
-    logging.info(f"Starting Kitchen Panel reed switch monitor on GPIO {kitchen_pin} with initial state: {last_state}")
-    
-    while True:
-        try:
-            current_read = lgpio.gpio_read(h, kitchen_pin)
-            if current_read == last_read_state:
-                debounce_count += 1
-            else:
-                debounce_count = 0
-                last_read_state = current_read
-            
-            if debounce_count >= DEBOUNCE_THRESHOLD and current_read != last_state:
-                with config_lock:
-                    if current_read == 0:  # Reed switch closed
-                        logging.info("Kitchen Panel reed switch closed, turning off display-pi screen")
-                        command = ["xset", "dpms", "force", "off"]
-                        action_desc = "screen off"
-                        brightness_value = None
-                        config['reed_switches'][str(kitchen_pin)]['state'] = "closed"
-                    else:  # Reed switch opened
-                        logging.info("Kitchen Panel reed switch opened, waking display-pi screen")
-                        command = ["xdotool", "key", "Shift"]
-                        action_desc = "screen wake"
-                        brightness_level = config['theme'].get('screenBrightness', 'medium')
-                        brightness_map = {'low': 25, 'medium': 127, 'high': 255}
-                        brightness_value = brightness_map.get(brightness_level, 127)
-                        config['reed_switches'][str(kitchen_pin)]['state'] = "open"
-                    
-                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
-                        last_state = current_read
-                    else:
-                        logging.error(f"Failed to update screen state, keeping last_state as {last_state}")
-                    
-                    # Save updated config
-                    try:
-                        with open('config.json', 'w') as f:
-                            json.dump(config, f, indent=4)
-                        logging.debug(f"Updated config with Kitchen Panel state: {config['reed_switches'][str(kitchen_pin)]['state']}")
-                    except Exception as e:
-                        logging.error(f"Failed to save config.json: {e}")
-            
-            time.sleep(0.5)  # Poll every 0.5 seconds
-        except Exception as e:
-            logging.error(f"Error monitoring Kitchen Panel reed switch: {e}")
-            time.sleep(5)  # Wait before retrying
-            
-# Perform initial reed switch check and start monitoring
-initial_state = None
-try:
-    initial_state = check_initial_reed_state()
-except Exception as e:
-    logging.error(f"Failed to check initial reed state: {e}")
-
-# Start the reed switch monitoring thread with the initial state
-reed_switch_thread = threading.Thread(target=monitor_kitchen_reed_switch, args=(initial_state,), daemon=True)
-reed_switch_thread.start()
 
 if __name__ == '__main__':
     try:
@@ -1062,4 +1363,4 @@ if __name__ == '__main__':
     except Exception as e:
         logging.error(f"Error starting Flask app: {e}")
         cleanup_gpio()
-        raise  # Re-raise to see the error in console
+        raise
