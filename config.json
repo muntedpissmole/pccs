@@ -182,6 +182,6 @@
         "autoTheme": "on",
         "autoBrightness": "off",
         "defaultTheme": "light",
-        "screen brightness": "medium"
+        "screenBrightness": "medium"
     }
 }
