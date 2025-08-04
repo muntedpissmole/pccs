@@ -30,6 +30,7 @@ RPi.GPIO
 smbus2
 spidev
 sysv-ipc
+timezonefinder
 typing_extensions
 urllib3
 w1thermsensor

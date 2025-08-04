@@ -9,16 +9,18 @@ import serial
 import pynmea2
 from astral.sun import sun
 from astral import LocationInfo
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time as dt_time
 import pytz
 import subprocess
 import threading
+import timezonefinder
 
 # Global serial lock
 serial_lock = threading.Lock()
 import os
 from w1thermsensor import W1ThermSensor, NoSensorFoundError, SensorNotReadyError
 import tempfile
+from collections import defaultdict
 
 app = Flask(__name__)
 
@@ -334,6 +336,28 @@ MELBOURNE_LOCATION = LocationInfo(
     longitude=144.9631
 )
 
+tf = timezonefinder.TimezoneFinder()
+
+tz_cache = {
+    "tz_str": "Australia/Melbourne",
+    "last_latitude": None,
+    "last_longitude": None
+}
+
+def get_local_tz_str():
+    global tz_cache
+    if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+        if tz_cache["last_latitude"] is None or abs(gps_data["latitude"] - tz_cache["last_latitude"]) > 0.1 or abs(gps_data["longitude"] - tz_cache["last_longitude"]) > 0.1:
+            tz_str = tf.timezone_at(lng=gps_data["longitude"], lat=gps_data["latitude"])
+            if tz_str:
+                tz_cache["tz_str"] = tz_str
+                tz_cache["last_latitude"] = gps_data["latitude"]
+                tz_cache["last_longitude"] = gps_data["longitude"]
+                logging.info(f"Updated timezone to {tz_str} based on GPS location")
+            else:
+                logging.warning("Could not determine timezone from GPS, using fallback")
+    return tz_cache["tz_str"]
+
 SHUTDOWN_TOKEN = "kzqWazMQIO8YrefrqwEi4cFvM9pCrlCAYG05FLpjgpc"
 
 def set_system_clock(dt):
@@ -370,13 +394,14 @@ def update_gps_data():
     try:
         while True:
             with gps_lock:
+                local_tz_str = get_local_tz_str()
+                local_tz = pytz.timezone(local_tz_str)
                 if not current_time_cache["time"]:
-                    system_time = datetime.now(pytz.timezone("Australia/Melbourne"))
+                    system_time = datetime.now(local_tz)
                     current_time_cache["time"] = system_time.strftime("%A %B %d %Y %I:%M %p %Z").lstrip("0").replace(" 0", " ") + "*"
                     current_time_cache["last_updated"] = datetime.now(pytz.UTC)
                     current_time_cache["using_gps"] = False
                 if not sun_times_cache["sunrise"]:
-                    local_tz = pytz.timezone("Australia/Melbourne")
                     today = date.today()
                     s = sun(MELBOURNE_LOCATION.observer, date=today, tzinfo=local_tz)
                     sun_times_cache.update({
@@ -417,7 +442,7 @@ def update_gps_data():
                                 minute=msg.timestamp.minute
                             )
                             utc_dt = pytz.utc.localize(naive_dt)
-                            local_dt = utc_dt.astimezone(pytz.timezone("Australia/Melbourne"))
+                            local_dt = utc_dt.astimezone(local_tz)
                             current_time_cache["time"] = local_dt.strftime("%A %B %d %Y %I:%M %p %Z").lstrip("0").replace(" 0", " ")
                             current_time_cache["last_updated"] = datetime.now(pytz.UTC)
                             if not current_time_cache["fix_obtained"]:
@@ -439,7 +464,7 @@ try:
                 "autoTheme": "off",
                 "autoBrightness": "off",
                 "defaultTheme": "light",
-                "screenBrightness": "medium"
+                "screen_brightness": "medium"
             },
             "channels": {
                 "arduino": {},
@@ -450,23 +475,22 @@ try:
                 "23": {
                     "name": "Kitchen Panel",
                     "type": "sensor",
-                    "state": "open",
-                    "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
-                    "display": False
+                    "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"]
                 },
                 "24": {
                     "name": "Storage Panel",
                     "type": "sensor",
-                    "state": "closed",
-                    "trigger_channels": ["arduino:5", "arduino:6"],
-                    "display": True
+                    "trigger_channels": ["arduino:5"]
                 },
                 "25": {
                     "name": "Rear Drawer",
                     "type": "sensor",
-                    "state": "closed",
-                    "trigger_channels": ["arduino:8"],
-                    "display": True
+                    "trigger_channels": ["arduino:6"]
+                },
+                "12": {
+                    "name": "Kitchen Bench",
+                    "type": "sensor",
+                    "trigger_channels": ["arduino:4"]
                 }
             },
             "relay_states": {}
@@ -481,7 +505,7 @@ try:
             "autoTheme": "off",
             "autoBrightness": "off",
             "defaultTheme": "light",
-            "screenBrightness": "medium"
+            "screen_brightness": "medium"
         }
     if 'channels' not in config:
         config['channels'] = {"arduino": {}, "relays": {}}
@@ -489,36 +513,55 @@ try:
         config['channels']['arduino'] = {}
     if 'relays' not in config['channels']:
         config['channels']['relays'] = {}
+    # Add display to arduino channels if missing
+    for channel, info in config['channels']['arduino'].items():
+        if 'display' not in info:
+            info['display'] = channel not in ['3', '10']
+    # Add display to relay channels if missing
+    for channel, info in config['channels']['relays'].items():
+        if 'display' not in info:
+            info['display'] = True
     if 'scenes' not in config:
         config['scenes'] = {}
     if 'reed_switches' not in config:
-        config['reed_switches'] = {
-            "23": {
-                "name": "Kitchen Panel",
-                "type": "sensor",
-                "state": "open",
-                "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
-                "display": False
-            },
-            "24": {
-                "name": "Storage Panel",
-                "type": "sensor",
-                "state": "closed",
-                "trigger_channels": ["arduino:5", "arduino:6"],
-                "display": True
-            },
-            "25": {
-                "name": "Rear Drawer",
-                "type": "sensor",
-                "state": "closed",
-                "trigger_channels": ["arduino:8"],
-                "display": True
-            }
+        config['reed_switches'] = {}
+    # Add missing reed switches
+    default_reed_switches = {
+        "23": {
+            "name": "Kitchen Panel",
+            "type": "sensor",
+            "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"]
+        },
+        "24": {
+            "name": "Storage Panel",
+            "type": "sensor",
+            "trigger_channels": ["arduino:5"]
+        },
+        "25": {
+            "name": "Rear Drawer",
+            "type": "sensor",
+            "trigger_channels": ["arduino:6"]
+        },
+        "12": {
+            "name": "Kitchen Bench",
+            "type": "sensor",
+            "trigger_channels": ["arduino:4"]
         }
+    }
+    updated = False
+    for pin, info in default_reed_switches.items():
+        if pin not in config['reed_switches']:
+            config['reed_switches'][pin] = info
+            updated = True
+            logging.info(f"Added missing reed switch entry for pin {pin}")
     if 'relay_states' not in config:
         config['relay_states'] = {}
-    write_config_atomically(config, config_path)
-    logging.info("Loaded and validated config")
+    if updated:
+        write_config_atomically(config, config_path)
+        logging.info("Updated config with missing reed switches")
+    else:
+        logging.info("Loaded and validated config")
+    
 except Exception as e:
     logging.error(f"Error loading config.json: {e}")
     config = {
@@ -527,7 +570,7 @@ except Exception as e:
             "autoTheme": "off",
             "autoBrightness": "off",
             "defaultTheme": "light",
-            "screenBrightness": "medium"
+            "screen_brightness": "medium"
         },
         "channels": {
             "arduino": {},
@@ -538,29 +581,37 @@ except Exception as e:
             "23": {
                 "name": "Kitchen Panel",
                 "type": "sensor",
-                "state": "open",
-                "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"],
-                "display": False
+                "trigger_channels": ["arduino:1", "arduino:2", "arduino:3"]
             },
             "24": {
                 "name": "Storage Panel",
                 "type": "sensor",
-                "state": "closed",
-                "trigger_channels": ["arduino:5", "arduino:6"],
-                "display": True
+                "trigger_channels": ["arduino:5"]
             },
             "25": {
                 "name": "Rear Drawer",
                 "type": "sensor",
-                "state": "closed",
-                "trigger_channels": ["arduino:8"],
-                "display": True
+                "trigger_channels": ["arduino:6"]
+            },
+            "12": {
+                "name": "Kitchen Bench",
+                "type": "sensor",
+                "trigger_channels": ["arduino:4"]
             }
         },
         "relay_states": {}
     }
     write_config_atomically(config, config_path)
     logging.info("Created fallback config.json")
+
+# Manual override and channel to reeds mapping
+manual_override = {pin_str: False for pin_str in config['reed_switches']}
+channel_to_reeds = defaultdict(list)
+for pin_str, info in config['reed_switches'].items():
+    for ch in info.get('trigger_channels', []):
+        if ch.startswith('arduino:'):
+            ch_idx = ch.split(':')[1]
+            channel_to_reeds[ch_idx].append(pin_str)
 
 def check_arduino_alive():
     if not arduino_available:
@@ -591,7 +642,7 @@ def monitor_arduino():
             failure_count = 0
         time.sleep(30)  # Check every 30s
 
-GREEN_FACTOR = 0.1  # Green PWM = % of red for red-orange mix
+GREEN_FACTOR = 0.05  # Green PWM = % of red for red-orange mix
 
 def set_arduino_pwm(channel, value, ramp_time=1000):
     """Send PWM value (0-255) to Arduino for the specified channel via serial, with optional ramp."""
@@ -673,20 +724,115 @@ def get_arduino_pwm(channel):
     logging.error(f"Failed to read PWM for channel {channel} after {retries} attempts")
     return None
 
+def get_target_pwms(pin_str, current_local):
+    local_tz_str = get_local_tz_str()
+    local_tz = pytz.timezone(local_tz_str)
+    if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+        loc = LocationInfo("Current", "", local_tz_str, gps_data["latitude"], gps_data["longitude"])
+    else:
+        loc = MELBOURNE_LOCATION
+    if current_local.hour >= 12:
+        today = current_local.date()
+        s = sun(loc.observer, date=today, tzinfo=local_tz)
+        sunset = s["sunset"]
+        operate_start = sunset - timedelta(hours=1)
+        tomorrow = today + timedelta(days=1)
+        s_tom = sun(loc.observer, date=tomorrow, tzinfo=local_tz)
+        sunrise_tom = s_tom["sunrise"]
+        operate_end = sunrise_tom + timedelta(hours=1)
+    else:
+        today = current_local.date()
+        s = sun(loc.observer, date=today, tzinfo=local_tz)
+        sunrise = s["sunrise"]
+        operate_end = sunrise + timedelta(hours=1)
+        prev_day = today - timedelta(days=1)
+        s_prev = sun(loc.observer, date=prev_day, tzinfo=local_tz)
+        sunset_prev = s_prev["sunset"]
+        operate_start = sunset_prev - timedelta(hours=1)
+    lights_operate = operate_start <= current_local < operate_end
+    if not lights_operate:
+        return {}, False
+    operate_start_date = operate_start.date()
+    target = {}
+    if pin_str == '23':
+        eight_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(20, 0)))
+        ten_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(22, 0)))
+        if current_local < eight_pm:
+            target[1] = 255
+            target[2] = 0
+            target[3] = 0
+        elif current_local < ten_pm:
+            target[1] = 0
+            target[2] = 255
+            target[3] = int(255 * GREEN_FACTOR)
+        else:
+            target[1] = 0
+            target[2] = int(255 * 0.2)
+            target[3] = int(target[2] * GREEN_FACTOR)
+    else:
+        pwm = 255
+        for ch in config['reed_switches'][pin_str]['trigger_channels']:
+            if ch.startswith('arduino:'):
+                ch_idx = int(ch.split(':')[1])
+                target[ch_idx] = pwm
+    return target, True
+
+def update_lights_based_on_time():
+    if h is None:
+        return
+    local_tz_str = get_local_tz_str()
+    local_tz = pytz.timezone(local_tz_str)
+    current_local = datetime.now(local_tz)
+    for pin_str in config['reed_switches']:
+        if manual_override[pin_str]:
+            continue
+        # Special override for kitchen bench (pin 12): if kitchen panel (23) is closed, force bench off
+        if pin_str == '12':
+            if lgpio.gpio_read(h, 23) == 0:
+                current_pwm = get_arduino_pwm(4)
+                if current_pwm is not None and current_pwm > 0:
+                    set_arduino_pwm(4, 0, ramp_time=1000)
+                continue  # Skip normal logic
+        if lgpio.gpio_read(h, int(pin_str)) == 1:
+            targets, operate = get_target_pwms(pin_str, current_local)
+            if operate:
+                for ch_idx, target_pwm in targets.items():
+                    if pin_str in ['24', '12'] and current_local.hour >= 20:
+                        dim_pwm = int(255 * 0.2)
+                        if target_pwm > dim_pwm:
+                            target_pwm = dim_pwm
+                    current_pwm = get_arduino_pwm(ch_idx)
+                    if current_pwm is not None and abs(current_pwm - target_pwm) > 5:
+                        set_arduino_pwm(ch_idx, target_pwm, ramp_time=2000 if pin_str == '23' else 1000)
+            else:
+                for ch in config['reed_switches'][pin_str]['trigger_channels']:
+                    if ch.startswith('arduino:'):
+                        ch_idx = int(ch.split(':')[1])
+                        current_pwm = get_arduino_pwm(ch_idx)
+                        if current_pwm is not None and current_pwm > 0:
+                            set_arduino_pwm(ch_idx, 0, ramp_time=2000 if pin_str == '23' else 1000)
+
+def light_manager():
+    while True:
+        update_lights_based_on_time()
+        time.sleep(60)
+
 def check_initial_reed_states():
     if h is None:
         logging.error("GPIO not initialized")
         return {}
     initial_states = {}
+    local_tz_str = get_local_tz_str()
+    local_tz = pytz.timezone(local_tz_str)
     for pin_str, switch_info in config['reed_switches'].items():
         pin = int(pin_str)
         try:
             initial_state = lgpio.gpio_read(h, pin)
             state_str = "closed" if initial_state == 0 else "open"
             logging.info(f"Initial state for {switch_info['name']}: {state_str}")
-            config['reed_switches'][pin_str]['state'] = state_str
             initial_states[pin] = initial_state
 
+            current_local = datetime.now(local_tz)
             # Kitchen-specific screen and light control
             if pin == 23:
                 display_pi_user = "pi"
@@ -697,40 +843,32 @@ def check_initial_reed_states():
                     action_desc = "screen off"
                     brightness_value = None
                     # Turn off kitchen lights
-                    set_arduino_pwm(1, 0, ramp_time=1000)
-                    set_arduino_pwm(2, 0, ramp_time=1000)
-                    set_arduino_pwm(3, 0, ramp_time=1000)
+                    set_arduino_pwm(1, 0, ramp_time=2000)
+                    set_arduino_pwm(2, 0, ramp_time=2000)
+                    set_arduino_pwm(3, 0, ramp_time=2000)
+                    # Also turn off kitchen bench light
+                    set_arduino_pwm(4, 0, ramp_time=1000)
                 else:  # Open
                     command = ["xdotool", "key", "Shift"]
                     action_desc = "screen wake"
-                    brightness_level = config['theme'].get('screenBrightness', 'medium')
+                    brightness_level = config['theme'].get('screen_brightness', 'medium')
                     brightness_map = {'low': 25, 'medium': 127, 'high': 255}
                     brightness_value = brightness_map.get(brightness_level, 127)
                     # Compute and set kitchen lights based on time
-                    local_tz = pytz.timezone("Australia/Melbourne")
-                    current_local = datetime.now(local_tz)
-                    if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
-                        loc = LocationInfo("Current", "", "Australia/Melbourne", gps_data["latitude"], gps_data["longitude"])
+                    targets, operate = get_target_pwms(pin_str, current_local)
+                    if operate:
+                        for ch_idx, pwm in targets.items():
+                            set_arduino_pwm(ch_idx, pwm, ramp_time=2000)
                     else:
-                        loc = MELBOURNE_LOCATION
-                    today = current_local.date()
-                    s = sun(loc.observer, date=today, tzinfo=local_tz)
-                    sunrise = s["sunrise"]
-                    sunset = s["sunset"]
-                    ten_pm = current_local.replace(hour=22, minute=0, second=0, microsecond=0)
-                    white_pwm = 0
-                    red_pwm = 0
-                    if sunrise <= current_local < sunset:
-                        white_pwm = 255
-                    else:
-                        if sunset <= current_local < ten_pm:
-                            red_pwm = 255
-                        else:
-                            red_pwm = int(0.3 * 255)
-                    green_pwm = int(red_pwm * GREEN_FACTOR)
-                    set_arduino_pwm(1, white_pwm, ramp_time=1000)
-                    set_arduino_pwm(2, red_pwm, ramp_time=1000)
-                    set_arduino_pwm(3, green_pwm, ramp_time=1000)
+                        set_arduino_pwm(1, 0, ramp_time=2000)
+                        set_arduino_pwm(2, 0, ramp_time=2000)
+                        set_arduino_pwm(3, 0, ramp_time=2000)
+                    # If kitchen bench panel is open, turn on its light based on time logic
+                    if initial_states.get(12, 0) == 1:
+                        bench_targets, bench_operate = get_target_pwms('12', current_local)
+                        if bench_operate:
+                            for ch_idx, pwm in bench_targets.items():
+                                set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
                 max_attempts = 3
                 retry_interval = 10
                 for attempt in range(max_attempts):
@@ -741,15 +879,19 @@ def check_initial_reed_states():
                 else:
                     logging.error("All SSH attempts failed")
 
-            # For storage and rear drawer, set initial lights based on state
-            elif pin in [24, 25]:
+            # For storage, rear drawer, and kitchen bench, set initial lights based on state
+            elif pin in [24, 25, 12]:
                 trigger_channels = switch_info.get('trigger_channels', [])
-                target_pwm = 255 if initial_state == 1 else 0  # Open: on, Closed: off
-                for ch in trigger_channels:
-                    if ch.startswith('arduino:'):
-                        channel_idx = int(ch.split(':')[1])
-                        if not set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000):
-                            logging.error(f"Failed to set initial PWM for channel {channel_idx} to {target_pwm}")
+                targets, operate = get_target_pwms(pin_str, current_local)
+                if initial_state == 1 and operate:  # Open and operate
+                    for ch_idx, pwm in targets.items():
+                        set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
+                else:
+                    target_pwm = 0
+                    for ch in trigger_channels:
+                        if ch.startswith('arduino:'):
+                            channel_idx = int(ch.split(':')[1])
+                            set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000)
         except Exception as e:
             logging.error(f"Error reading initial state for pin {pin}: {e}")
             initial_states[pin] = None
@@ -779,8 +921,11 @@ def monitor_reed_switch(pin, initial_state):
             if debounce_count >= DEBOUNCE_THRESHOLD and current_read != last_state:
                 state_str = "closed" if current_read == 0 else "open"
                 logging.info(f"{switch_info['name']} {state_str}")
-                config['reed_switches'][str(pin)]['state'] = state_str
+                manual_override[str(pin)] = False
 
+                local_tz_str = get_local_tz_str()
+                local_tz = pytz.timezone(local_tz_str)
+                current_local = datetime.now(local_tz)
                 # Kitchen-specific: control screen and lights
                 if pin == 23:
                     display_pi_user = "pi"
@@ -791,56 +936,49 @@ def monitor_reed_switch(pin, initial_state):
                         action_desc = "screen off"
                         brightness_value = None
                         # Turn off kitchen lights
-                        set_arduino_pwm(1, 0, ramp_time=1000)
-                        set_arduino_pwm(2, 0, ramp_time=1000)
-                        set_arduino_pwm(3, 0, ramp_time=1000)
+                        set_arduino_pwm(1, 0, ramp_time=2000)
+                        set_arduino_pwm(2, 0, ramp_time=2000)
+                        set_arduino_pwm(3, 0, ramp_time=2000)
+                        # Also turn off kitchen bench light
+                        set_arduino_pwm(4, 0, ramp_time=1000)
                     else:  # Open
                         command = ["xdotool", "key", "Shift"]
                         action_desc = "screen wake"
-                        brightness_level = config['theme'].get('screenBrightness', 'medium')
+                        brightness_level = config['theme'].get('screen_brightness', 'medium')
                         brightness_map = {'low': 25, 'medium': 127, 'high': 255}
                         brightness_value = brightness_map.get(brightness_level, 127)
                         # Compute and set kitchen lights based on time
-                        local_tz = pytz.timezone("Australia/Melbourne")
-                        current_local = datetime.now(local_tz)
-                        if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
-                            loc = LocationInfo("Current", "", "Australia/Melbourne", gps_data["latitude"], gps_data["longitude"])
+                        targets, operate = get_target_pwms(str(pin), current_local)
+                        if operate:
+                            for ch_idx, pwm in targets.items():
+                                set_arduino_pwm(ch_idx, pwm, ramp_time=2000)
                         else:
-                            loc = MELBOURNE_LOCATION
-                        today = current_local.date()
-                        s = sun(loc.observer, date=today, tzinfo=local_tz)
-                        sunrise = s["sunrise"]
-                        sunset = s["sunset"]
-                        ten_pm = current_local.replace(hour=22, minute=0, second=0, microsecond=0)
-                        white_pwm = 0
-                        red_pwm = 0
-                        if sunrise <= current_local < sunset:
-                            white_pwm = 255
-                        else:
-                            if sunset <= current_local < ten_pm:
-                                red_pwm = 255
-                            else:
-                                red_pwm = int(0.3 * 255)
-                        green_pwm = int(red_pwm * GREEN_FACTOR)
-                        set_arduino_pwm(1, white_pwm, ramp_time=1000)
-                        set_arduino_pwm(2, red_pwm, ramp_time=1000)
-                        set_arduino_pwm(3, green_pwm, ramp_time=1000)
-                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
-                        last_state = current_read
+                            set_arduino_pwm(1, 0, ramp_time=2000)
+                            set_arduino_pwm(2, 0, ramp_time=2000)
+                            set_arduino_pwm(3, 0, ramp_time=2000)
+                        # If kitchen bench panel is open, turn on its light based on time logic
+                        if lgpio.gpio_read(h, 12) == 1:
+                            bench_targets, bench_operate = get_target_pwms('12', current_local)
+                            if bench_operate:
+                                for ch_idx, pwm in bench_targets.items():
+                                    set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
+                    send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value)
+                    last_state = current_read
 
-                # Storage and rear drawer: control lights
-                else:
+                # Storage, rear drawer, and kitchen bench: control lights
+                elif pin in [24, 25, 12]:
                     trigger_channels = switch_info.get('trigger_channels', [])
-                    target_pwm = 255 if current_read == 1 else 0  # Open: on, Closed: off
-                    success = True
-                    for ch in trigger_channels:
-                        if ch.startswith('arduino:'):
-                            channel_idx = int(ch.split(':')[1])
-                            if not set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000):
-                                logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
-                                success = False
-                    if success:
-                        last_state = current_read
+                    targets, operate = get_target_pwms(str(pin), current_local)
+                    if current_read == 1 and operate:  # Open and operate
+                        for ch_idx, pwm in targets.items():
+                            set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
+                    else:
+                        target_pwm = 0
+                        for ch in trigger_channels:
+                            if ch.startswith('arduino:'):
+                                channel_idx = int(ch.split(':')[1])
+                                set_arduino_pwm(channel_idx, target_pwm, ramp_time=1000)
+                    last_state = current_read
 
             time.sleep(0.5)
         except Exception as e:
@@ -872,13 +1010,26 @@ if arduino_available:
     arduino_monitor_thread = threading.Thread(target=monitor_arduino, daemon=True)
     arduino_monitor_thread.start()
 
+# Start light manager thread
+light_manager_thread = threading.Thread(target=light_manager, daemon=True)
+light_manager_thread.start()
+
 @app.route('/')
 def index():
     try:
+        # Filter channels based on display attribute
+        filtered_arduino_channels = {k: v for k, v in config['channels']['arduino'].items() if v.get('display', True)}
+        filtered_relay_channels = {k: v for k, v in config['channels']['relays'].items() if v.get('display', True)}
+        
+        logging.info(f"Arduino channels before filtering: {list(config['channels']['arduino'].keys())}")
+        logging.info(f"Display value for channel 9: {config['channels']['arduino'].get('9', {}).get('display', 'missing')}")
+        logging.info(f"Filtered Arduino channels: {list(filtered_arduino_channels.keys())}")
+        logging.info(f"Filtered relay channels: {list(filtered_relay_channels.keys())}")
+        
         return render_template('index.html',
                               scenes=config['scenes'].keys(),
-                              arduino_channels=config['channels']['arduino'],
-                              relay_channels=config['channels']['relays'],
+                              arduino_channels=filtered_arduino_channels,
+                              relay_channels=filtered_relay_channels,
                               reed_switches=config['reed_switches'],
                               arduino_available=arduino_available)
     except Exception as e:
@@ -939,17 +1090,32 @@ def set_brightness():
             logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
             return jsonify({"error": "Failed to set PWM"}), 500
 
+        # Kitchen logic
+        if channel_idx == 1 and target_pwm > 0:
+            set_arduino_pwm(2, 0, ramp_time=1000)
+            set_arduino_pwm(3, 0, ramp_time=1000)
+        elif channel_idx == 2 and target_pwm > 0:
+            set_arduino_pwm(1, 0, ramp_time=1000)
         if channel_idx == 2:
             green_value = int(target_pwm * GREEN_FACTOR)
             if not set_arduino_pwm(3, green_value, ramp_time=1000):
                 logging.warning(f"Failed to auto-set green channel 3 to {green_value}")
 
-        # Optional final verification
-        final_pwm = get_arduino_pwm(channel_idx)
-        if final_pwm is None or abs(final_pwm - target_pwm) > 10:
-            logging.error(f"PWM verification failed for channel {channel_idx}: expected {target_pwm}, got {final_pwm}")
-            return jsonify({"error": "PWM verification failed"}), 500
-        logging.debug(f"Successfully set channel {channel_idx} to PWM {final_pwm}")
+        # Awning logic
+        if channel_idx == 8 and target_pwm > 0:
+            set_arduino_pwm(9, 0, ramp_time=1000)
+            set_arduino_pwm(10, 0, ramp_time=1000)
+        elif channel_idx == 9 and target_pwm > 0:
+            set_arduino_pwm(8, 0, ramp_time=1000)
+        if channel_idx == 9:
+            green_value = int(target_pwm * GREEN_FACTOR)
+            if not set_arduino_pwm(10, green_value, ramp_time=1000):
+                logging.warning(f"Failed to auto-set green channel 10 to {green_value}")
+
+        # Removed final verification to avoid timing issues with ramps
+        logging.debug(f"Successfully initiated set for channel {channel_idx} to PWM {target_pwm}")
+        for reed in channel_to_reeds[str(channel_idx)]:
+            manual_override[reed] = True
         return jsonify({"message": f"Brightness set to {brightness}%"})
     except Exception as e:
         logging.error(f"Error in set_brightness: {e}")
@@ -997,16 +1163,32 @@ def toggle():
                 logging.error(f"Failed to set PWM for channel {channel_idx} to {target_pwm}")
                 return jsonify({"error": "Failed to set PWM"}), 500
 
+            # Kitchen color logic
+            if channel_idx == 1 and target_pwm > 0:
+                set_arduino_pwm(2, 0, ramp_time=1000)
+                set_arduino_pwm(3, 0, ramp_time=1000)
+            elif channel_idx == 2 and target_pwm > 0:
+                set_arduino_pwm(1, 0, ramp_time=1000)
             if channel_idx == 2:
                 green_value = int(target_pwm * GREEN_FACTOR)
                 if not set_arduino_pwm(3, green_value):
                     logging.warning(f"Failed to auto-set green channel 3 to {green_value}")
 
-            final_pwm = get_arduino_pwm(channel_idx)
-            if final_pwm is None or abs(final_pwm - target_pwm) > 10:
-                logging.error(f"PWM verification failed for channel {channel_idx}: expected {target_pwm}, got {final_pwm}")
-                return jsonify({"error": "PWM verification failed"}), 500
-            logging.debug(f"Successfully set channel {channel_idx} to PWM {final_pwm}")
+            # Awning color logic (mirrored from kitchen)
+            if channel_idx == 8 and target_pwm > 0:
+                set_arduino_pwm(9, 0, ramp_time=1000)
+                set_arduino_pwm(10, 0, ramp_time=1000)
+            elif channel_idx == 9 and target_pwm > 0:
+                set_arduino_pwm(8, 0, ramp_time=1000)
+            if channel_idx == 9:
+                green_value = int(target_pwm * GREEN_FACTOR)
+                if not set_arduino_pwm(10, green_value):
+                    logging.warning(f"Failed to auto-set green channel 10 to {green_value}")
+
+            # Removed final verification to avoid timing issues with ramps
+            logging.debug(f"Successfully initiated set for channel {channel_idx} to PWM {target_pwm}")
+            for reed in channel_to_reeds[str(channel_idx)]:
+                manual_override[reed] = True
             return jsonify({"message": f"Channel {channel} set to {state.upper()}"})
         elif channel_type == 'relays':
             if not h:
@@ -1037,38 +1219,32 @@ def activate_scene():
         data = request.json
         scene_name = data['scene']
         scene = config['scenes'][scene_name]
-        target_pwm = {ch: 0 for ch in config['channels']['arduino']}
+        # Infer all possible Arduino channels from configured channels
+        all_arduino_channels = set(config['channels']['arduino'].keys())
+        target_pwm = {ch: 0 for ch in all_arduino_channels}
         for channel, brightness in scene.get('arduino', {}).items():
-            if channel in config['channels']['arduino']:
-                target_pwm[channel] = int(brightness * 255 / 100)
-        if '2' in config['channels']['arduino']:
+            target_pwm[channel] = int(brightness * 255 / 100)
+        if '2' in target_pwm:
             target_pwm['3'] = int(target_pwm.get('2', 0) * GREEN_FACTOR)
+        if '9' in target_pwm:
+            target_pwm['10'] = int(target_pwm.get('9', 0) * GREEN_FACTOR)
+        # Include any derived channels (e.g., 3) in the set list
+        channels_to_set = list(set(list(target_pwm.keys()) + list(all_arduino_channels)))
         if arduino_available:
-            # Batch ramp all Arduino channels to their targets (or 0) over 1s for simultaneous starts
-            with serial_lock:
-                ser_arduino.flushInput()
-                ser_arduino.flushOutput()
-                time.sleep(0.05)  # Single settle time for all channels
-                channels_to_set = list(config['channels']['arduino'].keys())
-                # Send all ramp commands with small delay to pace processing
-                for channel in channels_to_set:
-                    channel_idx = int(channel)
-                    target = target_pwm.get(channel, 0)
-                    ser_arduino.write(f'R{channel_idx} {target} 1000\n'.encode())
-                    time.sleep(0.02)  # Pace sends to avoid overwhelming Arduino parser/buffer
-                # Read all responses (echoed targets) in order, with retry for empties
-                for channel in channels_to_set:
-                    target = target_pwm.get(channel, 0)
-                    response = ser_arduino.readline().decode().strip()
-                    if not response:  # If empty, try one more read (delayed line)
-                        logging.warning(f"Empty response for channel {channel}, retrying readline")
-                        response = ser_arduino.readline().decode().strip()
-                    if response.isdigit():
-                        read_value = int(response)
-                        if read_value != target:
-                            logging.warning(f"Batch ramp echo mismatch for channel {channel}: expected {target}, got {read_value}")
-                    else:
-                        logging.warning(f"Invalid batch ramp response for channel {channel}: {response}")
+            for channel in sorted(channels_to_set):
+                target = target_pwm.get(channel, 0)
+                if not set_arduino_pwm(int(channel), target, ramp_time=1000):
+                    logging.error(f"Failed to set channel {channel} during scene activation")
+            # Final verification after all ramps
+            time.sleep(1.5)  # Wait for longest ramp + margin
+            for channel in channels_to_set:
+                current = get_arduino_pwm(int(channel))
+                target = target_pwm.get(channel, 0)
+                if current is None or abs(current - target) > 5:
+                    logging.error(f"Final verification failed for channel {channel}: current {current}, target {target}")
+        # Set manual override for ALL reeds to prevent auto light manager interference
+        for pin_str in config['reed_switches']:
+            manual_override[pin_str] = True
         config['relay_states'] = config.get('relay_states', {})
         if h:
             for pin, state in scene.get('relays', {}).items():
@@ -1152,19 +1328,20 @@ def get_data():
             if sun_times_cache["last_latitude"] is None or abs(gps_data["latitude"] - sun_times_cache["last_latitude"]) > 0.1 or abs(gps_data["longitude"] - sun_times_cache["last_longitude"]) > 0.1:
                 recalculate = True
         if recalculate and gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
-            local_tz = pytz.timezone("Australia/Melbourne")
+            local_tz_str = get_local_tz_str()
+            local_tz = pytz.timezone(local_tz_str)
             location = LocationInfo(
                 name="Current Location",
                 region="Unknown",
-                timezone="UTC",
+                timezone=local_tz_str,
                 latitude=gps_data["latitude"],
                 longitude=gps_data["longitude"]
             )
             today = date.today()
             s = sun(location.observer, date=today, tzinfo=local_tz)
             sun_times_cache.update({
-                "sunrise": s["sunrise"].astimezone(local_tz).strftime("%I:%M %p").lstrip("0"),
-                "sunset": s["sunset"].astimezone(local_tz).strftime("%I:%M %p").lstrip("0"),
+                "sunrise": s["sunrise"].strftime("%I:%M %p").lstrip("0"),
+                "sunset": s["sunset"].strftime("%I:%M %p").lstrip("0"),
                 "last_calculated": current_time,
                 "last_latitude": gps_data["latitude"],
                 "last_longitude": gps_data["longitude"]
@@ -1182,14 +1359,14 @@ def get_data():
             "longitude": gps_data["longitude"]
         }
         if h:
-            for pin, switch_info in config['reed_switches'].items():
-                name = switch_info['name'].lower().replace(" ", "_")
-                state = "Open" if lgpio.gpio_read(h, int(pin)) else "Closed"
-                data[name] = state
+            # Hard-code only storage_panel and rear_drawer
+            data['storage_panel'] = "Open" if lgpio.gpio_read(h, 24) else "Closed"
+            data['rear_drawer'] = "Open" if lgpio.gpio_read(h, 25) else "Closed"
+            data['kitchen_bench'] = "Open" if lgpio.gpio_read(h, 12) else "Closed"
         else:
-            for pin, switch_info in config['reed_switches'].items():
-                name = switch_info['name'].lower().replace(" ", "_")
-                data[name] = "Unknown"
+            data['storage_panel'] = "Unknown"
+            data['rear_drawer'] = "Unknown"
+            data['kitchen_bench'] = "Unknown"
         return jsonify(data)
     except Exception as e:
         logging.error(f"Error in get_data: {e}")
@@ -1238,14 +1415,14 @@ def save_config():
                 "autoTheme": "off",
                 "autoBrightness": "off",
                 "defaultTheme": "light",
-                "screenBrightness": "medium"
+                "screen_brightness": "medium"
             }
         new_theme = {
             "darkMode": config_data.get('theme', {}).get('darkMode', current_config['theme'].get('darkMode', 'off')),
             "autoTheme": config_data.get('theme', {}).get('autoTheme', current_config['theme'].get('autoTheme', 'off')),
-            "autoBrightness": config_data.get('theme', {}).get('autoBrightness', current_config['theme'].get('autoBrightness', 'off')),
+            "autoBrightness": config_data.get('theme', {}).get('autoBrightness', current_config['theme'].get('auto Brightness', 'off')),
             "defaultTheme": config_data.get('theme', {}).get('defaultTheme', current_config['theme'].get('defaultTheme', 'light')),
-            "screenBrightness": config_data.get('theme', {}).get('screenBrightness', current_config['theme'].get('screenBrightness', 'medium'))
+            "screen_brightness": config_data.get('theme', {}).get('screen_brightness', current_config['theme'].get('screen_brightness', 'medium'))
         }
         current_config['theme'] = new_theme
         if 'scenes' in config_data:
@@ -1267,50 +1444,14 @@ def load_config():
         config_path = 'config.json'
         if not os.access(config_path, os.R_OK):
             logging.error(f"No read permissions for {config_path}")
-            return jsonify({
-                "theme": {
-                    "darkMode": "off",
-                    "autoTheme": "off",
-                    "autoBrightness": "off",
-                    "defaultTheme": "light",
-                    "screenBrightness": "medium"
-                },
-                "screenBrightness": "medium"
-            }), 500
+            return jsonify({}), 500
         with open(config_path, 'r') as f:
             config_data = json.load(f)
-        theme = config_data.get('theme', {
-            "darkMode": "off",
-            "autoTheme": "off",
-            "autoBrightness": "off",
-            "defaultTheme": "light",
-            "screenBrightness": "medium"
-        })
-        screen_brightness = theme.get('screen brightness', 'medium')
-        response = {
-            "theme": {
-                "darkMode": theme.get("darkMode", "off"),
-                "autoTheme": theme.get("autoTheme", "off"),
-                "autoBrightness": theme.get("autoBrightness", "off"),
-                "defaultTheme": theme.get("defaultTheme", "light"),
-                "screenBrightness": screen_brightness
-            },
-            "screenBrightness": screen_brightness
-        }
-        logging.info("Loaded config")
-        return jsonify(response)
+        logging.info("Loaded full config")
+        return jsonify(config_data)
     except Exception as e:
         logging.error(f"Error in load_config: {e}")
-        return jsonify({
-            "theme": {
-                "darkMode": "off",
-                "autoTheme": "off",
-                "autoBrightness": "off",
-                "defaultTheme": "light",
-                "screenBrightness": "medium"
-            },
-            "screenBrightness": "medium"
-        }), 500
+        return jsonify({}), 500
 
 @app.route('/get_scenes', methods=['GET'])
 def get_scenes():
@@ -1332,7 +1473,7 @@ def set_screen_brightness():
     try:
         data = request.json
         brightness_level = data.get('brightness')
-        auto_brightness = config['theme'].get('autoBrightness', 'off')
+        auto_brightness = config['theme'].get('auto_brightness', 'off')
         brightness_map = {'low': 25, 'medium': 127, 'high': 255}
         if brightness_level not in brightness_map:
             logging.error(f"Invalid brightness level: {brightness_level}")

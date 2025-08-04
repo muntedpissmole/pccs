@@ -3,6 +3,19 @@ All notable changes to the PCCS project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+##1.5.0-beta 2 build 04082025-1900
+### Added & Changed
+- Started planning UI for 5" tent touchscreen
+- Added support for kitchen bench reed
+- Refined reed switch events
+- Refined scene components
+- Refined timing between lighting ramps for setting Scenes
+- Updated requirements.txt
+
+### Fixed
+- Reed switches now always turn off their associated lights when closed
+- Kitchen reed events depended on kitchen touchscreen successfully receiving SSH sleep command for some reason
+
 ## 1.5.0-beta 2 build 19072025-1430
 
 ### Added & Changed
@@ -12,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Back end refinements
 - Green LED channel follows red channel level at a multiplier of 0.1 to get a nice red-orange hue
 - Added Ardunio sketch to repo
-- Updates requirements.txt
+- Updated requirements.txt
 
 ### Fixed
 - Lighting channels now ramp silky smooth

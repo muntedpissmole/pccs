@@ -31,32 +31,40 @@
         <div class="data-panel glass">
             <div class="data-grid">
                 <div class="data-item">
-                    <span><i class="fas fa-thermometer-half"></i> Temperature:</span>
-                    <span id="temperature">N/A</span>
+                    <span><i class="fas fa-battery-full"></i> Battery Voltage:</span>
+                    <span id="battery_level">N/A</span>
+                </div>
+                <div class="data-item">
+                    <span><i class="fas fa-satellite"></i> GPS Fix:</span>
+                    <span id="gps_fix">No</span>
+                </div>
+                <div class="data-item">
+                    <span><i class="fas fa-bolt"></i> Battery Output:</span>
+                    <span id="battery_output">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-sun"></i> Sunrise:</span>
                     <span id="sunrise">---</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-battery-full"></i> Battery Voltage:</span>
-                    <span id="battery_level">N/A</span>
+                    <span><i class="fas fa-solar-panel"></i> Solar Output:</span>
+                    <span id="solar_output">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-moon"></i> Sunset:</span>
                     <span id="sunset">---</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-water"></i> Water Level:</span>
-                    <span id="tank_level">N/A</span>
+                    <span><i class="fas fa-thermometer-half"></i> Temperature:</span>
+                    <span id="temperature">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-box"></i> Storage Panel:</span>
                     <span id="storage_panel">Unknown</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-satellite"></i> GPS Fix:</span>
-                    <span id="gps_fix">No</span>
+                    <span><i class="fas fa-water"></i> Water Level:</span>
+                    <span id="tank_level">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-inbox"></i> Rear Drawer:</span>
@@ -70,7 +78,7 @@
         </div>
         <div class="lighting-panel glass">
             <div class="lighting-slider">
-                {% set arduino_channels_list = arduino_channels.items()|rejectattr('0', 'in', ['3', '9'])|list %}
+                {% set arduino_channels_list = arduino_channels.items()|list %}
                 {% for i in range(0, arduino_channels_list|length, 6) %}
                     <div class="lighting-page">
                         <div class="lighting-grid">
@@ -196,7 +204,7 @@
                 </div>
                 <div class="setting-item">
                     <span>Software Version:</span>
-                    <span class="setting-value">1.5.0-beta 2 build 19072025-1430</span>
+                    <span class="setting-value">1.5.0-beta 2 build 04082025-1900</span>
                 </div>
                 <div class="setting-item">
                     <span>GitHub:</span>

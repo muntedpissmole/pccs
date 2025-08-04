@@ -763,8 +763,8 @@ function fetchArduinoStates() {
 
 function updateArduinoSliders(states) {
     Object.keys(states).forEach(channel => {
-        if (['3', '9'].includes(channel)) {
-            console.log(`Diagnostic: Skipping channel ${channel}`);
+        if (!config.channels.arduino[channel]?.display) {
+            console.log(`Diagnostic: Skipping UI update for hidden channel ${channel}`);
             return;
         }
         const channelNum = parseInt(channel);
@@ -811,6 +811,10 @@ function fetchRelayStates() {
     $.get('/get_relay_states', function(data) {
         console.log('Diagnostic: Relay states received:', data);
         Object.keys(data).forEach(channel => {
+            if (!config.channels.relays[channel]?.display) {
+                console.log(`Diagnostic: Skipping UI update for hidden relay channel ${channel}`);
+                return;
+            }
             const state = data[channel] ? 'On' : 'Off';
             const toggleSlider = $(`#relay-value-${channel}`).closest('.control-item').find('.toggle-slider');
             $(`#relay-value-${channel}`).text(state);
@@ -968,7 +972,7 @@ function startArduinoStateInterval() {
         arduinoStateInterval = setInterval(() => {
             console.log('Diagnostic: Background fetchArduinoStates triggered');
             debouncedFetchArduinoStates();
-        }, 180000); // Increased to 180 seconds (3 minutes)
+        }, 2000); // Poll every 2 seconds to detect automated changes promptly
         console.log('Diagnostic: Started Arduino state interval');
     }
 }
@@ -1135,12 +1139,14 @@ function loadConfig() {
     $.get('/load_config', function(data) {
         console.log('Diagnostic: Config loaded:', data);
         try {
-            if (data && data.theme) {
-                const darkMode = data.theme.darkMode === 'on';
-                const autoTheme = data.theme.autoTheme === 'on';
-                const autoBrightness = data.theme.autoBrightness === 'on';
-                const defaultTheme = data.theme.defaultTheme || 'light';
-                let brightness = data.theme.screenBrightness || 'medium';
+            config = JSON.parse(JSON.stringify(data));
+            originalConfig = JSON.parse(JSON.stringify(data));
+            if (config && config.theme) {
+                const darkMode = config.theme.darkMode === 'on';
+                const autoTheme = config.theme.autoTheme === 'on';
+                const autoBrightness = config.theme.autoBrightness === 'on';
+                const defaultTheme = config.theme.defaultTheme || 'light';
+                let brightness = config.theme.screen_brightness || 'medium';
 
                 console.log(`Diagnostic: Parsed settings - darkMode: ${darkMode}, autoTheme: ${autoTheme}, autoBrightness: ${autoBrightness}, defaultTheme: ${defaultTheme}, brightness: ${brightness}`);
 
@@ -1178,6 +1184,7 @@ function loadConfig() {
                 console.warn('Diagnostic: No theme data in config, using defaults');
                 applyDefaultSettings();
             }
+            initializeSceneEditor();
         } catch (e) {
             console.error('Diagnostic: Error processing config data:', e);
             applyDefaultSettings();
@@ -1231,7 +1238,6 @@ const debouncedCheckActiveScene = debounce(function() {
 
                 if (sceneConfig.arduino) {
                     Object.keys(sceneConfig.arduino).forEach(channel => {
-                        if (['3', '9'].includes(channel)) return;
                         const sceneValue = sceneConfig.arduino[channel];
                         const currentValue = parseInt(arduinoStates[channel]) || 0;
                         if (Math.abs(sceneValue - currentValue) > 2) {
@@ -1252,7 +1258,6 @@ const debouncedCheckActiveScene = debounce(function() {
 
                 if (isCurrentSceneValid) {
                     Object.keys(arduinoStates).forEach(channel => {
-                        if (['3', '9'].includes(channel)) return;
                         if (!sceneConfig.arduino || !(channel in sceneConfig.arduino)) {
                             const currentValue = parseInt(arduinoStates[channel]) || 0;
                             if (currentValue > 2) {
@@ -1286,7 +1291,6 @@ const debouncedCheckActiveScene = debounce(function() {
 
                     if (sceneConfig.arduino) {
                         Object.keys(sceneConfig.arduino).forEach(channel => {
-                            if (['3', '9'].includes(channel)) return;
                             const sceneValue = sceneConfig.arduino[channel];
                             const currentValue = parseInt(arduinoStates[channel]) || 0;
                             if (Math.abs(sceneValue - currentValue) > 2) {
@@ -1307,7 +1311,6 @@ const debouncedCheckActiveScene = debounce(function() {
 
                     if (isMatch) {
                         Object.keys(arduinoStates).forEach(channel => {
-                            if (['3', '9'].includes(channel)) return;
                             if (!sceneConfig.arduino || !(channel in sceneConfig.arduino)) {
                                 const currentValue = parseInt(arduinoStates[channel]) || 0;
                                 if (currentValue > 2) {
