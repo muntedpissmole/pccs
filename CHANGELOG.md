@@ -1,9 +1,7 @@
 # Changelog
-All notable changes to the PCCS project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ##1.5.0-beta 2 build 14082025-2000
+
 ### Added & Changed
 - Refined lighting scenes
 - Added event to turn off all lights 1 hour after sunset
@@ -12,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - If the kitchen panel is open and sunset-1hr occurs, set the evening scene. If the evening scene is active and nighttime occurs, set the night scene
 
 ##1.5.0-beta 2 build 04082025-1900
+
 ### Added & Changed
 - Started planning UI for 5" tent touchscreen
 - Added support for kitchen bench reed
