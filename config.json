@@ -88,30 +88,21 @@
     "scenes": {
         "evening": {
             "arduino": {
-                "1": 80,
-                "4": 80,
-                "7": 50,
-                "8": 10
-            },
-            "relays": {
-                "17": 0,
-                "18": 0,
-                "27": 0,
-                "22": 0
+                "7": 20,
+                "8": 20
             }
         },
         "night": {
             "arduino": {
-                "2": 30,
-                "4": 5,
+                "7": 5,
                 "9": 10
             }
         },
         "bathroom": {
             "arduino": {
-                "7": 10,
+                "7": 5,
                 "11": 5,
-                "12": 5
+                "12": 10
             }
         },
         "all_off": {
@@ -143,30 +134,53 @@
             "type": "sensor",
             "trigger_channels": [
                 "arduino:1",
-                "arduino:2",
-                "arduino:3"
-            ]
+                "arduino:2"
+            ],
+            "evening": {
+                "arduino:1": 40
+            },
+            "night": {
+                "arduino:2": 10
+            }
         },
         "24": {
             "name": "Storage Panel",
             "type": "sensor",
             "trigger_channels": [
                 "arduino:5"
-            ]
+            ],
+            "evening": {
+                "arduino:5": 40
+            },
+            "night": {
+                "arduino:5": 5
+            }
         },
         "25": {
             "name": "Rear Drawer",
             "type": "sensor",
             "trigger_channels": [
                 "arduino:6"
-            ]
+            ],
+            "evening": {
+                "arduino:6": 100
+            },
+            "night": {
+                "arduino:6": 50
+            }
         },
         "12": {
             "name": "Kitchen Bench",
             "type": "sensor",
             "trigger_channels": [
                 "arduino:4"
-            ]
+            ],
+            "evening": {
+                "arduino:4": 80
+            },
+            "night": {
+                "arduino:4": 10
+            }
         }
     },
     "relay_states": {

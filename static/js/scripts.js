@@ -14,6 +14,8 @@ let sceneConfigs = {};
 let currentActiveScene = null;
 let arduinoStateInterval;
 let lastSetBrightness = {};
+let lastActiveScenePollTime = 0;
+const ACTIVE_SCENE_POLL_INTERVAL = 2000; // Sync with arduino poll
 
 $(document).ready(function() {
     console.log('Diagnostic: Page loaded, starting initialization');
@@ -244,7 +246,8 @@ $(document).ready(function() {
             }
             const currentTime = performance.now();
             calculateVelocity(x, currentTime);
-            console.log(`Diagnostic: Touch move to X=${x}, walk=${walk}, scrollLeft=${lightingSlider.scrollLeft}, velocity=${velocity}`);
+            const currentScroll = lightingSlider.scrollLeft;
+            console.log(`Diagnostic: Touch move to X=${x}, walk=${walk}, scrollLeft=${currentScroll}, velocity=${velocity}`);
         }, { passive: false });
 
         lightingSlider.addEventListener('touchend', (e) => {
@@ -640,6 +643,11 @@ function fetchData() {
         const gpsCoords = (data.latitude && data.longitude) ?
             `${parseFloat(data.latitude).toFixed(6)}, ${parseFloat(data.longitude).toFixed(6)}` : 'N/A';
         $('#gps-coordinates').text(gpsCoords);
+        $('#solar_output').text(data.solar_output !== 'Error' ? data.solar_output : 'Error')
+                          .toggleClass('error', data.solar_output === 'Error');
+        $('#battery_label').html(`<i class="fas fa-bolt"></i> ${data.battery_label || 'Battery Output'}:`);
+        $('#battery_output').text(data.battery_current !== 'Error' ? data.battery_current : 'Error')
+                           .toggleClass('error', data.battery_current === 'Error');
 
         if ($('#auto-theme-toggle').prop('checked') || $('#auto-brightness-toggle').prop('checked')) {
             if ($('#sunrise').text() !== '---' && $('#sunset').text() !== '---') {
@@ -715,6 +723,30 @@ function fetchData() {
         $('#rear_drawer').text('Unknown');
         $('#gps_fix').text('No');
         $('#gps-coordinates').text('N/A');
+        $('#solar_output').text('Error').toggleClass('error', true);
+        $('#battery_label').html(`<i class="fas fa-bolt"></i> Battery Output:`);
+        $('#battery_output').text('Error').toggleClass('error', true);
+    });
+}
+
+function fetchActiveScene() {
+    $.get('/get_active_scene', function(data) {
+        console.log('Diagnostic: Active scene from backend:', data.active_scene);
+        if (data.active_scene !== currentActiveScene) {
+            currentActiveScene = data.active_scene;
+            $('.scene-btn').removeClass('active');
+            if (currentActiveScene) {
+                const sceneTitle = currentActiveScene.replace('_', ' ').toLowerCase();
+                $('.scene-btn').each(function() {
+                    const buttonText = $(this).text().trim().toLowerCase().replace(' ', '');
+                    if (buttonText.includes(sceneTitle)) {
+                        $(this).addClass('active');
+                    }
+                });
+            }
+        }
+    }).fail(function(jqXHR, textStatus, errorThrown) {
+        console.error('Diagnostic: Error fetching /get_active_scene:', textStatus, errorThrown);
     });
 }
 
@@ -938,11 +970,13 @@ function activateScene(scene) {
             console.log(`Diagnostic: Scene ${scene} activated:`, response);
             debouncedFetchArduinoStates();
             fetchRelayStates();
+            fetchActiveScene();  // New: Immediate sync after activation
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error(`Diagnostic: Error in activate_scene for ${scene}:`, textStatus, errorThrown);
             debouncedFetchArduinoStates();
             fetchRelayStates();
+            fetchActiveScene();  // New: Sync even on error
         }
     });
 }
@@ -970,10 +1004,11 @@ function initiateShutdown() {
 function startArduinoStateInterval() {
     if (!arduinoStateInterval) {
         arduinoStateInterval = setInterval(() => {
-            console.log('Diagnostic: Background fetchArduinoStates triggered');
+            console.log('Diagnostic: Background fetchArduinoStates and fetchActiveScene triggered');
             debouncedFetchArduinoStates();
-        }, 2000); // Poll every 2 seconds to detect automated changes promptly
-        console.log('Diagnostic: Started Arduino state interval');
+            fetchActiveScene();  // New: Poll backend active scene for UI sync
+        }, ACTIVE_SCENE_POLL_INTERVAL);  // Use consistent interval
+        console.log('Diagnostic: Started Arduino state and active scene interval');
     }
 }
 
@@ -1218,74 +1253,122 @@ function loadScenes(retryCount = 3, delay = 1000) {
 
 const debouncedCheckActiveScene = debounce(function() {
     if (!Object.keys(sceneConfigs).length) {
-        console.log('Diagnostic: Scene pages not loaded, skipping active scene check');
+        console.log('Diagnostic: Scene configs not loaded, skipping active scene check');
         return;
     }
 
-    $.when(
-        $.get('/get_arduino_states'),
-        $.get('/get_relay_states')
-    ).done(function(arduinoResponse, relayResponse) {
-        try {
-            const arduinoStates = typeof arduinoResponse[0] === 'string' ? JSON.parse(arduinoResponse[0]) : arduinoResponse[0];
-            const relayStates = typeof relayResponse[0] === 'string' ? JSON.parse(relayResponse[0]) : relayResponse[0];
-            console.log('Diagnostic: Checking active scene - Arduino states:', arduinoStates, 'Relay states:', relayStates);
+    // New: First fetch backend active scene, then fallback to inference if null
+    $.get('/get_active_scene', function(data) {
+        if (data.active_scene) {
+            console.log('Diagnostic: Using backend active scene:', data.active_scene);
+            currentActiveScene = data.active_scene;
+            $('.scene-btn').removeClass('active');
+            const sceneTitle = currentActiveScene.replace('_', ' ').toLowerCase();
+            $('.scene-btn').each(function() {
+                const buttonText = $(this).text().trim().toLowerCase().replace(' ', '');
+                if (buttonText.includes(sceneTitle)) {
+                    $(this).addClass('active');
+                }
+            });
+        } else {
+            // Fallback to existing inference if backend says null
+            $.when(
+                $.get('/get_arduino_states'),
+                $.get('/get_relay_states')
+            ).done(function(arduinoResponse, relayResponse) {
+                try {
+                    const arduinoStates = typeof arduinoResponse[0] === 'string' ? JSON.parse(arduinoResponse[0]) : arduinoResponse[0];
+                    const relayStates = typeof relayResponse[0] === 'string' ? JSON.parse(relayResponse[0]) : relayResponse[0];
+                    console.log('Diagnostic: Backend scene null, inferring from states - Arduino:', arduinoStates, 'Relay:', relayStates);
 
-            let isCurrentSceneValid = false;
-            if (currentActiveScene && sceneConfigs[currentActiveScene]) {
-                const sceneConfig = sceneConfigs[currentActiveScene];
-                isCurrentSceneValid = true;
+                    let newActiveScene = null;
+                    Object.keys(sceneConfigs).forEach(scene => {
+                        const sceneConfig = sceneConfigs[scene];
+                        let isMatch = true;
 
-                if (sceneConfig.arduino) {
-                    Object.keys(sceneConfig.arduino).forEach(channel => {
-                        const sceneValue = sceneConfig.arduino[channel];
-                        const currentValue = parseInt(arduinoStates[channel]) || 0;
-                        if (Math.abs(sceneValue - currentValue) > 2) {
-                            isCurrentSceneValid = false;
+                        if (sceneConfig.arduino) {
+                            Object.keys(sceneConfig.arduino).forEach(channel => {
+                                const sceneValue = sceneConfig.arduino[channel];
+                                const currentValue = parseInt(arduinoStates[channel]) || 0;
+                                if (Math.abs(sceneValue - currentValue) > 2) {
+                                    isMatch = false;
+                                }
+                            });
+                        }
+
+                        if (sceneConfig.relays) {
+                            Object.keys(sceneConfig.relays).forEach(channel => {
+                                const sceneValue = sceneConfig.relays[channel];
+                                const currentValue = relayStates[channel] ? 1 : 0;
+                                if (sceneValue !== currentValue) {
+                                    isMatch = false;
+                                }
+                            });
+                        }
+
+                        if (isMatch) {
+                            Object.keys(arduinoStates).forEach(channel => {
+                                if (!sceneConfig.arduino || !(channel in sceneConfig.arduino)) {
+                                    const currentValue = parseInt(arduinoStates[channel]) || 0;
+                                    if (currentValue > 2) {
+                                        isMatch = false;
+                                    }
+                                }
+                            });
+                            Object.keys(relayStates).forEach(channel => {
+                                if (!sceneConfig.relays || !(channel in sceneConfig.relays)) {
+                                    const currentValue = relayStates[channel] ? 1 : 0;
+                                    if (currentValue !== 0) {
+                                        isMatch = false;
+                                    }
+                                }
+                            });
+                        }
+
+                        if (isMatch) {
+                            newActiveScene = scene;
                         }
                     });
-                }
 
-                if (sceneConfig.relays) {
-                    Object.keys(sceneConfig.relays).forEach(channel => {
-                        const sceneValue = sceneConfig.relays[channel];
-                        const currentValue = relayStates[channel] ? 1 : 0;
-                        if (sceneValue !== currentValue) {
-                            isCurrentSceneValid = false;
-                        }
-                    });
-                }
-
-                if (isCurrentSceneValid) {
-                    Object.keys(arduinoStates).forEach(channel => {
-                        if (!sceneConfig.arduino || !(channel in sceneConfig.arduino)) {
-                            const currentValue = parseInt(arduinoStates[channel]) || 0;
-                            if (currentValue > 2) {
-                                isCurrentSceneValid = false;
+                    console.log('Diagnostic: Inferred active scene:', newActiveScene);
+                    $('.scene-btn').removeClass('active');
+                    if (newActiveScene) {
+                        const sceneTitle = newActiveScene.replace('_', ' ').toLowerCase();
+                        $('.scene-btn').each(function() {
+                            const buttonText = $(this).text().trim().toLowerCase().replace(' ', '');
+                            if (buttonText.includes(sceneTitle)) {
+                                $(this).addClass('active');
                             }
-                        }
-                    });
-                    Object.keys(relayStates).forEach(channel => {
-                        if (!sceneConfig.relays || !(channel in sceneConfig.relays)) {
-                            const currentValue = relayStates[channel] ? 1 : 0;
-                            if (currentValue !== 0) {
-                                isCurrentSceneValid = false;
-                            }
-                        }
-                    });
+                        });
+                        currentActiveScene = newActiveScene;
+                    } else {
+                        currentActiveScene = null;
+                    }
+                } catch (e) {
+                    console.error('Diagnostic: Error in checkActiveScene inference:', e);
+                    $('.scene-btn').removeClass('active');
+                    currentActiveScene = null;
                 }
-            }
-
-            if (!isCurrentSceneValid && currentActiveScene) {
-                console.log(`Diagnostic: Current scene ${currentActiveScene} no longer valid, deactivating`);
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error('Diagnostic: Error fetching states for checkActiveScene:', textStatus, errorThrown);
                 $('.scene-btn').removeClass('active');
                 currentActiveScene = null;
-            }
+            });
+        }
+    }).fail(function(jqXHR, textStatus, errorThrown) {
+        console.error('Diagnostic: Error fetching /get_active_scene in checkActiveScene:', textStatus, errorThrown);
+        // Fallback to full inference if endpoint fails
+        $.when(
+            $.get('/get_arduino_states'),
+            $.get('/get_relay_states')
+        ).done(function(arduinoResponse, relayResponse) {
+            try {
+                const arduinoStates = typeof arduinoResponse[0] === 'string' ? JSON.parse(arduinoResponse[0]) : arduinoResponse[0];
+                const relayStates = typeof relayResponse[0] === 'string' ? JSON.parse(relayResponse[0]) : relayResponse[0];
+                console.log('Diagnostic: Backend scene null, inferring from states - Arduino:', arduinoStates, 'Relay:', relayStates);
 
-            if (!currentActiveScene) {
                 let newActiveScene = null;
                 Object.keys(sceneConfigs).forEach(scene => {
-                    if (scene === currentActiveScene) return;
                     const sceneConfig = sceneConfigs[scene];
                     let isMatch = true;
 
@@ -1333,7 +1416,7 @@ const debouncedCheckActiveScene = debounce(function() {
                     }
                 });
 
-                console.log('Diagnostic: New active scene detected:', newActiveScene);
+                console.log('Diagnostic: Inferred active scene:', newActiveScene);
                 $('.scene-btn').removeClass('active');
                 if (newActiveScene) {
                     const sceneTitle = newActiveScene.replace('_', ' ').toLowerCase();
@@ -1344,17 +1427,19 @@ const debouncedCheckActiveScene = debounce(function() {
                         }
                     });
                     currentActiveScene = newActiveScene;
+                } else {
+                    currentActiveScene = null;
                 }
+            } catch (e) {
+                console.error('Diagnostic: Error in checkActiveScene inference:', e);
+                $('.scene-btn').removeClass('active');
+                currentActiveScene = null;
             }
-        } catch (e) {
-            console.error('Diagnostic: Error in checkActiveScene:', e);
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error('Diagnostic: Error fetching states for checkActiveScene:', textStatus, errorThrown);
             $('.scene-btn').removeClass('active');
             currentActiveScene = null;
-        }
-    }).fail(function(jqXHR, textStatus, errorThrown) {
-        console.error('Diagnostic: Error fetching states for checkActiveScene:', textStatus, errorThrown);
-        $('.scene-btn').removeClass('active');
-        currentActiveScene = null;
+        });
     });
 }, 500);
 

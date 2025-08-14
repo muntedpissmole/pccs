@@ -3,6 +3,14 @@ All notable changes to the PCCS project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+##1.5.0-beta 2 build 14082025-2000
+### Added & Changed
+- Refined lighting scenes
+- Added event to turn off all lights 1 hour after sunset
+- Refined reed switch events to check if evening or night scenes are active and will apply those lighting levels if true (time based logic is still active)
+- If the RPI loses comms with the arduino it will periodically try to re-establish comms rather than wait for an app restart
+- If the kitchen panel is open and sunset-1hr occurs, set the evening scene. If the evening scene is active and nighttime occurs, set the night scene
+
 ##1.5.0-beta 2 build 04082025-1900
 ### Added & Changed
 - Started planning UI for 5" tent touchscreen
@@ -38,9 +46,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added & Changed
 Moved scripts from index.html to script.js
 Bug Fixes
-
-### Fixed
-
 
 ## 1.4.0-beta 1 build 19062025-1705
 

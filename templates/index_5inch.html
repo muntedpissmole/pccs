@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Pissmole Camping Control System</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles_5inch.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/montserrat.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.min.css') }}">
     <script src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
@@ -31,47 +31,31 @@
         <div class="data-panel glass">
             <div class="data-grid">
                 <div class="data-item">
-                    <span><i class="fas fa-battery-full"></i> Battery Voltage:</span>
+                    <span><i class="fas fa-battery-full"></i> Battery:</span>
                     <span id="battery_level">N/A</span>
-                </div>
-                <div class="data-item">
-                    <span><i class="fas fa-satellite"></i> GPS Fix:</span>
-                    <span id="gps_fix">No</span>
-                </div>
-                <div class="data-item">
-                    <span id="battery_label"><i class="fas fa-bolt"></i> Battery Output:</span>
-                    <span id="battery_output">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-sun"></i> Sunrise:</span>
                     <span id="sunrise">---</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-solar-panel"></i> Solar Output:</span>
-                    <span id="solar_output">N/A</span>
+                    <span><i class="fas fa-thermometer-half"></i> Temperature:</span>
+                    <span id="temperature">N/A</span>
                 </div>
                 <div class="data-item">
                     <span><i class="fas fa-moon"></i> Sunset:</span>
                     <span id="sunset">---</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-thermometer-half"></i> Temperature:</span>
-                    <span id="temperature">N/A</span>
-                </div>
-                <div class="data-item">
-                    <span><i class="fas fa-box"></i> Storage Panel:</span>
+                    <span><i class="fas fa-box"></i> Storage:</span>
                     <span id="storage_panel">Unknown</span>
                 </div>
                 <div class="data-item">
-                    <span><i class="fas fa-water"></i> Water Level:</span>
-                    <span id="tank_level">N/A</span>
-                </div>
-                <div class="data-item">
-                    <span><i class="fas fa-inbox"></i> Rear Drawer:</span>
-                    <span id="rear_drawer">Unknown</span>
+                    <span><i class="fas fa-door-open"></i> Kitchen:</span>
+                    <span id="kitchen_panel">Unknown</span>
                 </div>              
                 <div class="data-item" style="grid-column: 1 / 3;">
-                    <span><i class="fas fa-clock"></i> Date & Time:</span>
+                    <span><i class="fas fa-clock"></i></span>
                     <span id="current_datetime">N/A</span>
                 </div>
             </div>
@@ -204,7 +188,7 @@
                 </div>
                 <div class="setting-item">
                     <span>Software Version:</span>
-                    <span class="setting-value">1.5.0-beta 2 build 14082025-2000</span>
+                    <span class="setting-value">1.5.0-beta 2 build 04082025-1900</span>
                 </div>
                 <div class="setting-item">
                     <span>GitHub:</span>

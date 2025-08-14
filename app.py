@@ -59,6 +59,12 @@ arduino_available = False
 
 def init_serial():
     global ser_arduino, arduino_available
+    if ser_arduino is not None:
+        try:
+            ser_arduino.close()
+        except Exception as e:
+            logging.warning(f"Error closing existing serial: {e}")
+        ser_arduino = None
     try:
         ser_arduino = serial.Serial('/dev/ttyACM0', 500000, timeout=2)  # Increased timeout
         time.sleep(2)  # Wait for Arduino reset
@@ -73,16 +79,36 @@ def init_serial():
             return True
         else:
             logging.error(f"Serial init failed: ping response {response}")
+            ser_arduino.close()
+            ser_arduino = None
             return False
     except Exception as e:
         logging.error(f"Serial init failed: {e}")
+        if ser_arduino is not None:
+            try:
+                ser_arduino.close()
+            except:
+                pass
+            ser_arduino = None
         return False
 
 # Sensor caches
 last_battery_voltage = last_battery_voltage_time = None
 last_tank_level = last_tank_level_time = None
 last_temperature = last_temperature_time = None
+last_solar_current = last_solar_time = None
+last_battery_current = last_battery_time = None
 CACHE_DURATION = 10
+CACHE_CURRENT = 2
+
+# Calibrated normalized offsets (from zero-current measurements)
+SOLAR_OFFSET_NORM = 538 / 1023.0  # ≈0.5259 from your log with CT disconnected
+BATTERY_OFFSET_NORM = 0.5  # Temporary; calibrate when connected by removing CT from cable and using raw/1023.0
+
+# Normalized sensitivity (span_norm / rated_current)
+SPAN_NORM = 0.625 / 5.0  # 0.125 (normalized span for ±0.625V at 5V nominal)
+SOLAR_SENS_NORM = SPAN_NORM / 50  # 0.0025 per A for 50A model
+BATTERY_SENS_NORM = SPAN_NORM / 200  # 0.000625 per A for 200A model
 
 def write_config_atomically(config_data, config_path):
     logging.debug(f"Writing to {config_path}")
@@ -178,7 +204,7 @@ def read_arduino_analog(pin):
     if not arduino_available:
         logging.error("Serial not initialized")
         return None
-    if not (0 <= pin <= 1):
+    if not (0 <= pin <= 3):
         logging.error(f"Invalid analog pin: A{pin}")
         return None
     
@@ -224,10 +250,26 @@ def get_battery_voltage():
             last_battery_voltage_time = current_time
             return None
         logging.debug(f"Raw ADC value from A0: {raw_value}")
-        V_REF = 4.98
-        a0_voltage = (raw_value / 1023.0) * V_REF
+        norm = raw_value / 1023.0
+        if norm < 0.2 or norm > 0.8:
+            logging.warning(f"Battery voltage sensor fault: norm={norm:.3f}")
+            last_battery_voltage = None
+            last_battery_voltage_time = current_time
+            return None
+        # Voltage divider: assume input = norm * Vcc, but since Vcc varies, but scaling factor was 13.02 / 2.686 assuming Vcc=5V
+        # Original SCALING_FACTOR = 13.02 / 2.686, where 2.686 is (A0 voltage for 13.02V battery)
+        # But to make ratiometric, since divider is fixed ratio, the norm = battery_V / (scaling * Vcc)
+        # Original: a0_voltage = norm * V_REF, battery = a0_voltage * SCALING_FACTOR
+        # So battery = norm * V_REF * SCALING_FACTOR
+        # But since V_REF = Vcc, and if divider is ratiometric, but voltage divider is fixed ratios, not dependent on Vcc (since it's passive).
+        # Wait, for voltage measurement, it's not ratiometric to Vcc; the ADC is, but the input is absolute.
+        # So for battery voltage, if Vcc varies, the reading is wrong.
+        # To fix, either stable Vcc or measure Vcc.
+        # For now, keep original, but update V_REF to average measured 4.765
+        V_REF = 4.765  # Update with your measured rail voltage; consider stabilizing if varies
+        a0_voltage = norm * V_REF
         logging.debug(f"Voltage at A0: {a0_voltage:.2f}V")
-        SCALING_FACTOR = 13.02 / 2.686
+        SCALING_FACTOR = 13.02 / 2.686  # Keep, assuming divider calibrated at nominal
         battery_voltage = round(a0_voltage * SCALING_FACTOR, 2)
         if battery_voltage < 9.0 or battery_voltage > 15.0:
             logging.warning(f"Battery voltage out of range: {battery_voltage}V")
@@ -254,14 +296,15 @@ def get_tank_level():
             last_tank_level_time = current_time
             return None
         logging.debug(f"Raw ADC value from A1: {raw_value}")
-        v_in = 4.98
-        v_out = (raw_value / 1023.0) * v_in
-        logging.debug(f"Voltage at A1: {v_out:.2f}V")
-        if v_out < 0.5 or v_out > 3.0:
-            logging.warning(f"Tank level sensor fault: V_out={v_out:.3f}V")
+        norm = raw_value / 1023.0
+        if norm < 0.1 or norm > 0.6:  # Adjusted for ~0.5-3V /5V
+            logging.warning(f"Tank level sensor fault: norm={norm:.3f}")
             last_tank_level = None
             last_tank_level_time = current_time
             return None
+        V_REF = 4.765  # Update with measured
+        v_out = norm * V_REF
+        v_in = V_REF  # Sensor powered by same rail
         r1 = 100.0
         r2 = r1 * v_out / (v_in - v_out) if v_out < v_in else float('inf')
         logging.debug(f"Calculated r2: {r2:.1f}Ω")
@@ -279,6 +322,73 @@ def get_tank_level():
         return percentage
     except Exception as e:
         logging.error(f"Error reading tank level: {e}")
+        return None
+
+def get_solar_current():
+    global last_solar_current, last_solar_time
+    current_time = time.time()
+    if last_solar_current is not None and (current_time - last_solar_time) < CACHE_CURRENT:
+        return last_solar_current
+    try:
+        raw_value = read_arduino_analog(2)
+        if raw_value is None or raw_value < 0 or raw_value > 1023:
+            logging.error(f"Invalid ADC reading from A2: {raw_value}")
+            last_solar_current = None
+            last_solar_time = current_time
+            return None
+        logging.debug(f"Raw ADC value from A2: {raw_value}")
+        norm = raw_value / 1023.0
+        logging.debug(f"Normalized value at A2: {norm:.3f}")
+        if norm < 0.3 or norm > 0.7:
+            logging.warning(f"Solar current sensor fault: norm={norm:.3f}")
+            last_solar_current = None
+            last_solar_time = current_time
+            return None
+        current = (norm - SOLAR_OFFSET_NORM) / SOLAR_SENS_NORM
+        if current < -55 or current > 55:
+            logging.warning(f"Solar current out of range: {current:.1f}A")
+            last_solar_current = None
+            last_solar_time = current_time
+            return None
+        current = max(0, current)  # Always one way
+        last_solar_current = round(current, 1)
+        last_solar_time = current_time
+        return last_solar_current
+    except Exception as e:
+        logging.error(f"Error reading solar current: {e}")
+        return None
+
+def get_battery_current():
+    global last_battery_current, last_battery_time
+    current_time = time.time()
+    if last_battery_current is not None and (current_time - last_battery_time) < CACHE_CURRENT:
+        return last_battery_current
+    try:
+        raw_value = read_arduino_analog(3)
+        if raw_value is None or raw_value < 0 or raw_value > 1023:
+            logging.error(f"Invalid ADC reading from A3: {raw_value}")
+            last_battery_current = None
+            last_battery_time = current_time
+            return None
+        logging.debug(f"Raw ADC value from A3: {raw_value}")
+        norm = raw_value / 1023.0
+        logging.debug(f"Normalized value at A3: {norm:.3f}")
+        if norm < 0.3 or norm > 0.7:
+            logging.warning(f"Battery current sensor fault: norm={norm:.3f}")
+            last_battery_current = None
+            last_battery_time = current_time
+            return None
+        current = (norm - BATTERY_OFFSET_NORM) / BATTERY_SENS_NORM
+        if current < -220 or current > 220:
+            logging.warning(f"Battery current out of range: {current:.1f}A")
+            last_battery_current = None
+            last_battery_time = current_time
+            return None
+        last_battery_current = round(current, 1)
+        last_battery_time = current_time
+        return last_battery_current
+    except Exception as e:
+        logging.error(f"Error reading battery current: {e}")
         return None
 
 def get_ds18b20_temperature():
@@ -614,7 +724,7 @@ for pin_str, info in config['reed_switches'].items():
             channel_to_reeds[ch_idx].append(pin_str)
 
 def check_arduino_alive():
-    if not arduino_available:
+    if not arduino_available or ser_arduino is None:
         return False
     try:
         ser_arduino.write(b'P\n')
@@ -625,21 +735,31 @@ def check_arduino_alive():
         return False
 
 def monitor_arduino():
-    global arduino_available
+    global arduino_available, ser_arduino
     failure_count = 0
     MAX_FAILURES = 3
     while True:
-        if not check_arduino_alive():
-            failure_count += 1
-            logging.warning(f"Arduino unresponsive (failure {failure_count}/{MAX_FAILURES})")
-            if failure_count >= MAX_FAILURES:
-                arduino_available = False
-                logging.error("Arduino offline - disabling features")
+        if arduino_available:
+            if not check_arduino_alive():
+                failure_count += 1
+                logging.warning(f"Arduino unresponsive (failure {failure_count}/{MAX_FAILURES})")
+                if failure_count >= MAX_FAILURES:
+                    logging.error("Arduino offline - disabling features")
+                    try:
+                        ser_arduino.close()
+                    except Exception as e:
+                        logging.warning(f"Error closing serial on disconnect: {e}")
+                    ser_arduino = None
+                    arduino_available = False
+                    failure_count = 0
+            else:
+                failure_count = 0
         else:
-            if not arduino_available:
-                logging.info("Arduino back online")
-                arduino_available = True
-            failure_count = 0
+            logging.info("Attempting to reconnect to Arduino")
+            if init_serial():
+                logging.info("Successfully reconnected to Arduino")
+            else:
+                logging.debug("Reconnect attempt failed, will try again later")
         time.sleep(30)  # Check every 30s
 
 GREEN_FACTOR = 0.05  # Green PWM = % of red for red-orange mix
@@ -724,6 +844,8 @@ def get_arduino_pwm(channel):
     logging.error(f"Failed to read PWM for channel {channel} after {retries} attempts")
     return None
 
+current_scene = None
+
 def get_target_pwms(pin_str, current_local):
     local_tz_str = get_local_tz_str()
     local_tz = pytz.timezone(local_tz_str)
@@ -738,42 +860,41 @@ def get_target_pwms(pin_str, current_local):
         operate_start = sunset - timedelta(hours=1)
         tomorrow = today + timedelta(days=1)
         s_tom = sun(loc.observer, date=tomorrow, tzinfo=local_tz)
-        sunrise_tom = s_tom["sunrise"]
-        operate_end = sunrise_tom + timedelta(hours=1)
+        operate_end = s_tom["sunrise"] + timedelta(minutes=30)
     else:
         today = current_local.date()
         s = sun(loc.observer, date=today, tzinfo=local_tz)
-        sunrise = s["sunrise"]
-        operate_end = sunrise + timedelta(hours=1)
+        operate_end = s["sunrise"] + timedelta(minutes=30)
         prev_day = today - timedelta(days=1)
         s_prev = sun(loc.observer, date=prev_day, tzinfo=local_tz)
-        sunset_prev = s_prev["sunset"]
-        operate_start = sunset_prev - timedelta(hours=1)
+        operate_start = s_prev["sunset"] - timedelta(hours=1)
     lights_operate = operate_start <= current_local < operate_end
     if not lights_operate:
         return {}, False
-    operate_start_date = operate_start.date()
-    target = {}
-    if pin_str == '23':
-        eight_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(20, 0)))
-        ten_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(22, 0)))
-        if current_local < eight_pm:
-            target[1] = 255
-            target[2] = 0
-            target[3] = 0
-        elif current_local < ten_pm:
-            target[1] = 0
-            target[2] = 255
-            target[3] = int(255 * GREEN_FACTOR)
-        else:
-            target[1] = 0
-            target[2] = int(255 * 0.2)
-            target[3] = int(target[2] * GREEN_FACTOR)
+    period = None
+    if current_scene in ['evening', 'night']:
+        period = current_scene
     else:
-        pwm = 255
-        for ch in config['reed_switches'][pin_str]['trigger_channels']:
-            if ch.startswith('arduino:'):
-                ch_idx = int(ch.split(':')[1])
+        operate_start_date = operate_start.date()
+        eight_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(20, 0)))
+        if current_local < eight_pm:
+            period = 'evening'
+        else:
+            period = 'night'
+    trigger_channels = config['reed_switches'][pin_str].get('trigger_channels', [])
+    arduino_triggers = [ch for ch in trigger_channels if ch.startswith('arduino:')]
+    if period not in config['reed_switches'][pin_str]:
+        # Fallback to full on for trigger channels
+        target = {int(ch.split(':')[1]): 255 for ch in arduino_triggers}
+        return target, True
+    config_dict = config['reed_switches'][pin_str][period]
+    target = {int(ch.split(':')[1]): 0 for ch in arduino_triggers}
+    for ch_str, percent in config_dict.items():
+        if ch_str.startswith('arduino:'):
+            _, ch_idx = ch_str.split(':')
+            ch_idx = int(ch_idx)
+            if ch_idx in target:
+                pwm = int(255 * percent / 100.0)
                 target[ch_idx] = pwm
     return target, True
 
@@ -797,24 +918,120 @@ def update_lights_based_on_time():
             targets, operate = get_target_pwms(pin_str, current_local)
             if operate:
                 for ch_idx, target_pwm in targets.items():
-                    if pin_str in ['24', '12'] and current_local.hour >= 20:
-                        dim_pwm = int(255 * 0.2)
-                        if target_pwm > dim_pwm:
-                            target_pwm = dim_pwm
                     current_pwm = get_arduino_pwm(ch_idx)
                     if current_pwm is not None and abs(current_pwm - target_pwm) > 5:
                         set_arduino_pwm(ch_idx, target_pwm, ramp_time=2000 if pin_str == '23' else 1000)
-            else:
-                for ch in config['reed_switches'][pin_str]['trigger_channels']:
-                    if ch.startswith('arduino:'):
-                        ch_idx = int(ch.split(':')[1])
-                        current_pwm = get_arduino_pwm(ch_idx)
-                        if current_pwm is not None and current_pwm > 0:
-                            set_arduino_pwm(ch_idx, 0, ramp_time=2000 if pin_str == '23' else 1000)
+
+def activate_scene_func(scene_name):
+    global current_scene
+    try:
+        scene = config['scenes'][scene_name]
+        # Infer all possible Arduino channels from configured channels
+        all_arduino_channels = set(config['channels']['arduino'].keys())
+        target_pwm = {}  # Don't init to 0 for all; only set specified non-reed-linked
+        scene_arduino = scene.get('arduino', {})
+        for channel, brightness in scene_arduino.items():
+            if channel not in reed_linked_channels:  # Skip reed-linked
+                target_pwm[channel] = int(brightness * 255 / 100)
+        # Handle derived greens only if the base red is set (and not skipped)
+        if '2' in target_pwm:
+            target_pwm['3'] = int(target_pwm.get('2', 0) * GREEN_FACTOR)
+        if '9' in target_pwm:
+            target_pwm['10'] = int(target_pwm.get('9', 0) * GREEN_FACTOR)
+        # Channels to set: only those in target_pwm (non-reed-linked)
+        channels_to_set = list(target_pwm.keys())
+        if arduino_available:
+            for channel in sorted(channels_to_set):
+                target = target_pwm.get(channel, 0)
+                if not set_arduino_pwm(int(channel), target, ramp_time=1000):
+                    logging.error(f"Failed to set channel {channel} during scene activation")
+            # Final verification after all ramps
+            time.sleep(1.5)  # Wait for longest ramp + margin
+            for channel in channels_to_set:
+                current = get_arduino_pwm(int(channel))
+                target = target_pwm.get(channel, 0)
+                if current is None or abs(current - target) > 5:
+                    logging.error(f"Final verification failed for channel {channel}: current {current}, target {target}")
+        # Set manual override only for reeds whose triggers overlap with set channels
+        for pin_str in config['reed_switches']:
+            trigger_channels = set(ch.split(':')[1] for ch in config['reed_switches'][pin_str].get('trigger_channels', []) if ch.startswith('arduino:'))
+            if trigger_channels & set(target_pwm.keys()):  # If overlap, override to block auto on those
+                manual_override[pin_str] = True
+            # Else, leave as is (don't block reeds not affected by this scene)
+        if scene_name in ['evening', 'night']:
+            current_scene = scene_name
+        else:
+            current_scene = None
+        config['relay_states'] = config.get('relay_states', {})
+        if h:
+            for pin, state in scene.get('relays', {}).items():
+                if pin in config['channels']['relays']:
+                    lgpio.gpio_write(h, int(pin), 1 if state == 0 else 0)
+                    config['relay_states'][pin] = state
+            for pin in config['channels']['relays']:
+                if pin not in scene.get('relays', {}):
+                    lgpio.gpio_write(h, int(pin), 1)
+                    config['relay_states'][pin] = 0
+            save_relay_states(config['relay_states'])
+    except Exception as e:
+        logging.error(f"Error in activate_scene_func: {e}")
+
+last_all_off_trigger = None
+last_evening_to_night_trigger = None
+last_sunset_evening_trigger = None
 
 def light_manager():
+    global last_all_off_trigger, last_evening_to_night_trigger, last_sunset_evening_trigger
     while True:
         update_lights_based_on_time()
+        local_tz_str = get_local_tz_str()
+        local_tz = pytz.timezone(local_tz_str)
+        current_local = datetime.now(local_tz)
+        if gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+            loc = LocationInfo("Current", "", local_tz_str, gps_data["latitude"], gps_data["longitude"])
+        else:
+            loc = MELBOURNE_LOCATION
+        today = current_local.date()
+        s = sun(loc.observer, date=today, tzinfo=local_tz)
+        sunset = s["sunset"]
+        operate_start = sunset - timedelta(hours=1)  # Evening start time
+        trigger_time = sunset + timedelta(hours=1)   # All off time
+        
+        # New: Auto-activate evening at operate_start if kitchen panel open
+        if current_local >= operate_start and (last_sunset_evening_trigger is None or last_sunset_evening_trigger.date() != today):
+            if h and lgpio.gpio_read(h, 23) == 1:  # Kitchen open
+                if 'evening' in config['scenes'] and current_scene != 'evening':
+                    activate_scene_func('evening')
+                    last_sunset_evening_trigger = current_local
+                    logging.info(f"Auto-triggered evening scene (kitchen open) at {current_local}")
+                else:
+                    logging.warning("Evening scene not defined or already active")
+        
+        # Existing: Auto-transition from evening to night at 8 PM if kitchen open
+        if current_scene == 'evening':
+            # Calculate the 8 PM boundary for today (or prev if before noon, but align to operate_start)
+            if current_local.hour >= 12:
+                operate_start_date = today
+            else:
+                operate_start_date = today - timedelta(days=1)
+            eight_pm = local_tz.localize(datetime.combine(operate_start_date, dt_time(20, 0)))
+            if current_local >= eight_pm and (last_evening_to_night_trigger is None or last_evening_to_night_trigger.date() != operate_start_date):
+                if h and lgpio.gpio_read(h, 23) == 1:  # Kitchen open
+                    if 'night' in config['scenes']:
+                        activate_scene_func('night')
+                        last_evening_to_night_trigger = current_local
+                        logging.info(f"Auto-triggered night scene from evening (kitchen open) at {current_local}")
+                    else:
+                        logging.warning("Night scene not defined")
+        
+        if current_local >= trigger_time and (last_all_off_trigger is None or last_all_off_trigger.date() != today):
+            if 'all off' in config['scenes']:
+                activate_scene_func('all off')
+                last_all_off_trigger = current_local
+                logging.info(f"Triggered all off scene at {current_local}")
+            else:
+                logging.warning("All off scene not defined")
+        
         time.sleep(60)
 
 def check_initial_reed_states():
@@ -838,7 +1055,7 @@ def check_initial_reed_states():
                 display_pi_user = "pi"
                 display_pi_ip = "10.10.10.20"
                 ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-                if initial_state == 0:  # Closed
+                if initial_state == 0:  # Closed: screen off + lights to 0
                     command = ["xset", "dpms", "force", "off"]
                     action_desc = "screen off"
                     brightness_value = None
@@ -848,27 +1065,23 @@ def check_initial_reed_states():
                     set_arduino_pwm(3, 0, ramp_time=2000)
                     # Also turn off kitchen bench light
                     set_arduino_pwm(4, 0, ramp_time=1000)
-                else:  # Open
+                else:  # Open: wake screen + lights if operate
                     command = ["xdotool", "key", "Shift"]
                     action_desc = "screen wake"
                     brightness_level = config['theme'].get('screen_brightness', 'medium')
                     brightness_map = {'low': 25, 'medium': 127, 'high': 255}
                     brightness_value = brightness_map.get(brightness_level, 127)
-                    # Compute and set kitchen lights based on time
+                    # Compute and set kitchen lights based on time/scene only if operate
                     targets, operate = get_target_pwms(pin_str, current_local)
                     if operate:
                         for ch_idx, pwm in targets.items():
                             set_arduino_pwm(ch_idx, pwm, ramp_time=2000)
-                    else:
-                        set_arduino_pwm(1, 0, ramp_time=2000)
-                        set_arduino_pwm(2, 0, ramp_time=2000)
-                        set_arduino_pwm(3, 0, ramp_time=2000)
-                    # If kitchen bench panel is open, turn on its light based on time logic
-                    if initial_states.get(12, 0) == 1:
-                        bench_targets, bench_operate = get_target_pwms('12', current_local)
-                        if bench_operate:
-                            for ch_idx, pwm in bench_targets.items():
-                                set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
+                        # If kitchen bench panel is open, turn on its light based on time logic
+                        if initial_states.get(12, 0) == 1:
+                            bench_targets, bench_operate = get_target_pwms('12', current_local)
+                            if bench_operate:
+                                for ch_idx, pwm in bench_targets.items():
+                                    set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
                 max_attempts = 3
                 retry_interval = 10
                 for attempt in range(max_attempts):
@@ -883,10 +1096,10 @@ def check_initial_reed_states():
             elif pin in [24, 25, 12]:
                 trigger_channels = switch_info.get('trigger_channels', [])
                 targets, operate = get_target_pwms(pin_str, current_local)
-                if initial_state == 1 and operate:  # Open and operate
+                if initial_state == 1 and operate:  # Open and operate: set levels
                     for ch_idx, pwm in targets.items():
                         set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
-                else:
+                elif initial_state == 0:  # Closed: set to 0
                     target_pwm = 0
                     for ch in trigger_channels:
                         if ch.startswith('arduino:'):
@@ -931,7 +1144,7 @@ def monitor_reed_switch(pin, initial_state):
                     display_pi_user = "pi"
                     display_pi_ip = "10.10.10.20"
                     ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-                    if current_read == 0:  # Closed
+                    if current_read == 0:  # Closed: screen off + lights to 0
                         command = ["xset", "dpms", "force", "off"]
                         action_desc = "screen off"
                         brightness_value = None
@@ -941,38 +1154,33 @@ def monitor_reed_switch(pin, initial_state):
                         set_arduino_pwm(3, 0, ramp_time=2000)
                         # Also turn off kitchen bench light
                         set_arduino_pwm(4, 0, ramp_time=1000)
-                    else:  # Open
+                    else:  # Open: wake screen + lights if operate
                         command = ["xdotool", "key", "Shift"]
                         action_desc = "screen wake"
                         brightness_level = config['theme'].get('screen_brightness', 'medium')
                         brightness_map = {'low': 25, 'medium': 127, 'high': 255}
                         brightness_value = brightness_map.get(brightness_level, 127)
-                        # Compute and set kitchen lights based on time
+                        # Compute and set kitchen lights based on time/scene only if operate
                         targets, operate = get_target_pwms(str(pin), current_local)
                         if operate:
                             for ch_idx, pwm in targets.items():
                                 set_arduino_pwm(ch_idx, pwm, ramp_time=2000)
-                        else:
-                            set_arduino_pwm(1, 0, ramp_time=2000)
-                            set_arduino_pwm(2, 0, ramp_time=2000)
-                            set_arduino_pwm(3, 0, ramp_time=2000)
-                        # If kitchen bench panel is open, turn on its light based on time logic
-                        if lgpio.gpio_read(h, 12) == 1:
-                            bench_targets, bench_operate = get_target_pwms('12', current_local)
-                            if bench_operate:
-                                for ch_idx, pwm in bench_targets.items():
-                                    set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
+                            # If kitchen bench panel is open, turn on its light based on time logic
+                            if lgpio.gpio_read(h, 12) == 1:
+                                bench_targets, bench_operate = get_target_pwms('12', current_local)
+                                if bench_operate:
+                                    for ch_idx, pwm in bench_targets.items():
+                                        set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
                     send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value)
                     last_state = current_read
-
                 # Storage, rear drawer, and kitchen bench: control lights
                 elif pin in [24, 25, 12]:
                     trigger_channels = switch_info.get('trigger_channels', [])
                     targets, operate = get_target_pwms(str(pin), current_local)
-                    if current_read == 1 and operate:  # Open and operate
+                    if current_read == 1 and operate:  # Open and operate: set levels
                         for ch_idx, pwm in targets.items():
                             set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
-                    else:
+                    elif current_read == 0:  # Closed: set to 0
                         target_pwm = 0
                         for ch in trigger_channels:
                             if ch.startswith('arduino:'):
@@ -1034,6 +1242,26 @@ def index():
                               arduino_available=arduino_available)
     except Exception as e:
         logging.error(f"Error rendering index: {e}")
+        return f"Error rendering page: {e}", 500
+        
+@app.route('/5inch')
+def index_5inch():
+    try:
+        # Filter channels based on display attribute (same as main index)
+        filtered_arduino_channels = {k: v for k, v in config['channels']['arduino'].items() if v.get('display', True)}
+        filtered_relay_channels = {k: v for k, v in config['channels']['relays'].items() if v.get('display', True)}
+        
+        logging.info(f"Filtered Arduino channels for 5inch: {list(filtered_arduino_channels.keys())}")
+        logging.info(f"Filtered relay channels for 5inch: {list(filtered_relay_channels.keys())}")
+        
+        return render_template('index_5inch.html',
+                              scenes=config['scenes'].keys(),
+                              arduino_channels=filtered_arduino_channels,
+                              relay_channels=filtered_relay_channels,
+                              reed_switches=config['reed_switches'],
+                              arduino_available=arduino_available)
+    except Exception as e:
+        logging.error(f"Error rendering index_5inch: {e}")
         return f"Error rendering page: {e}", 500
 
 @app.route('/set_brightness', methods=['POST'])
@@ -1114,6 +1342,10 @@ def set_brightness():
 
         # Removed final verification to avoid timing issues with ramps
         logging.debug(f"Successfully initiated set for channel {channel_idx} to PWM {target_pwm}")
+        global current_scene
+        if current_scene and str(channel_idx) in config['scenes'].get(current_scene, {}).get('arduino', {}):
+            logging.info(f"Breaking scene '{current_scene}' due to manual change on channel {channel_idx}")
+            current_scene = None
         for reed in channel_to_reeds[str(channel_idx)]:
             manual_override[reed] = True
         return jsonify({"message": f"Brightness set to {brightness}%"})
@@ -1187,6 +1419,10 @@ def toggle():
 
             # Removed final verification to avoid timing issues with ramps
             logging.debug(f"Successfully initiated set for channel {channel_idx} to PWM {target_pwm}")
+            global current_scene
+            if current_scene and str(channel_idx) in config['scenes'].get(current_scene, {}).get('arduino', {}):
+                logging.info(f"Breaking scene '{current_scene}' due to manual change on channel {channel_idx}")
+                current_scene = None
             for reed in channel_to_reeds[str(channel_idx)]:
                 manual_override[reed] = True
             return jsonify({"message": f"Channel {channel} set to {state.upper()}"})
@@ -1320,6 +1556,8 @@ def get_data():
         temperature = get_ds18b20_temperature()
         battery_voltage = get_battery_voltage()
         tank_level = get_tank_level()
+        solar_current = get_solar_current()
+        battery_current = get_battery_current()
         current_time = datetime.now(pytz.UTC)
         recalculate = False
         if sun_times_cache["last_calculated"] is None or (current_time - sun_times_cache["last_calculated"]).total_seconds() > 3600:
@@ -1356,8 +1594,19 @@ def get_data():
             "gps_fix": gps_data["fix"],
             "gps_quality": gps_data["quality"],
             "latitude": gps_data["latitude"],
-            "longitude": gps_data["longitude"]
+            "longitude": gps_data["longitude"],
+            "solar_output": f"{solar_current:.1f}A" if solar_current is not None else "Error"
         }
+        if battery_current is not None:
+            if battery_current >= 0:
+                data["battery_label"] = "Battery Output"
+                data["battery_current"] = f"{battery_current:.1f}A"
+            else:
+                data["battery_label"] = "Battery Input"
+                data["battery_current"] = f"{abs(battery_current):.1f}A"
+        else:
+            data["battery_label"] = "Battery Output"
+            data["battery_current"] = "Error"
         if h:
             # Hard-code only storage_panel and rear_drawer
             data['storage_panel'] = "Open" if lgpio.gpio_read(h, 24) else "Closed"
@@ -1420,7 +1669,7 @@ def save_config():
         new_theme = {
             "darkMode": config_data.get('theme', {}).get('darkMode', current_config['theme'].get('darkMode', 'off')),
             "autoTheme": config_data.get('theme', {}).get('autoTheme', current_config['theme'].get('autoTheme', 'off')),
-            "autoBrightness": config_data.get('theme', {}).get('autoBrightness', current_config['theme'].get('auto Brightness', 'off')),
+            "autoBrightness": config_data.get('theme', {}).get('autoBrightness', current_config['theme'].get('autoBrightness', 'off')),
             "defaultTheme": config_data.get('theme', {}).get('defaultTheme', current_config['theme'].get('defaultTheme', 'light')),
             "screen_brightness": config_data.get('theme', {}).get('screen_brightness', current_config['theme'].get('screen_brightness', 'medium'))
         }
