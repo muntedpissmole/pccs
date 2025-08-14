@@ -1,6 +1,6 @@
 # Changelog
 
-##1.5.0-beta 2 build 14082025-2000
+## 1.5.0-beta 2 build 14082025-2000
 
 ### Added & Changed
 - Refined lighting scenes
@@ -9,7 +9,7 @@
 - If the RPI loses comms with the arduino it will periodically try to re-establish comms rather than wait for an app restart
 - If the kitchen panel is open and sunset-1hr occurs, set the evening scene. If the evening scene is active and nighttime occurs, set the night scene
 
-##1.5.0-beta 2 build 04082025-1900
+## 1.5.0-beta 2 build 04082025-1900
 
 ### Added & Changed
 - Started planning UI for 5" tent touchscreen
