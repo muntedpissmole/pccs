@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0-beta 2 build 6092025-2200
+
+### Added & Changed
+- Version is now stored in a central text file
+- Refined evening and scene trigger functionality
+- Improved tent touchscreen interface
+
+### Fixed
+- Various bug Fixes
+
 ## 1.5.0-beta 2 build 25082025-0800
 
 ### Added & Changed

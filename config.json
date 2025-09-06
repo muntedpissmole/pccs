@@ -4,84 +4,132 @@
             "1": {
                 "name": "Kitchen White",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": false
+                }
             },
             "2": {
                 "name": "Kitchen Red",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": false
+                }
             },
             "3": {
                 "name": "Kitchen Green",
                 "type": "dimmer",
-                "display": false
+                "display": {
+                    "kitchen": false,
+                    "tent": false
+                }
             },
             "4": {
                 "name": "Kitchen Bench",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": false
+                }
             },
             "5": {
                 "name": "Storage",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": false
+                }
             },
             "6": {
                 "name": "Rear Drawer",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": false
+                }
             },
             "7": {
                 "name": "Accent",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             },
             "8": {
                 "name": "Awning White",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             },
             "9": {
                 "name": "Awning Red",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             },
             "10": {
                 "name": "Awning Green",
                 "type": "dimmer",
-                "display": false
+                "display": {
+                    "kitchen": false,
+                    "tent": false
+                }
             },
             "11": {
                 "name": "Tent",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             },
             "12": {
                 "name": "Ensuite",
                 "type": "dimmer",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             }
         },
         "relays": {
             "17": {
                 "name": "Floodlights",
                 "type": "switch",
-                "display": true
+                "display": {
+                    "kitchen": true,
+                    "tent": true
+                }
             },
             "18": {
                 "name": "Relay 2",
                 "type": "switch",
-                "display": false
+                "display": {
+                    "kitchen": false,
+                    "tent": false
+                }
             },
             "27": {
                 "name": "Relay 3",
                 "type": "switch",
-                "display": false
+                "display": {
+                    "kitchen": false,
+                    "tent": false
+                }
             },
             "22": {
                 "name": "Relay 4",
                 "type": "switch",
-                "display": false
+                "display": {
+                    "kitchen": false,
+                    "tent": false
+                }
             }
         }
     },
@@ -89,13 +137,15 @@
         "evening": {
             "arduino": {
                 "7": 20,
-                "8": 20
+                "8": 20,
+                "11": 30
             }
         },
         "night": {
             "arduino": {
                 "7": 5,
-                "9": 10
+                "9": 10,
+                "11": 5
             }
         },
         "bathroom": {
@@ -193,9 +243,9 @@
     "theme": {
         "darkMode": "on",
         "autoTheme": "on",
-        "autoBrightness": "off",
+        "autoBrightness": "on",
         "defaultTheme": "light",
-        "screen_brightness": "medium"
+        "screen_brightness": "low"
     },
     "evening_offset": 30,
     "night_time": "20:00"

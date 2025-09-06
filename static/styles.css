@@ -1072,6 +1072,8 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
 }
 
 /* Error State */
+#battery_output.error,
+#solar_output.error,
 #tank_level.error {
     color: #FF6666;
     font-weight: bold;

@@ -3,6 +3,17 @@ function springEase(t) {
     return 1 - Math.cos(t * 4 * Math.PI) * Math.exp(-6 * t);
 }
 
+// Function to determine if the current page is the 5-inch version
+function isFiveInchVersion() {
+    return Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+        .some(link => link.href.includes('styles_5inch.css'));
+}
+
+// Get the display key based on the touchscreen type
+function getDisplayKey() {
+    return isFiveInchVersion() ? 'tent' : 'kitchen';
+}
+
 // Global state to track day/night for sunrise/sunset crossings
 let isNightLast = null; // null = uninitialized, true = night, false = day
 let lastArduinoStates = {};
@@ -52,13 +63,20 @@ $(document).ready(function() {
             }
         }
 
-        // Lighting slider pagination (unchanged)
+        // Lighting slider pagination
         const lightingSlider = document.querySelector('.lighting-slider');
         const dots = document.querySelectorAll('.pagination-dots .dot');
 
         if (lightingSlider) {
-            lightingSlider.scrollLeft = 0;
-            console.log('Diagnostic: Initialized lightingSlider to scrollLeft=0');
+            // Check if this is the 5-inch version by looking for styles_5inch.css
+            const isFiveInchVersion = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .some(link => link.href.includes('styles_5inch.css'));
+            
+            // Set default page (0 for main version, 2 for 5-inch version)
+            const defaultPage = isFiveInchVersion ? 1 : 0;
+            const pageWidth = lightingSlider.clientWidth || 1;
+            lightingSlider.scrollLeft = defaultPage * pageWidth;
+            console.log(`Diagnostic: Initialized lightingSlider to page ${defaultPage}, scrollLeft=${lightingSlider.scrollLeft}, isFiveInchVersion=${isFiveInchVersion}`);
         } else {
             console.error('Diagnostic: lightingSlider not found');
             return;
@@ -99,7 +117,7 @@ $(document).ready(function() {
             });
         });
 
-        // Swipe and drag handling (unchanged)
+        // Swipe and drag handling
         let isDragging = false;
         let startX = 0;
         let scrollLeft = 0;
@@ -344,137 +362,137 @@ $(document).ready(function() {
             debouncedUpdateActiveDot();
         }, { passive: true });
 
-		// Slider event listeners for lighting controls
-		document.querySelectorAll('input[type="range"]:not(#screen-brightness)').forEach(slider => {
-			const updateSliderUI = (value, channel) => {  // New: Separate UI update from set
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} for slider`);
-					return;
-				}
-				$(`#arduino-value-${channel}`).text(value + '%');
-				slider.style.setProperty('--value', value + '%');
-				slider.value = value;
-				const toggleSlider = $(`.control-item:has(input[data-channel="${channel}"]) .toggle-slider`);
-				if (value > 0) {
-					toggleSlider.addClass('on').removeClass('disabled');
-				} else {
-					toggleSlider.removeClass('on').removeClass('disabled');
-				}
-				console.log(`Diagnostic: Updated UI for channel ${channel}: ${value}%`);
-			};
+        // Slider event listeners for lighting controls
+        document.querySelectorAll('input[type="range"]:not(#screen-brightness)').forEach(slider => {
+            const updateSliderUI = (value, channel) => {
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} for slider`);
+                    return;
+                }
+                $(`#arduino-value-${channel}`).text(value + '%');
+                slider.style.setProperty('--value', value + '%');
+                slider.value = value;
+                const toggleSlider = $(`.control-item:has(input[data-channel="${channel}"]) .toggle-slider`);
+                if (value > 0) {
+                    toggleSlider.addClass('on').removeClass('disabled');
+                } else {
+                    toggleSlider.removeClass('on').removeClass('disabled');
+                }
+                console.log(`Diagnostic: Updated UI for channel ${channel}: ${value}%`);
+            };
 
-			let isDraggingSlider = false;
+            let isDraggingSlider = false;
 
-			slider.addEventListener('mousedown', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				isDraggingSlider = true;
-				const channel = parseInt(slider.dataset.channel);
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} on mousedown`);
-					isDraggingSlider = false;
-					return;
-				}
-				console.log(`Diagnostic: Slider mousedown for channel ${channel}`);
-				stopArduinoStateInterval();
-			});
+            slider.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isDraggingSlider = true;
+                const channel = parseInt(slider.dataset.channel);
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} on mousedown`);
+                    isDraggingSlider = false;
+                    return;
+                }
+                console.log(`Diagnostic: Slider mousedown for channel ${channel}`);
+                stopArduinoStateInterval();
+            });
 
-			document.addEventListener('mousemove', (e) => {
-				if (!isDraggingSlider) return;
-				e.preventDefault();
-				const channel = parseInt(slider.dataset.channel);
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} on mousemove`);
-					return;
-				}
-				const rect = slider.getBoundingClientRect();
-				const totalHeight = rect.height;
-				const mouseY = e.clientY - rect.top;
-				let value = Math.round(((totalHeight - mouseY) / totalHeight) * 100);
-				value = Math.max(0, Math.min(100, value));
-				console.log(`Diagnostic: Slider mousemove for channel ${channel}: ${value}%`);
-				updateSliderUI(value, channel);  // UI only during drag
-				slider.dispatchEvent(new Event('input'));
-			});
+            document.addEventListener('mousemove', (e) => {
+                if (!isDraggingSlider) return;
+                e.preventDefault();
+                const channel = parseInt(slider.dataset.channel);
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} on mousemove`);
+                    return;
+                }
+                const rect = slider.getBoundingClientRect();
+                const totalHeight = rect.height;
+                const mouseY = e.clientY - rect.top;
+                let value = Math.round(((totalHeight - mouseY) / totalHeight) * 100);
+                value = Math.max(0, Math.min(100, value));
+                console.log(`Diagnostic: Slider mousemove for channel ${channel}: ${value}%`);
+                updateSliderUI(value, channel);
+                slider.dispatchEvent(new Event('input'));
+            });
 
-			document.addEventListener('mouseup', () => {
-				if (isDraggingSlider) {
-					const channel = parseInt(slider.dataset.channel);
-					if (channel < 1 || channel > 12) {
-						console.error(`Diagnostic: Invalid channel ${channel} on mouseup`);
-					} else {
-						console.log(`Diagnostic: Slider mouseup for channel ${channel}`);
-					}
-					isDraggingSlider = false;
-					debouncedFetchArduinoStates();
-					setBrightness('arduino', channel, slider.value);  // Force immediate set on drag end
-				}
-			});
+            document.addEventListener('mouseup', () => {
+                if (isDraggingSlider) {
+                    const channel = parseInt(slider.dataset.channel);
+                    if (channel < 1 || channel > 12) {
+                        console.error(`Diagnostic: Invalid channel ${channel} on mouseup`);
+                    } else {
+                        console.log(`Diagnostic: Slider mouseup for channel ${channel}`);
+                    }
+                    isDraggingSlider = false;
+                    debouncedFetchArduinoStates();
+                    setBrightness('arduino', channel, slider.value);
+                }
+            });
 
-			slider.addEventListener('input', (e) => {
-				const value = parseInt(slider.value);
-				const channel = parseInt(slider.dataset.channel);
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} on input`);
-					return;
-				}
-				console.log(`Diagnostic: Slider input for channel ${channel}: ${value}%`);
-				updateSliderUI(value, channel);  // UI only
-			});
+            slider.addEventListener('input', (e) => {
+                const value = parseInt(slider.value);
+                const channel = parseInt(slider.dataset.channel);
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} on input`);
+                    return;
+                }
+                console.log(`Diagnostic: Slider input for channel ${channel}: ${value}%`);
+                updateSliderUI(value, channel);
+            });
 
-			slider.addEventListener('touchstart', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				isDraggingSlider = true;
-				const channel = parseInt(slider.dataset.channel);
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} on touchstart`);
-					isDraggingSlider = false;
-					return;
-				}
-				console.log(`Diagnostic: Slider touchstart for channel ${channel}`);
-				stopArduinoStateInterval();
-				slider.classList.add('active');
-			});
+            slider.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isDraggingSlider = true;
+                const channel = parseInt(slider.dataset.channel);
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} on touchstart`);
+                    isDraggingSlider = false;
+                    return;
+                }
+                console.log(`Diagnostic: Slider touchstart for channel ${channel}`);
+                stopArduinoStateInterval();
+                slider.classList.add('active');
+            });
 
-			slider.addEventListener('touchmove', (e) => {
-				if (!isDraggingSlider) return;
-				e.preventDefault();
-				e.stopPropagation();
-				const channel = parseInt(slider.dataset.channel);
-				if (channel < 1 || channel > 12) {
-					console.error(`Diagnostic: Invalid channel ${channel} on touchmove`);
-					return;
-				}
-				const rect = slider.getBoundingClientRect();
-				const totalHeight = rect.height;
-				const touchY = e.touches[0].clientY - rect.top;
-				let value = Math.round(((totalHeight - touchY) / totalHeight) * 100);
-				value = Math.max(0, Math.min(100, value));
-				console.log(`Diagnostic: Slider touchmove for channel ${channel}: ${value}%`);
-				updateSliderUI(value, channel);  // UI only during drag
-				slider.dispatchEvent(new Event('input'));
-			});
+            slider.addEventListener('touchmove', (e) => {
+                if (!isDraggingSlider) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const channel = parseInt(slider.dataset.channel);
+                if (channel < 1 || channel > 12) {
+                    console.error(`Diagnostic: Invalid channel ${channel} on touchmove`);
+                    return;
+                }
+                const rect = slider.getBoundingClientRect();
+                const totalHeight = rect.height;
+                const touchY = e.touches[0].clientY - rect.top;
+                let value = Math.round(((totalHeight - touchY) / totalHeight) * 100);
+                value = Math.max(0, Math.min(100, value));
+                console.log(`Diagnostic: Slider touchmove for channel ${channel}: ${value}%`);
+                updateSliderUI(value, channel);
+                slider.dispatchEvent(new Event('input'));
+            });
 
-			slider.addEventListener('touchend', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				if (isDraggingSlider) {
-					const channel = parseInt(slider.dataset.channel);
-					if (channel < 1 || channel > 12) {
-						console.error(`Diagnostic: Invalid channel ${channel} on touchend`);
-					} else {
-						console.log(`Diagnostic: Slider touchend for channel ${channel}`);
-					}
-					isDraggingSlider = false;
-					slider.classList.remove('active');
-					debouncedFetchArduinoStates();
-					setBrightness('arduino', channel, slider.value);  // Force immediate set on drag end
-				}
-			});
-		});
+            slider.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isDraggingSlider) {
+                    const channel = parseInt(slider.dataset.channel);
+                    if (channel < 1 || channel > 12) {
+                        console.error(`Diagnostic: Invalid channel ${channel} on touchend`);
+                    } else {
+                        console.log(`Diagnostic: Slider touchend for channel ${channel}`);
+                    }
+                    isDraggingSlider = false;
+                    slider.classList.remove('active');
+                    debouncedFetchArduinoStates();
+                    setBrightness('arduino', channel, slider.value);
+                }
+            });
+        });
 
-        // Settings event listeners (unchanged)
+        // Settings event listeners
         $('#dark-mode-toggle').off('change').on('change', function(e) {
             e.stopPropagation();
             const $checkbox = $(this);
@@ -555,7 +573,6 @@ $(document).ready(function() {
 
         $('.settings-toggle').off('click').on('click', function(e) {
             e.preventDefault();
-            e.stopPropagation();
             const $checkbox = $(this).find('input[type="checkbox"]');
             $checkbox.prop('checked', !$checkbox.prop('checked')).trigger('change');
             console.log('Diagnostic: Settings toggle clicked:', $checkbox.attr('id'), 'New state:', $checkbox.prop('checked'));
@@ -637,10 +654,11 @@ function fetchData() {
                           .toggleClass('error', data.battery_level === 'Error');
         $('#tank_level').text(data.tank_level !== 'Error' ? data.tank_level + '% Full' : 'Error')
                        .toggleClass('error', data.tank_level === 'Error');
+        $('#kitchen_panel').text(data.kitchen_panel || 'Unknown');
         $('#storage_panel').text(data.storage_panel || 'Unknown');
         $('#rear_drawer').text(data.rear_drawer || 'Unknown');
         const gpsFix = data.gps_fix || 'No';
-        const gpsSatellites = data.gps_quality.match(/\d+/) ? data.gps_quality.match(/\d+/)[0] : '0';
+        const gpsSatellites = data.gps_quality ? (data.gps_quality.match(/\d+/) ? data.gps_quality.match(/\d+/)[0] : '0') : '0';
         const gpsDisplay = gpsFix === 'Yes' ? `${gpsSatellites} Satellites` : 'No';
         $('#gps_fix').text(gpsDisplay);
         const gpsCoords = (data.latitude && data.longitude) ?
@@ -722,6 +740,7 @@ function fetchData() {
         $('#temperature').text('Error').toggleClass('error', true);
         $('#battery_level').text('Error').toggleClass('error', true);
         $('#tank_level').text('Error').toggleClass('error', true);
+        $('#kitchen_panel').text('Unknown');
         $('#storage_panel').text('Unknown');
         $('#rear_drawer').text('Unknown');
         $('#gps_fix').text('No');
@@ -797,9 +816,13 @@ function fetchArduinoStates() {
 }
 
 function updateArduinoSliders(states) {
+    const displayKey = getDisplayKey();
     Object.keys(states).forEach(channel => {
-        if (!config.channels.arduino[channel]?.display) {
-            console.log(`Diagnostic: Skipping UI update for hidden channel ${channel}`);
+        // Check if display is an object or boolean for backward compatibility
+        const displayValue = config.channels.arduino[channel]?.display;
+        const shouldDisplay = typeof displayValue === 'object' ? displayValue[displayKey] : displayValue;
+        if (!shouldDisplay) {
+            console.log(`Diagnostic: Skipping UI update for hidden channel ${channel} on ${displayKey} touchscreen`);
             return;
         }
         const channelNum = parseInt(channel);
@@ -819,7 +842,6 @@ function updateArduinoSliders(states) {
             console.warn(`Diagnostic: Missing elements for channel ${channel}`);
             return;
         }
-        // Ignore if within 3s of last set and mismatch >10 (anti-jump during/after ramp, including to 0)
         if (lastSetBrightness[channel] && (Date.now() - lastSetBrightness[channel].timestamp < 3000) && Math.abs(brightness - lastSetBrightness[channel].value) > 10) {
             console.log(`Diagnostic: Ignoring erratic update for channel ${channel} during ramp window`);
             return;
@@ -843,11 +865,15 @@ function updateArduinoSliders(states) {
 }
 
 function fetchRelayStates() {
+    const displayKey = getDisplayKey();
     $.get('/get_relay_states', function(data) {
         console.log('Diagnostic: Relay states received:', data);
         Object.keys(data).forEach(channel => {
-            if (!config.channels.relays[channel]?.display) {
-                console.log(`Diagnostic: Skipping UI update for hidden relay channel ${channel}`);
+            // Check if display is an object or boolean for backward compatibility
+            const displayValue = config.channels.relays[channel]?.display;
+            const shouldDisplay = typeof displayValue === 'object' ? displayValue[displayKey] : displayValue;
+            if (!shouldDisplay) {
+                console.log(`Diagnostic: Skipping UI update for hidden relay channel ${channel} on ${displayKey} touchscreen`);
                 return;
             }
             const state = data[channel] ? 'On' : 'Off';
@@ -881,13 +907,11 @@ function setBrightness(type, channel, value) {
         data: JSON.stringify({ type: type, channel: channel, brightness: value }),
         success: function(response) {
             console.log(`Diagnostic: Set brightness success for channel ${channel}:`, response);
-            // Update lastSet on success only
             lastSetBrightness[channel] = {value: value, timestamp: Date.now()};
             debouncedFetchArduinoStates();
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error(`Diagnostic: Error in set_brightness for channel ${channel}:`, textStatus, errorThrown);
-            // Revert UI on failure
             fetchArduinoStates();
         }
     });
@@ -973,13 +997,13 @@ function activateScene(scene) {
             console.log(`Diagnostic: Scene ${scene} activated:`, response);
             debouncedFetchArduinoStates();
             fetchRelayStates();
-            fetchActiveScene();  // New: Immediate sync after activation
+            fetchActiveScene();
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error(`Diagnostic: Error in activate_scene for ${scene}:`, textStatus, errorThrown);
             debouncedFetchArduinoStates();
             fetchRelayStates();
-            fetchActiveScene();  // New: Sync even on error
+            fetchActiveScene();
         }
     });
 }
@@ -991,7 +1015,7 @@ function initiateShutdown() {
             url: '/shutdown',
             type: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ token: 'kzqWazMQIO8YrefrqwEi4cFvM9pCrlCAYG05FLpjgpc' }),
+            data: JSON.stringify({ token: 'okohWE_uJGFikr4bF_zVKLOazp27DCbI_rWjTtRALcY' }),
             success: function(response) {
                 console.log('Diagnostic: Shutdown command sent:', response);
                 alert('Both systems are shutting down. Please wait a moment before powering off.');
@@ -1009,8 +1033,8 @@ function startArduinoStateInterval() {
         arduinoStateInterval = setInterval(() => {
             console.log('Diagnostic: Background fetchArduinoStates and fetchActiveScene triggered');
             debouncedFetchArduinoStates();
-            fetchActiveScene();  // New: Poll backend active scene for UI sync
-        }, ACTIVE_SCENE_POLL_INTERVAL);  // Use consistent interval
+            fetchActiveScene();
+        }, ACTIVE_SCENE_POLL_INTERVAL);
         console.log('Diagnostic: Started Arduino state and active scene interval');
     }
 }
@@ -1265,7 +1289,6 @@ const debouncedCheckActiveScene = debounce(function() {
         return;
     }
 
-    // New: First fetch backend active scene, then fallback to inference if null
     $.get('/get_active_scene', function(data) {
         if (data.active_scene) {
             console.log('Diagnostic: Using backend active scene:', data.active_scene);
@@ -1279,7 +1302,6 @@ const debouncedCheckActiveScene = debounce(function() {
                 }
             });
         } else {
-            // Fallback to existing inference if backend says null
             $.when(
                 $.get('/get_arduino_states'),
                 $.get('/get_relay_states')
@@ -1365,7 +1387,6 @@ const debouncedCheckActiveScene = debounce(function() {
         }
     }).fail(function(jqXHR, textStatus, errorThrown) {
         console.error('Diagnostic: Error fetching /get_active_scene in checkActiveScene:', textStatus, errorThrown);
-        // Fallback to full inference if endpoint fails
         $.when(
             $.get('/get_arduino_states'),
             $.get('/get_relay_states')
@@ -1510,8 +1531,8 @@ function openTab(tabName) {
 }
 
 function rampFaders() {
-    const rampDuration = 1000;  // Match backend ramp time
-    const stepInterval = 50;  // Poll every 50ms for smooth animation
+    const rampDuration = 1000;
+    const stepInterval = 50;
     const steps = Math.ceil(rampDuration / stepInterval);
     let currentStep = 0;
 
@@ -1568,6 +1589,7 @@ function initializeSceneEditor() {
 function renderLightsList() {
     const lightsList = $('.lights-list');
     lightsList.empty();
+    const displayKey = getDisplayKey();
 
     if (!config.channels || !config.channels.arduino || !config.channels.relays) {
         console.error('Invalid config.channels:', config.channels);
@@ -1576,24 +1598,34 @@ function renderLightsList() {
     }
 
     const lights = [
-        ...Object.entries(config.channels.arduino).map(([channel, info]) => ({
-            id: `arduino:${channel}`,
-            name: info.name,
-            type: 'dimmer',
-            channel
-        })),
-        ...Object.entries(config.channels.relays).map(([channel, info]) => ({
-            id: `relays:${channel}`,
-            name: info.name,
-            type: 'switch',
-            channel
-        }))
+        ...Object.entries(config.channels.arduino)
+            .filter(([_, info]) => {
+                const displayValue = info.display;
+                return typeof displayValue === 'object' ? displayValue[displayKey] : displayValue;
+            })
+            .map(([channel, info]) => ({
+                id: `arduino:${channel}`,
+                name: info.name,
+                type: 'dimmer',
+                channel
+            })),
+        ...Object.entries(config.channels.relays)
+            .filter(([_, info]) => {
+                const displayValue = info.display;
+                return typeof displayValue === 'object' ? displayValue[displayKey] : displayValue;
+            })
+            .map(([channel, info]) => ({
+                id: `relays:${channel}`,
+                name: info.name,
+                type: 'switch',
+                channel
+            }))
     ];
 
-    console.log('Lights array:', lights);
+    console.log(`Diagnostic: Lights array for ${displayKey} touchscreen:`, lights);
 
     if (lights.length === 0) {
-        console.warn('No lights found in config.');
+        console.warn(`No lights found for ${displayKey} touchscreen.`);
         lightsList.append('<p>No lights available.</p>');
         return;
     }
@@ -1649,6 +1681,36 @@ function updateBrightness(lightId, value) {
     slider.css('--value', `${value}%`);
     $(`.light-item[data-light-id="${lightId}"] .brightness-value`).text(`${value}%`);
     updateSceneLightSettings(lightId);
+}
+
+function updateSceneMembership(lightId, isChecked) {
+    const lightItem = $(`.light-item[data-light-id="${lightId}"]`);
+    const [channelType, channel] = lightId.split(':');
+
+    if (!config.scenes[activeSceneId]) {
+        config.scenes[activeSceneId] = { arduino: {}, relays: {} };
+    }
+    if (!config.scenes[activeSceneId][channelType]) {
+        config.scenes[activeSceneId][channelType] = {};
+    }
+
+    if (isChecked) {
+        // Add with default value
+        if (channelType === 'relays') {
+            config.scenes[activeSceneId].relays[channel] = 0; // Default off
+            lightItem.find('.toggle-slider').removeClass('active');
+        } else if (channelType === 'arduino') {
+            config.scenes[activeSceneId].arduino[channel] = 0; // Default 0%
+            lightItem.find('input[type="range"]').val(0).css('--value', '0%');
+            lightItem.find('.brightness-value').text('0%');
+        }
+    } else {
+        // Remove
+        delete config.scenes[activeSceneId][channelType][channel];
+        if (Object.keys(config.scenes[activeSceneId][channelType]).length === 0) {
+            delete config.scenes[activeSceneId][channelType];
+        }
+    }
 }
 
 function updateSceneLightSettings(lightId) {

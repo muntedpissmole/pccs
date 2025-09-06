@@ -14,6 +14,7 @@ import pytz
 import subprocess
 import threading
 import timezonefinder
+import os
 
 # Global serial lock
 serial_lock = threading.Lock()
@@ -127,7 +128,7 @@ def write_config_atomically(config_data, config_path):
 def send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value=None):
     try:
         cmd = ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}"]
-        if command[0] == "xdotool":
+        if command[0] in ["xdotool", "xset"]:
             cmd.append("DISPLAY=:0 " + " ".join(command))
         else:
             cmd.append(" ".join(command))
@@ -458,7 +459,7 @@ def get_local_tz_str():
                 logging.warning("Could not determine timezone from GPS, using fallback")
     return tz_cache["tz_str"]
 
-SHUTDOWN_TOKEN = "kzqWazMQIO8YrefrqwEi4cFvM9pCrlCAYG05FLpjgpc"
+SHUTDOWN_TOKEN = "okohWE_uJGFikr4bF_zVKLOazp27DCbI_rWjTtRALcY"
 
 def set_system_clock(dt):
     try:
@@ -532,8 +533,7 @@ def update_gps_data():
                         else:
                             gps_timeout_start = None
                             current_time_cache["using_gps"] = True
-                        if hasattr(msg, 'timestamp') and msg.timestamp and gps_data["fix"] == "Yes":
-                            today = date.today()
+                            current_time_cache["fix_obtained"] = True
                             naive_dt = datetime(
                                 year=today.year,
                                 month=today.month,
@@ -963,28 +963,32 @@ def update_lights_based_on_time():
     local_tz = pytz.timezone(local_tz_str)
     current_local = datetime.now(local_tz)
     for pin_str in config['reed_switches']:
+        if pin_str in ['23', '12']:
+            continue
         if manual_override[pin_str]:
             continue
-        # Special override for kitchen bench (pin 12): if kitchen panel (23) is closed, force bench off
-        if pin_str == '12':
-            if lgpio.gpio_read(h, 23) == 0:
-                current_pwm = get_arduino_pwm(4)
-                if current_pwm is not None and current_pwm > 0:
-                    set_arduino_pwm(4, 0, ramp_time=1000)
-                continue  # Skip normal logic
         if lgpio.gpio_read(h, int(pin_str)) == 1:
             targets, operate = get_target_pwms(pin_str, current_local)
             if operate:
                 for ch_idx, target_pwm in targets.items():
                     current_pwm = get_arduino_pwm(ch_idx)
                     if current_pwm is not None and abs(current_pwm - target_pwm) > 5:
-                        set_arduino_pwm(ch_idx, target_pwm, ramp_time=2000 if pin_str == '23' else 1000)
+                        set_arduino_pwm(ch_idx, target_pwm, ramp_time=1000)
+    # Force off kitchen-related lights if panel closed
+    if lgpio.gpio_read(h, 23) == 0:
+        for ch in [1, 2, 3]:
+            current = get_arduino_pwm(ch)
+            if current is not None and current > 0:
+                set_arduino_pwm(ch, 0, ramp_time=2000)
+        current = get_arduino_pwm(4)
+        if current is not None and current > 0:
+            set_arduino_pwm(4, 0, ramp_time=1000)
 
 def activate_scene_func(scene_name):
     global current_scene
     try:
         scene = config['scenes'][scene_name]
-        # Infer all possible Arduino channels from configured channels
+        # Infer all possible possible Arduino channels from configured channels
         all_arduino_channels = set(config['channels']['arduino'].keys())
         target_pwm = {}  # Don't init to 0 for all; only set specified non-reed-linked
         scene_arduino = scene.get('arduino', {})
@@ -1042,7 +1046,7 @@ def activate_scene_func(scene_name):
                         logging.error(f"Final verification failed for kitchen channel {ch_idx}: current {current}, target {target}")
             if lgpio.gpio_read(h, 12) == 1:  # Kitchen bench open (and implicitly kitchen panel open)
                 bench_targets, _ = get_target_pwms('12', current_local, forced_period=scene_name, force_operate=True)
-                for ch_idx, pwm in bench_targets.items():
+                for ch_idx, pwm in targets.items():
                     set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
                 time.sleep(1.5)  # Wait for ramp to complete
                 for ch_idx, pwm in bench_targets.items():
@@ -1065,7 +1069,6 @@ def activate_scene_func(scene_name):
         logging.error(f"Error in activate_scene_func: {e}")
 
 last_all_off_trigger = None
-last_evening_to_night_trigger = None
 last_sunset_evening_trigger = None
 
 def check_auto_scenes():
@@ -1092,43 +1095,28 @@ def light_manager():
         s = sun(loc.observer, date=today, tzinfo=local_tz)
         sunset = s["sunset"]
         operate_start = sunset - timedelta(minutes=config['evening_offset'])  # Evening start time
-        trigger_time = sunrise + timedelta(hours=1)   # All off time
-        
-        # New: Auto-activate evening at operate_start if kitchen open
-        if current_local >= operate_start and (last_sunset_evening_trigger is None or last_sunset_evening_trigger.date() != today):
-            if h and lgpio.gpio_read(h, 23) == 1:  # Kitchen open
-                if 'evening' in config['scenes'] and current_scene != 'evening':
-                    activate_scene_func('evening')
-                    last_sunset_evening_trigger = current_local
-                    logging.info(f"Auto-triggered evening scene (kitchen open) at {current_local}")
-                else:
-                    logging.warning("Evening scene not defined or already active")
-        
-        # Existing: Auto-transition from evening to night at 8 PM if kitchen open
-        if current_scene == 'evening':
-            # Calculate the 8 PM boundary for today (or prev if before noon, but align to operate_start)
-            if current_local.hour >= 12:
-                operate_start_date = today
-            else:
-                operate_start_date = today - timedelta(days=1)
-            night_time_obj = dt_time.fromisoformat(config['night_time'])
-            eight_pm = local_tz.localize(datetime.combine(operate_start_date, night_time_obj))
-            if current_local >= eight_pm and (last_evening_to_night_trigger is None or last_evening_to_night_trigger.date() != operate_start_date):
-                if h and lgpio.gpio_read(h, 23) == 1:  # Kitchen open
-                    if 'night' in config['scenes']:
-                        activate_scene_func('night')
-                        last_evening_to_night_trigger = current_local
-                        logging.info(f"Auto-triggered night scene from evening (kitchen open) at {current_local}")
-                    else:
-                        logging.warning("Night scene not defined")
-        
-        if current_local >= trigger_time and (last_all_off_trigger is None or last_all_off_trigger.date() != today):
+        trigger_time = s["sunrise"] + timedelta(hours=1)  # All off time
+        # Check if current time is within 5 minutes of trigger_time for all_off
+        time_diff = abs((current_local - trigger_time).total_seconds())
+        if time_diff <= 300 and (last_all_off_trigger is None or last_all_off_trigger.date() != today):
+            logging.debug(f"Checking all_off: current_local={current_local}, trigger_time={trigger_time}, time_diff={time_diff}s")
             if 'all_off' in config['scenes']:
                 activate_scene_func('all_off')
                 last_all_off_trigger = current_local
                 logging.info(f"Triggered all off scene at {current_local}")
             else:
                 logging.warning("All off scene not defined")
+        
+        # Auto-activate appropriate scene (evening or night) if kitchen open
+        if h and lgpio.gpio_read(h, 23) == 1:  # Kitchen open
+            period = get_operating_period(current_local)
+            if period and period in config['scenes'] and current_scene != period and \
+               (last_sunset_evening_trigger is None or last_sunset_evening_trigger.date() != today):
+                activate_scene_func(period)
+                last_sunset_evening_trigger = current_local
+                logging.info(f"Auto-triggered {period} scene (kitchen open) at {current_local}")
+            elif not period or period not in config['scenes']:
+                logging.warning(f"Scene {period} not defined or not in operating period")
         
         time.sleep(60)
 
@@ -1180,11 +1168,6 @@ def check_initial_reed_states():
                             if bench_operate:
                                 for ch_idx, pwm in bench_targets.items():
                                     set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
-                        # New: Activate scene if during evening/night and not already active
-                        period = get_operating_period(current_local)
-                        if current_time_cache["fix_obtained"] and period and period in config['scenes'] and current_scene != period:
-                            activate_scene_func(period)
-                            logging.info(f"Auto-triggered {period} scene on startup (kitchen open)")
                 max_attempts = 3
                 retry_interval = 10
                 for attempt in range(max_attempts):
@@ -1335,14 +1318,33 @@ light_manager_thread.start()
 @app.route('/')
 def index():
     try:
-        # Filter channels based on display attribute
-        filtered_arduino_channels = {k: v for k, v in config['channels']['arduino'].items() if v.get('display', True)}
-        filtered_relay_channels = {k: v for k, v in config['channels']['relays'].items() if v.get('display', True)}
+        # Filter channels based on display.kitchen attribute
+        filtered_arduino_channels = {
+            k: v for k, v in config['channels']['arduino'].items()
+            if isinstance(v.get('display'), dict) and v['display'].get('kitchen', False)
+            or (isinstance(v.get('display'), bool) and v['display'])
+        }
+        filtered_relay_channels = {
+            k: v for k, v in config['channels']['relays'].items()
+            if isinstance(v.get('display'), dict) and v['display'].get('kitchen', False)
+            or (isinstance(v.get('display'), bool) and v['display'])
+        }
         
-        logging.info(f"Arduino channels before filtering: {list(config['channels']['arduino'].keys())}")
-        logging.info(f"Display value for channel 9: {config['channels']['arduino'].get('9', {}).get('display', 'missing')}")
-        logging.info(f"Filtered Arduino channels: {list(filtered_arduino_channels.keys())}")
-        logging.info(f"Filtered relay channels: {list(filtered_relay_channels.keys())}")
+        logging.debug(f"Arduino channels before filtering for index: {list(config['channels']['arduino'].keys())}")
+        logging.debug(f"Filtered Arduino channels for index (kitchen): {list(filtered_arduino_channels.keys())}")
+        logging.debug(f"Relay channels before filtering for index: {list(config['channels']['relays'].keys())}")
+        logging.debug(f"Filtered relay channels for index (kitchen): {list(filtered_relay_channels.keys())}")
+        
+        version_path = os.path.join(os.path.dirname(__file__), 'version.txt')
+        try:
+            with open(version_path, 'r') as f:
+                version = f.read().strip()
+        except FileNotFoundError:
+            version = "Unknown"  # Fallback if file is missing
+            logging.warning(f"version.txt not found at {version_path}, using fallback")
+        except Exception as e:
+            version = "Error"
+            logging.error(f"Error reading version.txt: {e}")
         
         return render_template('index.html',
                               scenes=config['scenes'].keys(),
@@ -1350,30 +1352,55 @@ def index():
                               relay_channels=filtered_relay_channels,
                               reed_switches=config['reed_switches'],
                               arduino_available=arduino_available,
-                              evening_offset=config.get('evening_offset', 60),
-                              night_time=config.get('night_time', '20:00'))
+                              evening_offset=config.get('evening_offset', 30),
+                              night_time=config.get('night_time', '20:00'),
+                              version=version)
     except Exception as e:
-        logging.error(f"Error rendering index: {e}")
+        logging.error(f"Error rendering index: {e}", exc_info=True)
         return f"Error rendering page: {e}", 500
         
 @app.route('/5inch')
 def index_5inch():
     try:
-        # Filter channels based on display attribute (same as main index)
-        filtered_arduino_channels = {k: v for k, v in config['channels']['arduino'].items() if v.get('display', True)}
-        filtered_relay_channels = {k: v for k, v in config['channels']['relays'].items() if v.get('display', True)}
+        # Filter channels based on display.tent attribute
+        filtered_arduino_channels = {
+            k: v for k, v in config['channels']['arduino'].items()
+            if isinstance(v.get('display'), dict) and v['display'].get('tent', False)
+            or (isinstance(v.get('display'), bool) and v['display'])
+        }
+        filtered_relay_channels = {
+            k: v for k, v in config['channels']['relays'].items()
+            if isinstance(v.get('display'), dict) and v['display'].get('tent', False)
+            or (isinstance(v.get('display'), bool) and v['display'])
+        }
         
-        logging.info(f"Filtered Arduino channels for 5inch: {list(filtered_arduino_channels.keys())}")
-        logging.info(f"Filtered relay channels for 5inch: {list(filtered_relay_channels.keys())}")
+        logging.debug(f"Arduino channels before filtering for 5inch: {list(config['channels']['arduino'].keys())}")
+        logging.debug(f"Filtered Arduino channels for 5inch (tent): {list(filtered_arduino_channels.keys())}")
+        logging.debug(f"Relay channels before filtering for 5inch: {list(config['channels']['relays'].keys())}")
+        logging.debug(f"Filtered relay channels for 5inch (tent): {list(filtered_relay_channels.keys())}")
+        
+        version_path = os.path.join(os.path.dirname(__file__), 'version.txt')
+        try:
+            with open(version_path, 'r') as f:
+                version = f.read().strip()
+        except FileNotFoundError:
+            version = "Unknown"  # Fallback if file is missing
+            logging.warning(f"version.txt not found at {version_path}, using fallback")
+        except Exception as e:
+            version = "Error"
+            logging.error(f"Error reading version.txt: {e}")
         
         return render_template('index_5inch.html',
                               scenes=config['scenes'].keys(),
                               arduino_channels=filtered_arduino_channels,
                               relay_channels=filtered_relay_channels,
                               reed_switches=config['reed_switches'],
-                              arduino_available=arduino_available)
+                              arduino_available=arduino_available,
+                              evening_offset=config.get('evening_offset', 30),
+                              night_time=config.get('night_time', '20:00'),
+                              version=version)
     except Exception as e:
-        logging.error(f"Error rendering index_5inch: {e}")
+        logging.error(f"Error rendering index_5inch: {e}", exc_info=True)
         return f"Error rendering page: {e}", 500
 
 @app.route('/set_brightness', methods=['POST'])
@@ -1678,73 +1705,134 @@ def get_active_scene():
 @app.route('/get_data', methods=['GET'])
 def get_data():
     global sun_times_cache, current_time_cache
+    data = {}  # Initialize empty data to avoid full failure
     try:
-        temperature = get_ds18b20_temperature()
-        battery_voltage = get_battery_voltage()
-        tank_level = get_tank_level()
-        solar_current = get_solar_current()
-        battery_current = get_battery_current()
-        current_time = datetime.now(pytz.UTC)
-        recalculate = False
-        if sun_times_cache["last_calculated"] is None or (current_time - sun_times_cache["last_calculated"]).total_seconds() > 3600:
-            recalculate = True
-        if gps_data["latitude"] and gps_data["longitude"]:
-            if sun_times_cache["last_latitude"] is None or abs(gps_data["latitude"] - sun_times_cache["last_latitude"]) > 0.1 or abs(gps_data["longitude"] - sun_times_cache["last_longitude"]) > 0.1:
-                recalculate = True
-        if recalculate and gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
-            local_tz_str = get_local_tz_str()
-            local_tz = pytz.timezone(local_tz_str)
-            location = LocationInfo(
-                name="Current Location",
-                region="Unknown",
-                timezone=local_tz_str,
-                latitude=gps_data["latitude"],
-                longitude=gps_data["longitude"]
-            )
-            today = date.today()
-            s = sun(location.observer, date=today, tzinfo=local_tz)
-            sun_times_cache.update({
-                "sunrise": s["sunrise"].strftime("%I:%M %p").lstrip("0"),
-                "sunset": s["sunset"].strftime("%I:%M %p").lstrip("0"),
-                "last_calculated": current_time,
-                "last_latitude": gps_data["latitude"],
-                "last_longitude": gps_data["longitude"]
-            })
-        data = {
-            "temperature": str(temperature) if temperature is not None else "Error",
-            "battery_level": f"{battery_voltage}V" if battery_voltage is not None else "Error",
-            "tank_level": f"{tank_level}" if tank_level is not None else "Error",
-            "sunrise": sun_times_cache["sunrise"] or "---",
-            "sunset":sun_times_cache["sunset"] or "---",
-            "current_datetime": current_time_cache["time"] or "---",
-            "gps_fix": gps_data["fix"],
-            "gps_quality": gps_data["quality"],
-            "latitude": gps_data["latitude"],
-            "longitude": gps_data["longitude"],
-            "solar_output": f"{solar_current:.1f}A" if solar_current is not None else "Error"
-        }
-        if battery_current is not None:
-            if battery_current >= 0:
-                data["battery_label"] = "Battery Output"
-                data["battery_current"] = f"{battery_current:.1f}A"
+        # Sensor readings
+        try:
+            temperature = get_ds18b20_temperature()
+            data["temperature"] = str(temperature) if temperature is not None else "Error"
+        except Exception as e:
+            logging.error(f"Error getting temperature: {e}", exc_info=True)
+            data["temperature"] = "Error"
+        
+        try:
+            battery_voltage = get_battery_voltage()
+            data["battery_level"] = f"{battery_voltage}V" if battery_voltage is not None else "Error"
+        except Exception as e:
+            logging.error(f"Error getting battery voltage: {e}", exc_info=True)
+            data["battery_level"] = "Error"
+        
+        try:
+            tank_level = get_tank_level()
+            data["tank_level"] = f"{tank_level}" if tank_level is not None else "Error"
+        except Exception as e:
+            logging.error(f"Error getting tank level: {e}", exc_info=True)
+            data["tank_level"] = "Error"
+        
+        try:
+            solar_current = get_solar_current()
+            data["solar_output"] = f"{solar_current:.1f}A" if solar_current is not None else "Error"
+        except Exception as e:
+            logging.error(f"Error getting solar current: {e}", exc_info=True)
+            data["solar_output"] = "Error"
+        
+        try:
+            battery_current = get_battery_current()
+            if battery_current is not None:
+                if battery_current >= 0:
+                    data["battery_label"] = "Battery Output"
+                    data["battery_current"] = f"{battery_current:.1f}A"
+                else:
+                    data["battery_label"] = "Battery Input"
+                    data["battery_current"] = f"{abs(battery_current):.1f}A"
             else:
-                data["battery_label"] = "Battery Input"
-                data["battery_current"] = f"{abs(battery_current):.1f}A"
-        else:
+                data["battery_label"] = "Battery Output"
+                data["battery_current"] = "Error"
+        except Exception as e:
+            logging.error(f"Error getting battery current: {e}", exc_info=True)
             data["battery_label"] = "Battery Output"
             data["battery_current"] = "Error"
+        
+        # Sun times calculation
+        try:
+            current_time = datetime.now(pytz.UTC)
+            recalculate = False
+            if sun_times_cache["last_calculated"] is None or (current_time - sun_times_cache["last_calculated"]).total_seconds() > 3600:
+                recalculate = True
+            if gps_data["latitude"] and gps_data["longitude"]:
+                if sun_times_cache["last_latitude"] is None or abs(gps_data["latitude"] - sun_times_cache["last_latitude"]) > 0.1 or abs(gps_data["longitude"] - sun_times_cache["last_longitude"]) > 0.1:
+                    recalculate = True
+            if recalculate and gps_data["fix"] == "Yes" and gps_data["latitude"] and gps_data["longitude"]:
+                local_tz_str = get_local_tz_str()
+                local_tz = pytz.timezone(local_tz_str)
+                location = LocationInfo(
+                    name="Current Location",
+                    region="Unknown",
+                    timezone=local_tz_str,
+                    latitude=gps_data["latitude"],
+                    longitude=gps_data["longitude"]
+                )
+                today = date.today()
+                s = sun(location.observer, date=today, tzinfo=local_tz)
+                sun_times_cache.update({
+                    "sunrise": s["sunrise"].strftime("%I:%M %p").lstrip("0"),
+                    "sunset": s["sunset"].strftime("%I:%M %p").lstrip("0"),
+                    "last_calculated": current_time,
+                    "last_latitude": gps_data["latitude"],
+                    "last_longitude": gps_data["longitude"]
+                })
+            data["sunrise"] = sun_times_cache["sunrise"] or "---"
+            data["sunset"] = sun_times_cache["sunset"] or "---"
+        except Exception as e:
+            logging.error(f"Error calculating sun times: {e}", exc_info=True)
+            data["sunrise"] = "---"
+            data["sunset"] = "---"
+        
+        # Current datetime
+        try:
+            data["current_datetime"] = current_time_cache["time"] or "---"
+        except Exception as e:
+            logging.error(f"Error getting current datetime: {e}", exc_info=True)
+            data["current_datetime"] = "---"
+        
+        # GPS data
+        try:
+            data["gps_fix"] = gps_data["fix"]
+            data["gps_quality"] = gps_data["quality"]
+            data["latitude"] = gps_data["latitude"]
+            data["longitude"] = gps_data["longitude"]
+        except Exception as e:
+            logging.error(f"Error getting GPS data: {e}", exc_info=True)
+            data["gps_fix"] = "No"
+            data["gps_quality"] = "0 satellites"
+            data["latitude"] = None
+            data["longitude"] = None
+        
+        # Reed switches
         if h:
-            # Hard-code only storage_panel and rear_drawer
-            data['storage_panel'] = "Open" if lgpio.gpio_read(h, 24) else "Closed"
-            data['rear_drawer'] = "Open" if lgpio.gpio_read(h, 25) else "Closed"
-            data['kitchen_bench'] = "Open" if lgpio.gpio_read(h, 12) else "Closed"
+            try:
+                data['kitchen_panel'] = "Open" if lgpio.gpio_read(h, 23) else "Closed"
+            except Exception as e:
+                logging.error(f"Error reading kitchen panel (pin 23): {e}", exc_info=True)
+                data['kitchen_panel'] = "Unknown"
+            try:
+                data['storage_panel'] = "Open" if lgpio.gpio_read(h, 24) else "Closed"
+            except Exception as e:
+                logging.error(f"Error reading storage panel (pin 24): {e}", exc_info=True)
+                data['storage_panel'] = "Unknown"
+            try:
+                data['rear_drawer'] = "Open" if lgpio.gpio_read(h, 25) else "Closed"
+            except Exception as e:
+                logging.error(f"Error reading rear drawer (pin 25): {e}", exc_info=True)
+                data['rear_drawer'] = "Unknown"
         else:
+            data['kitchen_panel'] = "Unknown"
             data['storage_panel'] = "Unknown"
             data['rear_drawer'] = "Unknown"
-            data['kitchen_bench'] = "Unknown"
+        
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error in get_data: {e}")
+        logging.error(f"Critical error in get_data: {e}", exc_info=True)
         return jsonify({}), 500
 
 @app.route('/shutdown', methods=['POST'])
@@ -1759,7 +1847,7 @@ def shutdown():
         try:
             subprocess.run([
                 "ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}",
-                "sudo", "shutdown", "now"
+                "sudo", "shutdown", "-h", "now"
             ], check=True, timeout=10)
             logging.info("Sent shutdown command to display-pi")
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -1767,7 +1855,7 @@ def shutdown():
         cleanup_gpio()
         threading.Thread(target=lambda: [
             time.sleep(2),
-            subprocess.run(['sudo', 'shutdown', 'now'], check=True)
+            subprocess.run(['sudo', 'shutdown', '-h', 'now'], check=True)
         ], daemon=True).start()
         return jsonify({"message": "Both systems are shutting down"})
     except Exception as e:
