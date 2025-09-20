@@ -125,43 +125,18 @@ def write_config_atomically(config_data, config_path):
             os.remove(temp_file_path)
         raise
 
-def send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value=None):
+def send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, display_type=None):
     try:
-        cmd = ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}"]
-        if command[0] in ["xdotool", "xset"]:
-            cmd.append("DISPLAY=:0 " + " ".join(command))
-        else:
-            cmd.append(" ".join(command))
+        cmd = ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", " ".join(command)]
         logging.debug(f"Executing SSH command: {' '.join(cmd)}")
         result = subprocess.run(
             cmd, check=True, timeout=20, capture_output=True, text=True
         )
-        logging.info(f"Successfully sent {action_desc} command to display-pi: {result.stdout.strip()}")
-        if brightness_value is not None:
-            ssh_command = f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
-            logging.debug(f"Executing brightness SSH command: {ssh_command}")
-            result = subprocess.run(
-                ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
-                check=True, timeout=20, capture_output=True, text=True
-            )
-            logging.info(f"Restored brightness to {brightness_value}: {result.stdout.strip()}")
+        logging.info(f"Successfully sent {action_desc} command to display-pi ({display_type or 'unknown'}): {result.stdout.strip()}")
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         error_msg = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
-        logging.error(f"Failed to send {action_desc} command to display-pi: {error_msg}")
-        if command[0] in ["xset", "xdotool"]:
-            fallback_value = 0 if command[0] == "xset" and command[-1] == "off" else (brightness_value if brightness_value else 127)
-            logging.info(f"Attempting fallback: set backlight to {fallback_value}")
-            try:
-                ssh_command = f"echo {fallback_value} | sudo tee /sys/class/backlight/*/brightness"
-                result = subprocess.run(
-                    ["ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}", ssh_command],
-                    check=True, timeout=20, capture_output=True, text=True
-                )
-                logging.info(f"Fallback succeeded: set backlight to {fallback_value}")
-                return True
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logging.error(f"Fallback failed: {e}")
+        logging.error(f"Failed to send {action_desc} command to display-pi ({display_type or 'unknown'}): {error_msg}")
         return False
 
 def init_gpio():
@@ -1141,22 +1116,24 @@ def check_initial_reed_states():
                 display_pi_user = "pi"
                 display_pi_ip = "10.10.10.20"
                 ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+                output_name = "DSI-2"
                 if initial_state == 0:  # Closed: screen off + lights to 0
-                    command = ["xset", "dpms", "force", "off"]
+                    command = ["wlr-randr", "--output", output_name, "--off"]
                     action_desc = "screen off"
-                    brightness_value = None
                     # Turn off kitchen lights
                     set_arduino_pwm(1, 0, ramp_time=2000)
                     set_arduino_pwm(2, 0, ramp_time=2000)
                     set_arduino_pwm(3, 0, ramp_time=2000)
                     # Also turn off kitchen bench light
                     set_arduino_pwm(4, 0, ramp_time=1000)
-                else:  # Open: wake screen + lights if operate
-                    command = ["xdotool", "key", "F5"]
-                    action_desc = "screen wake and refresh"
+                    brightness_command = None
+                else:  # Open: screen on + set brightness + lights if operate
+                    command = ["wlr-randr", "--output", output_name, "--on"]
+                    action_desc = "screen on"
                     brightness_level = config['theme'].get('screen_brightness', 'medium')
-                    brightness_map = {'low': 25, 'medium': 127, 'high': 255}
-                    brightness_value = brightness_map.get(brightness_level, 127)
+                    brightness_map = {'low': 25, 'medium': 128, 'high': 255}
+                    brightness_value = brightness_map.get(brightness_level, 128)
+                    brightness_command = ["bash", "-c", f'"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"']
                     # Compute and set kitchen lights based on time/scene only if operate
                     targets, operate = get_target_pwms(pin_str, current_local)
                     if operate:
@@ -1170,14 +1147,25 @@ def check_initial_reed_states():
                                     set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
                 max_attempts = 3
                 retry_interval = 10
+                success = False
                 for attempt in range(max_attempts):
-                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value):
+                    if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc):
+                        success = True
                         break
                     logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed")
                     time.sleep(retry_interval)
-                else:
+                if not success:
                     logging.error("All SSH attempts failed")
-
+                if initial_state == 1 and brightness_command:
+                    success_br = False
+                    for attempt in range(max_attempts):
+                        if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, brightness_command, "set brightness"):
+                            success_br = True
+                            break
+                        logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed for brightness")
+                        time.sleep(retry_interval)
+                    if not success_br:
+                        logging.error("All SSH attempts failed for brightness")
             # For storage, rear drawer, and kitchen bench, set initial lights based on state
             elif pin in [24, 25, 12]:
                 trigger_channels = switch_info.get('trigger_channels', [])
@@ -1230,22 +1218,24 @@ def monitor_reed_switch(pin, initial_state):
                     display_pi_user = "pi"
                     display_pi_ip = "10.10.10.20"
                     ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+                    output_name = "DSI-2"
                     if current_read == 0:  # Closed: screen off + lights to 0
-                        command = ["xset", "dpms", "force", "off"]
+                        command = ["wlr-randr", "--output", output_name, "--off"]
                         action_desc = "screen off"
-                        brightness_value = None
                         # Turn off kitchen lights
                         set_arduino_pwm(1, 0, ramp_time=2000)
                         set_arduino_pwm(2, 0, ramp_time=2000)
                         set_arduino_pwm(3, 0, ramp_time=2000)
                         # Also turn off kitchen bench light
                         set_arduino_pwm(4, 0, ramp_time=1000)
-                    else:  # Open: wake screen + lights if operate
-                        command = ["xdotool", "key", "F5"]
-                        action_desc = "screen wake and refresh"
+                        brightness_command = None
+                    else:  # Open: screen on + set brightness + lights if operate
+                        command = ["wlr-randr", "--output", output_name, "--on"]
+                        action_desc = "screen on"
                         brightness_level = config['theme'].get('screen_brightness', 'medium')
                         brightness_map = {'low': 25, 'medium': 127, 'high': 255}
-                        brightness_value = brightness_map.get(brightness_level, 127)
+                        brightness_value = brightness_map.get(brightness_level, 16)
+                        brightness_command = ["bash", "-c", f'"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"']
                         # Compute and set kitchen lights based on time/scene only if operate
                         targets, operate = get_target_pwms(str(pin), current_local)
                         if operate:
@@ -1257,7 +1247,27 @@ def monitor_reed_switch(pin, initial_state):
                                 if bench_operate:
                                     for ch_idx, pwm in bench_targets.items():
                                         set_arduino_pwm(ch_idx, pwm, ramp_time=1000)
-                    send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, brightness_value)
+                    max_attempts = 3
+                    retry_interval = 10
+                    success = False
+                    for attempt in range(max_attempts):
+                        if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc):
+                            success = True
+                            break
+                        logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed")
+                        time.sleep(retry_interval)
+                    if not success:
+                        logging.error("All SSH attempts failed")
+                    if current_read == 1 and brightness_command:
+                        success_br = False
+                        for attempt in range(max_attempts):
+                            if send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, brightness_command, "set brightness"):
+                                success_br = True
+                                break
+                            logging.warning(f"SSH attempt {attempt + 1}/{max_attempts} failed for brightness")
+                            time.sleep(retry_interval)
+                        if not success_br:
+                            logging.error("All SSH attempts failed for brightness")
                     last_state = current_read
                 # Storage, rear drawer, and kitchen bench: control lights
                 elif pin in [24, 25, 12]:
@@ -1841,23 +1851,32 @@ def shutdown():
         data = request.json or {}
         if data.get('token') != SHUTDOWN_TOKEN:
             return jsonify({"error": "Unauthorized"}), 403
+        
+        # Shutdown display-pi
         display_pi_user = "pi"
         display_pi_ip = "10.10.10.20"
         ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-        try:
-            subprocess.run([
-                "ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}",
-                "sudo", "shutdown", "-h", "now"
-            ], check=True, timeout=10)
-            logging.info("Sent shutdown command to display-pi")
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logging.warning(f"Failed to shut down display-pi: {e}")
+        shutdown_command = ["sudo", "shutdown", "-h", "now"]
+        success_display = send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, shutdown_command, "shutdown")  # Removed brightness_value
+        
+        # Shutdown tent-pi
+        tent_pi_user = "pi"
+        tent_pi_ip = "10.10.10.21"
+        success_tent = send_ssh_display_command(tent_pi_user, tent_pi_ip, ssh_key, shutdown_command, "shutdown")  # Removed brightness_value
+        
+        # Log overall success or partial failure
+        if success_display and success_tent:
+            logging.info("Sent shutdown commands to both display-pi and tent-pi")
+        else:
+            logging.warning(f"Shutdown status: display-pi={'success' if success_display else 'failed'}, tent-pi={'success' if success_tent else 'failed'}")
+        
+        # Clean up GPIO and initiate local shutdown
         cleanup_gpio()
         threading.Thread(target=lambda: [
             time.sleep(2),
             subprocess.run(['sudo', 'shutdown', '-h', 'now'], check=True)
         ], daemon=True).start()
-        return jsonify({"message": "Both systems are shutting down"})
+        return jsonify({"message": "All systems are shutting down"})
     except Exception as e:
         logging.error(f"Error in shutdown: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1942,26 +1961,40 @@ def set_screen_brightness():
     try:
         data = request.json
         brightness_level = data.get('brightness')
-        auto_brightness = config['theme'].get('auto_brightness', 'off')
-        brightness_map = {'low': 25, 'medium': 127, 'high': 255}
-        if brightness_level not in brightness_map:
+        display = data.get('display', '10inch')  # Default to 10" for backward compatibility
+
+        if display == '5inch':
+            display_pi_ip = "10.10.10.21"
+            output_name = "DSI-1"
+            brightness_map = {'off': 0, 'low': 1, 'medium': 25}
+        else:
+            display_pi_ip = "10.10.10.20"
+            output_name = "DSI-2"
+            brightness_map = {'low': 25, 'medium': 128, 'high': 255}
+
+        display_pi_user = "pi"
+        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
+
+        if brightness_level == 'off':
+            command_str = f'wlr-randr --output {output_name} --off'
+            action_desc = f"power off {display} display"
+        elif brightness_level in brightness_map:
+            brightness_value = brightness_map[brightness_level]
+            command_str = f'wlr-randr --output {output_name} --on && sleep 0.5 && echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness'
+            action_desc = f"set {display} display brightness to {brightness_level}"
+        else:
             logging.error(f"Invalid brightness level: {brightness_level}")
             return jsonify({"error": "Invalid brightness level"}), 400
-        brightness_value = brightness_map[brightness_level]
-        display_pi_user = "pi"
-        display_pi_ip = "10.10.10.20"
-        ssh_key = "/home/pi/.ssh/id_rsa_shutdown"
-        ssh_command = f"echo {brightness_value} | sudo tee /sys/class/backlight/*/brightness"
-        try:
-            subprocess.run([
-                "ssh", "-i", ssh_key, f"{display_pi_user}@{display_pi_ip}",
-                ssh_command
-            ], check=True, timeout=10, capture_output=True, text=True)
-            logging.info(f"Set display-pi brightness to {brightness_level}")
+
+        command = ["bash", "-c", command_str]
+        success = send_ssh_display_command(display_pi_user, display_pi_ip, ssh_key, command, action_desc, display)
+        
+        if success:
+            logging.info(f"Successfully set {display} brightness to {brightness_level}")
             return jsonify({"message": f"Brightness set to {brightness_level}"})
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logging.error(f"Failed to set brightness: {e}")
-            return jsonify({"error": f"Failed to set brightness: {str(e)}"}), 500
+        else:
+            logging.error(f"Failed to set {display} brightness to {brightness_level}")
+            return jsonify({"error": "Failed to set brightness"}), 500
     except Exception as e:
         logging.error(f"Error in set_screen_brightness: {e}")
         return jsonify({"error": str(e)}), 500

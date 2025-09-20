@@ -180,6 +180,80 @@ body.dark-mode .scene-btn.active {
     color: var(--primary-color);
 }
 
+/* Screen Brightness Buttons */
+.screen-brightness-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.screen-brightness-buttons {
+    display: flex;
+    gap: 0.3rem;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.screen-brightness-btn {
+    background: var(--glass-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 0.4rem;
+    padding: 0.7rem;
+    color: var(--text-color);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+    box-shadow: var(--shadow-out);
+    flex: 1;
+    text-align: center;
+    touch-action: manipulation;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+}
+
+.screen-brightness-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 3px 3px 5px rgba(100, 100, 100, 0.4), -1px -1px 3px rgba(220, 220, 220, 0.7);
+}
+
+body.dark-mode .screen-brightness-btn:hover {
+    box-shadow: 3px 3px 5px #1f1f1f, -1px -1px 3px rgba(58, 58, 58, 0.5);
+}
+
+.screen-brightness-btn:active {
+    transform: translateY(1px);
+    box-shadow: inset 1px 1px 2px rgba(120, 120, 120, 0.3), inset -1px -1px 2px rgba(200, 200, 200, 0.4);
+}
+
+body.dark-mode .screen-brightness-btn:active {
+    box-shadow: inset 1px 1px 2px #1f1f1f, inset -1px -1px 2px rgba(58, 58, 58, 0.5);
+}
+
+.screen-brightness-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #e0e0e0;
+    box-shadow: 4px 4px 6px rgba(100, 100, 100, 0.4), -2px -2px 4px rgba(220, 220, 220, 0.8);
+}
+
+body.dark-mode .screen-brightness-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #e0e0e0;
+    box-shadow: 4px 4px 6px #1a1a1a, -2px -2px 4px rgba(63, 63, 63, 0.6);
+}
+
+.screen-brightness-btn i {
+    color: var(--primary-color);
+}
+
+.screen-brightness-btn.active i {
+    color: #e0e0e0;
+}
+
 /* Lighting Panel */
 .lighting-panel {
     grid-column: 1;

@@ -57,12 +57,19 @@
                 <div class="data-item" style="grid-column: 1 / 3; padding-bottom: 0;">
                     <span><i class="fas fa-clock"></i><span id="current_datetime">N/A</span></span>
                 </div>
-                <div class="data-item" style="grid-column: 1 / 3; padding-top: 0.1rem; text-align: center;">
-                    <button class="scene-btn" onclick="turnOffScreen()" style="padding: 0.7rem;">
-                        <i class="fas fa-power-off"></i>
-                        Screen Off
-                    </button>
-                </div>
+				<div class="data-item screen-brightness-container" style="grid-column: 1 / 3; padding-top: 0.1rem; text-align: center;">
+					<div class="screen-brightness-buttons">
+						<button class="screen-brightness-btn" data-brightness="off" aria-label="Turn screen off">
+							<i class="fas fa-power-off"></i> Off
+						</button>
+						<button class="screen-brightness-btn" data-brightness="low" aria-label="Set screen brightness to low">
+							<i class="fas fa-sun" style="opacity: 0.5;"></i> Low
+						</button>
+						<button class="screen-brightness-btn" data-brightness="medium" aria-label="Set screen brightness to medium">
+							<i class="fas fa-sun"></i> Medium
+						</button>
+					</div>
+				</div>
             </div>
         </div>
         <div class="lighting-panel glass">
@@ -192,7 +199,6 @@
                         {% endfor %}
                     </select>
                 </div>
-
                 <!-- Bottom right: Shutdown -->
                 <div class="setting-item shutdown-container">
                     <button class="shutdown-btn" onclick="initiateShutdown()">Shutdown System</button>

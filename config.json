@@ -241,11 +241,11 @@
         "22": 0
     },
     "theme": {
-        "darkMode": "on",
+        "darkMode": "off",
         "autoTheme": "on",
         "autoBrightness": "on",
         "defaultTheme": "light",
-        "screen_brightness": "low"
+        "screen_brightness": "medium"
     },
     "evening_offset": 30,
     "night_time": "20:00"

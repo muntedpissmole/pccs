@@ -491,7 +491,10 @@ $(document).ready(function() {
                 }
             });
         });
-
+		
+		$('.shutdown-btn').on('click', initiateShutdown);
+		console.log('Shutdown button clicked');
+		
         // Settings event listeners
         $('#dark-mode-toggle').off('change').on('change', function(e) {
             e.stopPropagation();
@@ -560,6 +563,26 @@ $(document).ready(function() {
             debouncedSaveConfig();
         });
 
+		// Add handler for screen-brightness-btn in 5inch data-panel
+		$('.screen-brightness-btn').off('click').on('click', function() {
+			const brightness = $(this).data('brightness');
+			console.log('Diagnostic: Screen brightness button clicked:', brightness);
+			$('.screen-brightness-btn').removeClass('active');
+			if (brightness !== 'off') {
+				$(this).addClass('active');
+			}
+			setScreenBrightness(brightness);
+		});
+
+		// Add touch wake-up for off state
+		document.addEventListener('touchstart', function(e) {
+			if ($('.screen-brightness-btn.active').length === 0) { // off state
+				console.log('Diagnostic: Touch detected in off state, waking to low');
+				setScreenBrightness('low');
+				$('.screen-brightness-btn[data-brightness="low"]').addClass('active');
+			}
+		}, { passive: true });
+
         $('#default-theme').off('change').on('change', function() {
             console.log('Diagnostic: Default theme changed:', $(this).val());
             if (!$('#auto-theme-toggle').prop('checked')) {
@@ -588,10 +611,12 @@ $(document).ready(function() {
             }
         });
 
-        $('.settings-content').on('click', function(event) {
-            console.log('Diagnostic: Click inside settings-content, stopping propagation');
-            event.stopPropagation();
-        });
+		$('.settings-content').on('click', function(event) {
+			if (!$(event.target).closest('.shutdown-btn, .brightness-btn, .scene-edit-btn, .save-scene-btn, .cancel-scene-btn').length) {
+				console.log('Diagnostic: Click inside settings-content, stopping propagation');
+				event.stopPropagation();
+			}
+		});
 
         if ($('#screen-brightness').length || $('#screen-brightness-value').length) {
             console.warn('Diagnostic: Found obsolete screen brightness slider elements');
@@ -628,7 +653,10 @@ function setScreenBrightness(brightness) {
         url: '/set_screen_brightness',
         type: 'POST',
         contentType: 'application/json',
-        data: JSON.stringify({ brightness: brightness }),
+        data: JSON.stringify({ 
+            brightness: brightness,
+            display: isFiveInchVersion() ? '5inch' : '10inch' 
+        }),
         success: function(response) {
             console.log(`Diagnostic: Screen brightness set to ${brightness}:`, response);
         },
@@ -1009,7 +1037,20 @@ function activateScene(scene) {
 }
 
 function initiateShutdown() {
-    if (confirm('Are you sure you want to shut down the control system?')) {
+    console.log('Diagnostic: Shutdown button clicked');
+    // Create and append the modal
+    const $modal = $('<div class="confirm-modal"><p>Are you sure you want to shut down the control system?</p><button class="confirm-btn">Yes</button><button class="cancel-btn">No</button></div>');
+    $('body').append($modal);
+
+    // Verify modal was created
+    if (!$modal.length) {
+        console.error('Diagnostic: Failed to create confirm modal');
+        alert('Failed to display confirmation. Please try again.');
+        return;
+    }
+
+    // Add event handlers
+    $('.confirm-btn', $modal).on('click', function() {
         console.log('Diagnostic: Initiating shutdown for both systems');
         $.ajax({
             url: '/shutdown',
@@ -1019,13 +1060,25 @@ function initiateShutdown() {
             success: function(response) {
                 console.log('Diagnostic: Shutdown command sent:', response);
                 alert('Both systems are shutting down. Please wait a moment before powering off.');
+                $modal.remove(); // Remove only if $modal is valid
             },
             error: function(jqXHR, textStatus, errorThrown) {
                 console.error('Diagnostic: Error initiating shutdown:', textStatus, errorThrown);
                 alert('Failed to initiate shutdown. Please try again or check the server.');
+                $modal.remove(); // Remove only if $modal is valid
             }
         });
-    }
+    });
+
+    $('.cancel-btn', $modal).on('click', function() {
+        console.log('Diagnostic: Cancelled shutdown');
+        $modal.remove(); // Remove only if $modal is valid
+    });
+
+    // Ensure modal is removed if AJAX fails silently
+    $modal.on('click', '.confirm-btn, .cancel-btn', function() {
+        if ($modal && $modal.length) $modal.remove();
+    });
 }
 
 function startArduinoStateInterval() {
@@ -1190,7 +1243,6 @@ function saveConfig() {
         data: JSON.stringify(config),
         success: function(response) {
             console.log('Diagnostic: Config saved successfully:', response);
-            setScreenBrightness(brightness);
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error('Diagnostic: Error saving config:', textStatus, errorThrown);
@@ -1223,7 +1275,15 @@ function loadConfig() {
 
                 $('.brightness-btn').removeClass('active');
                 $(`.brightness-btn[data-brightness="${brightness}"]`).addClass('active');
-                setScreenBrightness(brightness);
+
+                // For 5inch screen-brightness-btn, activate corresponding button (map high to medium if needed)
+                if ($('.screen-brightness-btn').length) {
+                    let btnBrightness = brightness;
+                    if (btnBrightness === 'high') btnBrightness = 'medium'; // No high on 5inch data-panel
+                    $('.screen-brightness-btn').removeClass('active');
+                    const btnLabel = btnBrightness.charAt(0).toUpperCase() + btnBrightness.slice(1);
+                    $(`.screen-brightness-btn:contains('${btnLabel}')`).addClass('active');
+                }
 
                 if (autoTheme || autoBrightness) {
                     console.log('Diagnostic: Auto-theme or auto-brightness enabled, checking sunrise/sunset');
