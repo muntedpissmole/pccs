@@ -43,11 +43,11 @@ Or install as a service to start with the RPI.
 - 4 channel 5VDC relay module
 - DS18B20 Temperature Sensor
 - fuel level sensor that scales from 240ohm (full) to 33ohm (empty)
-- DC0-25V Voltage Detection Module Voltage Sensor
+- 0-25VDC Voltage Detection Module Voltage Sensor
 
 ### Front End:
 - Waveshare 10.1" 1280 x 800 Touchscreen
-- RPI for powering the touchscren web ui, or a mini PC like an Intel NUC if you want a silky smooth webpage. I found that connecting the backend RPI to the touchscreen made the webui too jolty.
+- RPI or Rock for powering the touchscren web ui.
 
 ### Connections
 See config.json for lighting, relay and reed switch connections.
@@ -55,5 +55,5 @@ See config.json for lighting, relay and reed switch connections.
 - Water sensor: Arduino Mega channel A1.
 - Solar CT - Arduino Mega channel A2.
 - Battery/load CT Vout - Arduino Mega channel A3.
-- - Battery/load CT Vref - Arduino Mega channel A4.
-- Temperature Sensor: Pin 7 on the RPI. 
+- Battery/load CT Vref - Arduino Mega channel A4.
+- Temperature Sensor: Pin 7 on the RPI.
