@@ -1,0 +1,8 @@
+{
+    "dark_mode": true,
+    "auto_theme": false,
+    "auto_brightness": false,
+    "evening_offset": "-30 mins",
+    "morning_offset": "+30 mins",
+    "night_time": "8:00 PM"
+}

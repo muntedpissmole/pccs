@@ -1,0 +1,119 @@
+# modules/arduino.py
+import serial
+import time
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
+
+class ArduinoController:
+    def __init__(self, port='/dev/ttyACM0', baudrate=500000, on_event=None):
+        try:
+            self.ser = serial.Serial(port, baudrate, timeout=1)
+            time.sleep(2)  # Wait for Arduino to initialize
+            logger.info(f"Arduino serial initialized on {port} at {baudrate}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Arduino serial: {e}")
+            raise
+        self.on_event = on_event or (lambda event, data: None)
+        self.previous_failed = False
+
+    def start(self):
+        logger.info("Starting Arduino health thread")
+        threading.Thread(target=self._health_thread, daemon=True).start()
+
+    def _health_thread(self):
+        while True:
+            failed = False
+            try:
+                self.get_pwm(2)
+            except Exception as e:
+                failed = True
+                logger.error(f"Arduino health check failed: {e}")
+            if failed != self.previous_failed:
+                if failed:
+                    self.on_event('show_toast', {'message': 'Arduino disconnected', 'type': 'warning'})
+                    logger.warning("Arduino disconnected")
+                else:
+                    self.on_event('show_toast', {'message': 'Arduino reconnected', 'type': 'message'})
+                    logger.info("Arduino reconnected")
+                self.previous_failed = failed
+            time.sleep(60)
+
+    def set_pwm(self, pin, value):
+        if not 0 <= value <= 255:
+            logger.warning(f"Invalid PWM value {value} for pin {pin}")
+            return
+        cmd = f"SET {pin} {value}\n"
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(cmd.encode())
+            logger.debug(f"Set PWM on pin {pin} to {value}")
+        except Exception as e:
+            logger.error(f"Error setting PWM on pin {pin}: {e}")
+
+    def ramp_pwm(self, pin, value, duration_ms):
+        if not 0 <= value <= 255 or duration_ms <= 0:
+            logger.warning(f"Invalid ramp PWM: value {value}, duration {duration_ms} for pin {pin}")
+            return
+        cmd = f"RAMP {pin} {value} {int(duration_ms)}\n"
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(cmd.encode())
+            logger.debug(f"Ramp PWM on pin {pin} to {value} over {duration_ms}ms")
+        except Exception as e:
+            logger.error(f"Error ramping PWM on pin {pin}: {e}")
+
+    def get_pwm(self, pin):
+        cmd = f"GET {pin}\n"
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(cmd.encode())
+            time.sleep(0.2)
+            while self.ser.in_waiting > 0:
+                response = self.ser.readline().decode().strip()
+                if response.startswith("VALUE "):
+                    parts = response.split()
+                    if len(parts) == 3 and int(parts[1]) == pin:
+                        return int(parts[2])
+            logger.warning(f"Failed to get PWM for pin {pin}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting PWM for pin {pin}: {e}")
+            return None
+
+    def get_analog(self, pin):
+        cmd = f"ANALOG {pin}\n"
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(cmd.encode())
+            time.sleep(0.2)
+            while self.ser.in_waiting > 0:
+                response = self.ser.readline().decode().strip()
+                if response.startswith("ANALOG "):
+                    parts = response.split()
+                    if len(parts) == 3 and int(parts[1]) == pin:
+                        return float(parts[2])
+            logger.warning(f"Failed to get analog for pin {pin}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting analog for pin {pin}: {e}")
+            return None
+
+    def get_vcc(self):
+        cmd = f"GETVCC\n"
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.write(cmd.encode())
+            time.sleep(0.2)
+            while self.ser.in_waiting > 0:
+                response = self.ser.readline().decode().strip()
+                if response.startswith("VCC "):
+                    parts = response.split()
+                    if len(parts) == 2:
+                        return int(parts[1])
+            logger.warning("Failed to get VCC")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting VCC: {e}")
+            return None

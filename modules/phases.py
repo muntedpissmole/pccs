@@ -1,0 +1,107 @@
+# modules/phases.py
+import threading
+import time as time_module
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+
+class PhaseManager:
+    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio):
+        self.config_manager = config_manager
+        self.handle_apply_scene = handle_apply_scene
+        self.get_last_gps_data = get_last_gps_data
+        self.get_computed_dt = get_computed_dt
+        self.get_has_gps_fix = get_has_gps_fix
+        self.socketio = socketio
+        self.current_phase = None
+        self.phase_to_scene = {}  # Empty to disable auto scene application; will be handled by rules engine
+        logger.info("PhaseManager initialized")
+
+    def parse_time(self, time_str):
+        try:
+            return datetime.strptime(time_str, '%I:%M %p').time()
+        except ValueError as e:
+            logger.warning(f"Invalid time format: {time_str}, {e}")
+            return None
+
+    def parse_offset(self, offset_str):
+        try:
+            # Extracts the number part, handling + or - 
+            num_str = offset_str.split(' ')[0]
+            return int(num_str)
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid offset format: {offset_str}, {e}")
+            return 0
+
+    def get_current_phase(self):
+        if not self.get_has_gps_fix() or self.get_computed_dt() is None:
+            logger.debug("No GPS fix or computed DT, phase unknown")
+            return None
+
+        gps_data = self.get_last_gps_data()
+        current_dt = self.get_computed_dt()
+
+        sunrise_str = gps_data.get('sunrise', '---')
+        sunset_str = gps_data.get('sunset', '---')
+
+        if sunrise_str == '---' or sunset_str == '---':
+            logger.debug("Sunrise/sunset unknown, phase unknown")
+            return None
+
+        sunrise_time = self.parse_time(sunrise_str)
+        sunset_time = self.parse_time(sunset_str)
+
+        if sunrise_time is None or sunset_time is None:
+            return None
+
+        evening_offset_str = self.config_manager.get('evening_offset', '-30 mins')
+        morning_offset_str = self.config_manager.get('sunrise_offset', '+30 mins')
+        night_time_str = self.config_manager.get('night_time', '8:00 PM')
+
+        evening_offset_mins = self.parse_offset(evening_offset_str)
+        morning_offset_mins = self.parse_offset(morning_offset_str)
+        night_time = self.parse_time(night_time_str)
+
+        if night_time is None:
+            return None
+
+        today = current_dt.date()
+        sunrise_dt = datetime.combine(today, sunrise_time)
+        sunset_dt = datetime.combine(today, sunset_time)
+
+        day_start_dt = sunrise_dt + timedelta(minutes=morning_offset_mins)
+        evening_start_dt = sunset_dt + timedelta(minutes=evening_offset_mins)
+        night_start_dt = datetime.combine(today, night_time)
+
+        # If night start is before evening start, assume next day (unlikely, but handle)
+        if night_start_dt < evening_start_dt:
+            night_start_dt += timedelta(days=1)
+
+        if current_dt < day_start_dt:
+            return 'night'
+        elif current_dt < evening_start_dt:
+            return 'day'
+        elif current_dt < night_start_dt:
+            return 'evening'
+        else:
+            return 'night'
+
+    def phase_check(self):
+        new_phase = self.get_current_phase()
+        if new_phase is not None and new_phase != self.current_phase:
+            self.current_phase = new_phase
+            scene_id = self.phase_to_scene.get(new_phase)
+            if scene_id:
+                self.handle_apply_scene({'scene_id': scene_id})
+            self.socketio.emit('update_phase', {'phase': new_phase})
+            logger.info(f"Phase changed to {new_phase}")
+
+    def start(self):
+        logger.info("Starting phase loop thread")
+        threading.Thread(target=self._phase_loop, daemon=True).start()
+
+    def _phase_loop(self):
+        while True:
+            self.phase_check()
+            time_module.sleep(60)

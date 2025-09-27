@@ -13,7 +13,7 @@ __pycache__/
 .env
 
 # Logs and temporary files
-log/
+logs/
 *.log
 
 # Web project dependencies and build outputs

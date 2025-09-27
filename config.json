@@ -1,0 +1,118 @@
+{
+  "ramp_rate": 1,
+  "scene_ramp_rate": 2,
+
+  "lights": {
+    "1": {
+      "white_pin": 2,
+      "red_pin": 3,
+      "green_pin": 4,
+      "active": "white",
+      "description": "Kitchen"
+    },
+    "2": {
+      "pin": 5,
+      "description": "Kitchen: Bench"
+    },
+    "3": {
+      "pin": 6,
+      "description": "Storage Panel"
+    },
+    "4": {
+      "pin": 7,
+      "description": "Rear Drawer"
+    },
+    "5": {
+      "pin": 8,
+      "description": "Accent"
+    },
+    "6": {
+      "white_pin": 9,
+      "red_pin": 10,
+      "green_pin": 11,
+      "active": "white",
+      "description": "Awning"
+    },
+    "7": {
+      "pin": 12,
+      "description": "Rooftop Tent"
+    },
+    "8": {
+      "pin": 13,
+      "description": "Ensuite"
+    }
+  },
+  "relays": {
+    "water": 18,
+    "fridge_and_oven": 27,
+    "floodlights": 17,
+    "lighting_circuits": 22
+  },
+  "scenes": {
+    "evening": {
+      "5": 20,
+      "6": {"brightness": 20, "color": "white"},
+      "7": 30
+    },
+    "night": {
+      "5": 5,
+      "6": {"brightness": 10, "color": "red"},
+      "7": 5
+    },
+    "bathroom": {
+      "5": 5,
+      "7": 10,
+      "8": 5
+    },
+    "all off": {
+      "1": {"brightness": 0, "color": "white"},
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": {"brightness": 0, "color": "white"},
+      "7": 0,
+      "8": 0
+    }
+  },
+  "ct_solar": {
+    "zero_offset": 2.5,
+    "sensitivity": 0.0125
+  },
+  "ct_battery": {
+    "sensitivity": 0.001644,
+    "zero_offset": 0.008
+  },
+  "reeds": {
+    "kitchen_panel": {
+      "pin": 23,
+      "day": {"channel": 1, "brightness": 100, "color": "white"},
+      "evening": {"channel": 1, "brightness": 40, "color": "white"},
+      "night": {"channel": 1, "brightness": 10, "color": "red"}
+    },
+    "storage_panel": {
+      "pin": 24,
+      "day": {},
+      "evening": {"channel": 6, "brightness": 40},
+      "night": {"channel": 6, "brightness": 5}
+    },
+    "rear_drawer": {
+      "pin": 25,
+      "day": {},
+      "evening": {"channel": 7, "brightness": 50},
+      "night": {"channel": 7, "brightness": 10}
+    },
+    "kitchen_bench": {
+      "pin": 12,
+      "day": {},
+      "evening": {"channel": 5, "brightness": 80},
+      "night": {"channel": 5, "brightness": 10}
+    },
+    "rooftop_tent": {
+      "pin": 26,
+      "day": {},
+      "evening": {"channel": 12, "brightness": 30},
+      "night": {"channel": 12, "brightness": 5}
+    }
+  }
+}

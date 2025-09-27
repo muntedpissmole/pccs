@@ -1,0 +1,10 @@
+astral
+Flask
+Flask_SocketIO
+geopy
+gpiozero
+pynmea2
+pyserial
+pytz
+Requests
+timezonefinder
