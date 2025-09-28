@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+import queue
+import statistics
+import flask
 
 # Configure logging
 if not os.path.exists('logs'):
@@ -58,6 +61,7 @@ def broadcast_gps(data):
     last_gps_data.update(data)
     # Compute current time for broadcast
     current_system = time_module.time()
+    computed_dt = None
     if has_gps_fix and base_gps_datetime is not None:
         computed_dt = base_gps_datetime + timedelta(seconds=current_system - last_sync_time)
         hour = computed_dt.hour % 12 or 12
@@ -65,6 +69,7 @@ def broadcast_gps(data):
         ampm = computed_dt.strftime('%p')
         last_gps_data['time'] = f"{hour}:{minute:02d} {ampm}"
         last_gps_data['date'] = computed_dt.strftime('%a %b %d')
+        last_gps_data['full_date'] = computed_dt.strftime('%Y-%m-%d')
     elif not has_gps_fix:
         last_gps_data['date'] = '---'
         last_gps_data['time'] = '---'
@@ -73,6 +78,31 @@ def broadcast_gps(data):
         last_gps_data['satellites'] = '---'
         last_gps_data['location'] = '---'
         last_gps_data['weather'] = None
+        last_gps_data['full_date'] = '---'
+    last_gps_data['has_fix'] = has_gps_fix
+    # Compute offsets
+    evening_offset_str = config_manager.get('evening_offset', '-30 mins')
+    morning_offset_str = config_manager.get('sunrise_offset', '+30 mins')
+    night_time_str = config_manager.get('night_time', '8:00 PM')
+    last_gps_data['evening_offset_str'] = evening_offset_str
+    last_gps_data['morning_offset_str'] = morning_offset_str
+    last_gps_data['night_time'] = night_time_str
+    last_gps_data['sunrise_offset'] = '---'
+    last_gps_data['sunset_offset'] = '---'
+    if has_gps_fix and computed_dt is not None and 'sunrise' in last_gps_data and last_gps_data['sunrise'] != '---':
+        sunrise_time = phase_manager.parse_time(last_gps_data['sunrise'])
+        if sunrise_time:
+            morning_offset_mins = phase_manager.parse_offset(morning_offset_str)
+            sunrise_dt = datetime.combine(computed_dt.date(), sunrise_time)
+            sunrise_offset_dt = sunrise_dt + timedelta(minutes=morning_offset_mins)
+            last_gps_data['sunrise_offset'] = sunrise_offset_dt.strftime('%I:%M %p')
+    if has_gps_fix and computed_dt is not None and 'sunset' in last_gps_data and last_gps_data['sunset'] != '---':
+        sunset_time = phase_manager.parse_time(last_gps_data['sunset'])
+        if sunset_time:
+            evening_offset_mins = phase_manager.parse_offset(evening_offset_str)
+            sunset_dt = datetime.combine(computed_dt.date(), sunset_time)
+            sunset_offset_dt = sunset_dt + timedelta(minutes=evening_offset_mins)
+            last_gps_data['sunset_offset'] = sunset_offset_dt.strftime('%I:%M %p')
     socketio.emit('update_gps', last_gps_data)
 weather = WeatherController(on_event=handle_event)
 arduino = ArduinoController(on_event=handle_event)
@@ -123,8 +153,11 @@ def validate_static_config(config):
             raise ValueError(f"{ct_key} must be a dictionary")
         if 'zero_offset' not in ct or not isinstance(ct['zero_offset'], (int, float)):
             raise ValueError(f"Missing or invalid 'zero_offset' in {ct_key}")
-        if 'sensitivity' not in ct or not isinstance(ct['sensitivity'], (int, float)):
-            raise ValueError(f"Missing or invalid 'sensitivity' in {ct_key}")
+    if 'sensitivity' in config['ct_solar'] and not isinstance(config['ct_solar']['sensitivity'], (int, float)):
+        raise ValueError("Invalid 'sensitivity' in ct_solar")
+    for key in ['sensitivity_charging', 'sensitivity_discharging']:
+        if key in config['ct_battery'] and not isinstance(config['ct_battery'][key], (int, float)):
+            raise ValueError(f"Invalid '{key}' in ct_battery")
     
     # reeds
     reeds = config['reeds']
@@ -168,8 +201,11 @@ def validate_static_config(config):
             for pin_key in required_color_pins:
                 if pin_key not in light_data or not isinstance(light_data[pin_key], int):
                     raise ValueError(f"Missing or invalid '{pin_key}' for light '{light_id_str}'")
-            if 'green_pin' in light_data and not isinstance(light_data['green_pin'], int):
-                raise ValueError(f"Invalid 'green_pin' for light '{light_id_str}'")
+            if 'green_pin' in light_data:
+                if not isinstance(light_data['green_pin'], int):
+                    raise ValueError(f"Invalid 'green_pin' for light '{light_id_str}'")
+                if 'green_factor' not in light_data or not isinstance(light_data['green_factor'], (int, float)):
+                    raise ValueError(f"Missing or invalid 'green_factor' for light '{light_id_str}' with green_pin")
             if 'active' not in light_data or not isinstance(light_data['active'], str) or light_data['active'] not in allowed_colors:
                 raise ValueError(f"Missing or invalid 'active' for light '{light_id_str}'. Allowed: {allowed_colors}")
         if 'description' in light_data and not isinstance(light_data['description'], str):
@@ -183,6 +219,29 @@ def validate_static_config(config):
         if not isinstance(pin, int):
             raise ValueError(f"Invalid pin for relay '{relay_name}'")
 
+    # screens
+    if 'screens' in config:
+        screens = config['screens']
+        if not isinstance(screens, dict):
+            raise ValueError("screens must be a dictionary")
+        for name, sconf in screens.items():
+            if not isinstance(sconf, dict):
+                raise ValueError(f"Screen '{name}' must be a dictionary")
+            required = ['ip', 'brightness_path', 'levels']
+            for r in required:
+                if r not in sconf:
+                    raise ValueError(f"Missing '{r}' for screen '{name}'")
+            if not isinstance(sconf['ip'], str):
+                raise ValueError(f"Invalid 'ip' for screen '{name}'")
+            if not isinstance(sconf['brightness_path'], str):
+                raise ValueError(f"Invalid 'brightness_path' for screen '{name}'")
+            levels = sconf['levels']
+            if not isinstance(levels, dict):
+                raise ValueError(f"'levels' for screen '{name}' must be dict")
+            for l in ['low', 'medium', 'high']:
+                if l not in levels or not isinstance(levels[l], int):
+                    raise ValueError(f"Missing or invalid level '{l}' for screen '{name}'")
+
 try:
     validate_static_config(static_config)
     logger.info("Static config validated successfully")
@@ -194,6 +253,7 @@ gpio = GPIOController(on_event=handle_event, relays_config=static_config.get('re
 config_manager = ConfigManager()
 config = config_manager.config
 lights_config = static_config.get('lights', {})
+screens_config = static_config.get('screens', {})
 states = {}
 for lid_str, lconf in lights_config.items():
     lid = int(lid_str)
@@ -205,8 +265,18 @@ for lid_str, lconf in lights_config.items():
         state['red_pin'] = lconf['red_pin']
         if 'green_pin' in lconf:
             state['green_pin'] = lconf['green_pin']
+            state['green_factor'] = lconf.get('green_factor', 0.0)
         state['active'] = lconf.get('active', 'white')
     states[lid] = state
+# Initialize all PWM pins to 0
+for lid, state in states.items():
+    if 'pin' in state:
+        arduino.set_pwm(state['pin'], 0)
+    else:
+        arduino.set_pwm(state['white_pin'], 0)
+        arduino.set_pwm(state['red_pin'], 0)
+        if 'green_pin' in state:
+            arduino.set_pwm(state['green_pin'], 0)
 ramp_rate_ms = static_config.get('ramp_rate', 1) * 1000
 scene_ramp_rate = static_config.get('scene_ramp_rate', 2)
 gamma = config_manager.get('gamma', 2.5) # Keep gamma in dynamic config for potential future edits
@@ -258,6 +328,9 @@ def get_has_gps_fix():
 @socketio.on('connect')
 def handle_connect():
     logger.info("Client connected")
+    remote_addr = flask.request.remote_addr
+    is_screen = any(remote_addr == conf['ip'] for conf in screens_config.values())
+    emit('set_brightness_controls_enabled', {'enabled': is_screen})
     response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None)} for k, v in states.items()}
     emit('update_states', response_states)
     matching_scene = find_matching_scene()
@@ -266,6 +339,11 @@ def handle_connect():
     emit('update_sensors', gpio.get_sensor_states())
     emit('update_settings', config)
     emit('update_phase', {'phase': phase_manager.current_phase})
+    emit('update_gps', last_gps_data)
+    # Emit current reed states
+    for reed_id, button in reeds_controller.reeds.items():
+        state = "Closed" if button.is_pressed else "Open"
+        emit('update_reed_state', {'reed_id': reed_id, 'state': state})
 @socketio.on('set_brightness')
 def handle_set_brightness(data):
     light_id = data['light_id']
@@ -283,6 +361,12 @@ def handle_set_brightness(data):
         inactive_color = 'red' if state['active'] == 'white' else 'white'
         inactive_pin = state[inactive_color + '_pin']
         arduino.set_pwm(inactive_pin, 0)
+        if 'green_pin' in state:
+            if state['active'] == 'red':
+                green_pwm = int(pwm_value * state['green_factor'])
+                arduino.set_pwm(state['green_pin'], green_pwm)
+            else:
+                arduino.set_pwm(state['green_pin'], 0)
     state['brightness'] = value
     broadcast_states()
     update_active_scene()
@@ -304,6 +388,12 @@ def handle_toggle_color(data):
     new_pin = state[new_active + '_pin']
     arduino.ramp_pwm(new_pin, pwm_value, ramp_rate_ms)
     arduino.ramp_pwm(old_pin, 0, ramp_rate_ms)
+    if 'green_pin' in state:
+        if new_active == 'red':
+            green_pwm = int(pwm_value * state['green_factor'])
+            arduino.ramp_pwm(state['green_pin'], green_pwm, ramp_rate_ms)
+        else:
+            arduino.ramp_pwm(state['green_pin'], 0, ramp_rate_ms)
     state['active'] = new_active
     socketio.emit('ramp_start', {'light_id': light_id, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
@@ -321,7 +411,6 @@ def handle_ramp_brightness(data):
     arduino.ramp_pwm(state['pin'], pwm_value, ramp_rate_ms)
     state['brightness'] = target
     socketio.emit('brightness_ramp_start', {'light_id': light_id, 'target_brightness': target, 'ramp_duration': ramp_rate_ms})
-    threading.Timer(static_config.get('ramp_rate', 1) + 0.5, lambda: check_levels(light_id)).start()
     broadcast_states()
     update_active_scene()
     logger.debug(f"Ramping brightness for light {light_id} to {target}")
@@ -350,12 +439,24 @@ def apply_settings(settings, duration_sec):
             if state['active'] == target_color or target_color is None:
                 active_pin = state[state['active'] + '_pin']
                 arduino.ramp_pwm(active_pin, pwm_value, duration_ms)
+                if 'green_pin' in state:
+                    if state['active'] == 'red':
+                        green_pwm = int(pwm_value * state['green_factor'])
+                        arduino.ramp_pwm(state['green_pin'], green_pwm, duration_ms)
+                    else:
+                        arduino.ramp_pwm(state['green_pin'], 0, duration_ms)
             else:
                 new_active = target_color
                 old_pin = state[state['active'] + '_pin']
                 new_pin = state[new_active + '_pin']
                 arduino.ramp_pwm(new_pin, pwm_value, duration_ms)
                 arduino.ramp_pwm(old_pin, 0, duration_ms)
+                if 'green_pin' in state:
+                    if new_active == 'red':
+                        green_pwm = int(pwm_value * state['green_factor'])
+                        arduino.ramp_pwm(state['green_pin'], green_pwm, duration_ms)
+                    else:
+                        arduino.ramp_pwm(state['green_pin'], 0, duration_ms)
                 future_state['active'] = new_active
         future_state['brightness'] = target_brightness
     # Prepare response with future states
@@ -395,32 +496,33 @@ def handle_set_setting(data):
     if key == 'gamma':
         global gamma
         gamma = value
-        check_levels()
+    socketio.emit('update_settings', config_manager.config)
+    if key in ['sunrise_offset', 'evening_offset', 'night_time']:
+        broadcast_gps({})
+    if key == 'auto_brightness' and value:
+        current_phase = phase_manager.current_phase
+        if current_phase:
+            brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(current_phase)
+            if brightness_level:
+                for screen_name in screens_config:
+                    set_screen_brightness(screen_name, brightness_level)
     logger.debug(f"Set setting {key} to {value}")
-def check_levels(light_id=None):
-    if light_id:
-        lights_to_check = {light_id: states[light_id]}
+@socketio.on('set_brightness_level')
+def handle_set_brightness_level(data):
+    level = data.get('level')
+    if level not in ['low', 'medium', 'high']:
+        logger.warning(f"Invalid brightness level: {level}")
+        return
+    remote_addr = flask.request.remote_addr
+    screen_name = None
+    for name, conf in screens_config.items():
+        if conf['ip'] == remote_addr:
+            screen_name = name
+            break
+    if screen_name:
+        set_screen_brightness(screen_name, level)
     else:
-        lights_to_check = states
-    for lid, state in lights_to_check.items():
-        expected_pwm = calculate_pwm(state['brightness'])
-        if 'pin' in state:
-            pin = state['pin']
-            current = arduino.get_pwm(pin)
-            if current != expected_pwm:
-                arduino.set_pwm(pin, expected_pwm)
-                logger.warning(f"Corrected PWM for light {lid} pin {pin} from {current} to {expected_pwm}")
-        else:
-            active_pin = state[state['active'] + '_pin']
-            inactive_pin = state['red_pin' if state['active'] == 'white' else 'white_pin']
-            current_active = arduino.get_pwm(active_pin)
-            current_inactive = arduino.get_pwm(inactive_pin)
-            if current_active != expected_pwm or current_inactive != 0:
-                arduino.set_pwm(active_pin, expected_pwm)
-                arduino.set_pwm(inactive_pin, 0)
-                logger.warning(f"Corrected PWM for light {lid}: active {current_active}->{expected_pwm}, inactive {current_inactive}->0")
-    broadcast_states()
-    update_active_scene()
+        logger.warning(f"No screen found for IP: {remote_addr}")
 def time_update_loop():
     while True:
         time_module.sleep(1)
@@ -457,10 +559,9 @@ def voltage_to_soc(voltage):
 last_battery_voltage = None
 last_water_pct = None
 last_solar_current = None
-last_battery_current = None
 
 # Add this helper function
-def get_averaged_analog(pin, num_samples=20):
+def get_averaged_analog(pin, num_samples=15):
     samples = []
     for _ in range(num_samples):
         val = arduino.get_analog(pin)
@@ -469,20 +570,20 @@ def get_averaged_analog(pin, num_samples=20):
         time_module.sleep(0.01)  # Small delay between samples
     if not samples:
         return None
-    return sum(samples) / len(samples)
+    return statistics.median(samples)
 
 def power_update_loop():
-    global last_battery_voltage, last_water_pct, last_solar_current, last_battery_current
+    global last_battery_voltage, last_water_pct, last_solar_current
     alpha = 0.3  # EMA smoothing factor, adjust as needed (0.1-0.5)
     while True:
-        time_module.sleep(5)
+        time_module.sleep(1)
         vcc_samples = []
-        for _ in range(5):  # Fewer samples for VCC since it's usually stable
+        for _ in range(3):  # Fewer samples for VCC since it's usually stable
             vcc = arduino.get_vcc()
             if vcc is not None:
                 vcc_samples.append(vcc)
             time_module.sleep(0.01)
-        vcc_mv = sum(vcc_samples) / len(vcc_samples) if vcc_samples else None
+        vcc_mv = statistics.median(vcc_samples) if vcc_samples else None
         if vcc_mv is not None and not (4000 <= vcc_mv <= 6000):
             vcc_mv = None
             logger.warning(f"Invalid VCC reading: {vcc_mv}")
@@ -491,7 +592,9 @@ def power_update_loop():
         battery_voltage = last_battery_voltage
         if voltage_raw is not None:
             v_a0 = voltage_raw * vref / 1023.0
-            battery_voltage = round(v_a0 * 5, 1)
+            new_battery_voltage = round(v_a0 * 5, 1)
+            battery_voltage = alpha * new_battery_voltage + (1 - alpha) * last_battery_voltage if last_battery_voltage is not None else new_battery_voltage
+            battery_voltage = round(battery_voltage, 1)
             last_battery_voltage = battery_voltage
         else:
             logger.warning("Failed to read battery analog")
@@ -503,7 +606,9 @@ def power_update_loop():
             if abs(vref - v_a1) > 0.01:
                 sensor_r = 100 * v_a1 / (vref - v_a1)
                 pct = (240 - sensor_r) / (240 - 33) * 100
-                water_pct = max(0, min(100, round(pct)))
+                new_water_pct = max(0, min(100, round(pct)))
+                water_pct = alpha * new_water_pct + (1 - alpha) * last_water_pct if last_water_pct is not None else new_water_pct
+                water_pct = round(water_pct)
                 last_water_pct = water_pct
             else:
                 water_pct = 0
@@ -513,7 +618,7 @@ def power_update_loop():
         new_solar_current = None
         if solar_raw is not None:
             v_a2 = solar_raw * vref / 1023.0
-            ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5, 'sensitivity': 0.0125})
+            ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5326, 'sensitivity': 0.0125})
             zero_offset = ct_solar['zero_offset']
             sensitivity = ct_solar['sensitivity']
             new_solar_current = (v_a2 - zero_offset) / sensitivity
@@ -526,35 +631,29 @@ def power_update_loop():
             last_solar_current = solar_current
         else:
             solar_current = last_solar_current
-        battery_ct_raw = get_averaged_analog(3)
-        battery_ct_ref_raw = get_averaged_analog(4)
-        new_battery_current = None
-        if battery_ct_raw is not None and battery_ct_ref_raw is not None:
-            v_a3 = battery_ct_raw * vref / 1023.0
-            v_a4 = battery_ct_ref_raw * vref / 1023.0
-            delta = v_a3 - v_a4
-            ct_battery = static_config.get('ct_battery', {'sensitivity': 0.003125, 'zero_offset': 0.0})
-            sensitivity = ct_battery['sensitivity']
-            zero_offset = ct_battery['zero_offset']
-            delta -= zero_offset
-            new_battery_current = delta / sensitivity
-        else:
-            logger.warning("Failed to read battery current analogs")
-        if new_battery_current is not None:
-            battery_current = alpha * new_battery_current + (1 - alpha) * last_battery_current if last_battery_current is not None else new_battery_current
-            battery_current = round(battery_current, 1)
-            last_battery_current = battery_current
-        else:
-            battery_current = last_battery_current
-        load_current = None
-        if solar_current is not None and battery_current is not None:
-            load_current = solar_current - battery_current  # battery_current positive for charging, negative for discharging
-            load_current = max(0, round(load_current, 1))  # Ensure non-negative
         # Add detailed logging for debugging
-        logger.debug(f"Raw analogs: A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, A3={f'{battery_ct_raw:.2f}' if battery_ct_raw is not None else 'None'}, A4={f'{battery_ct_ref_raw:.2f}' if battery_ct_ref_raw is not None else 'None'}, delta={f'{delta:.5f}' if 'delta' in locals() else 'None'}, vref={vref:.2f}, battery_current={f'{battery_current:.2f}' if battery_current is not None else 'None'}")
-        socketio.emit('update_power', {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'load': load_current})
-        logger.debug(f"Power update: battery={battery_voltage}, battery_pct={battery_pct}, water={water_pct}, solar={solar_current}, load={load_current}")
-phase_manager = PhaseManager(config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio)
+        logger.debug(f"Raw analogs: A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
+        socketio.emit('update_power', {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase})
+        logger.debug(f"Power update: battery={battery_voltage}, battery_pct={battery_pct}, water={water_pct}, solar={solar_current}, phase={phase_manager.current_phase}")
+def set_screen_brightness(screen_name, level):
+    if screen_name not in screens_config:
+        logger.warning(f"Unknown screen {screen_name}")
+        return
+    conf = screens_config[screen_name]
+    if level not in conf['levels']:
+        logger.warning(f"Unknown level {level} for {screen_name}")
+        return
+    value = conf['levels'][level]
+    ip = conf['ip']
+    path = conf['brightness_path']
+    username = 'pi'
+    cmd = f"ssh {username}@{ip} \"echo {value} > {path}\""
+    result = os.system(cmd)
+    if result == 0:
+        logger.info(f"Set {screen_name} brightness to {level} ({value})")
+    else:
+        logger.error(f"Failed to set {screen_name} brightness, code {result}")
+phase_manager = PhaseManager(config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config)
 def apply_reed_settings(settings):
     # Convert reed phase setting to settings dict
     channel_str = str(settings['channel'])
@@ -567,8 +666,16 @@ def apply_reed_settings(settings):
     settings_dict = {channel_str: target}
     apply_settings(settings_dict, scene_ramp_rate)
     logger.debug(f"Applied reed settings: {settings}")
+state_queue = queue.Queue()
+def process_state_updates():
+    while True:
+        reed_id, state = state_queue.get()
+        socketio.emit('update_reed_state', {'reed_id': reed_id, 'state': state})
+socketio.start_background_task(process_state_updates)
+def broadcast_reed_state(reed_id, state):
+    state_queue.put((reed_id, state))
 reeds_config = static_config.get('reeds', {})
-reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase)
+reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state)
 phase_manager.set_reeds_controller(reeds_controller)
 @app.route('/phases')
 def show_phases():
@@ -584,48 +691,103 @@ def show_phases():
         evening_offset_str = config_manager.get('evening_offset', '-30 mins')
         morning_offset_str = config_manager.get('sunrise_offset', '+30 mins')
         night_time_str = config_manager.get('night_time', '8:00 PM')
-        sunrise_offset_str = '---'
-        sunset_offset_str = '---'
-        if has_fix and computed_dt is not None and sunrise_str != '---':
-            sunrise_time = phase_manager.parse_time(sunrise_str)
-            if sunrise_time:
-                morning_offset_mins = phase_manager.parse_offset(morning_offset_str)
-                sunrise_dt = datetime.combine(computed_dt.date(), sunrise_time)
-                sunrise_offset_dt = sunrise_dt + timedelta(minutes=morning_offset_mins)
-                sunrise_offset_str = sunrise_offset_dt.strftime('%I:%M %p')
-        if has_fix and computed_dt is not None and sunset_str != '---':
-            sunset_time = phase_manager.parse_time(sunset_str)
-            if sunset_time:
-                evening_offset_mins = phase_manager.parse_offset(evening_offset_str)
-                sunset_dt = datetime.combine(computed_dt.date(), sunset_time)
-                sunset_offset_dt = sunset_dt + timedelta(minutes=evening_offset_mins)
-                sunset_offset_str = sunset_offset_dt.strftime('%I:%M %p')
+        sunrise_offset_str = gps_data.get('sunrise_offset', '---')
+        sunset_offset_str = gps_data.get('sunset_offset', '---')
         title = "Sunrise and Sunset Times"
         if location and date_str:
             title += f" ({location}, {date_str})"
         html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Sun Phases</title>
-    </head>
-    <body>
-        <h1>{title}</h1>
-        <p><strong>Sunrise:</strong> {sunrise_str}</p>
-        <p><strong>Sunrise with offset ({morning_offset_str}):</strong> {sunrise_offset_str}</p>
-        <p><strong>Sunset:</strong> {sunset_str}</p>
-        <p><strong>Sunset with offset ({evening_offset_str}):</strong> {sunset_offset_str}</p>
-        <p><strong>Night start time:</strong> {night_time_str}</p>
-        <p><strong>Current Phase:</strong> {current_phase}</p>
-    </body>
-    </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sun Phases</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+    <script>
+        var socket = io();
+        socket.on('update_gps', function(data) {{
+            document.getElementById('title').innerText = 'Sunrise and Sunset Times' + (data.location && data.date ? ' (' + data.location + ', ' + data.date + ')' : '');
+            document.getElementById('sunrise').innerText = data.sunrise || '---';
+            document.getElementById('sunset').innerText = data.sunset || '---';
+            document.getElementById('sunrise_offset').innerText = data.sunrise_offset || '---';
+            document.getElementById('sunset_offset').innerText = data.sunset_offset || '---';
+            document.getElementById('morning_offset_str').innerText = data.morning_offset_str || '+30 mins';
+            document.getElementById('evening_offset_str').innerText = data.evening_offset_str || '-30 mins';
+            document.getElementById('night_time').innerText = data.night_time || '8:00 PM';
+        }});
+        socket.on('update_phase', function(data) {{
+            document.getElementById('current_phase').innerText = data.phase || 'Unknown';
+        }});
+        socket.on('update_settings', function(config) {{
+            document.getElementById('morning_offset_str').innerText = config.sunrise_offset || '+30 mins';
+            document.getElementById('evening_offset_str').innerText = config.evening_offset || '-30 mins';
+            document.getElementById('night_time').innerText = config.night_time || '8:00 PM';
+        }});
+    </script>
+</head>
+<body>
+    <h1 id="title">{title}</h1>
+    <p><strong>Sunrise:</strong> <span id="sunrise">{sunrise_str}</span></p>
+    <p><strong>Sunrise with offset (<span id="morning_offset_str">{morning_offset_str}</span>):</strong> <span id="sunrise_offset">{sunrise_offset_str}</span></p>
+    <p><strong>Sunset:</strong> <span id="sunset">{sunset_str}</span></p>
+    <p><strong>Sunset with offset (<span id="evening_offset_str">{evening_offset_str}</span>):</strong> <span id="sunset_offset">{sunset_offset_str}</span></p>
+    <p><strong>Night start time:</strong> <span id="night_time">{night_time_str}</span></p>
+    <p><strong>Current Phase:</strong> <span id="current_phase">{current_phase}</span></p>
+</body>
+</html>
         """
         return html
     except Exception as e:
         logger.error(f"Error generating phases page: {e}")
         return f"Error generating phases page: {str(e)}", 500
+
+@app.route('/reeds')
+def show_reeds():
+    try:
+        html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reed Switch States</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+    <script>
+        var socket = io();
+        socket.on('update_reed_state', function(data) {
+            var element = document.getElementById('reed-' + data.reed_id);
+            if (element) {
+                var displayName = data.reed_id.replace(/_/g, ' ').split(' ').map(function(word) {
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                }).join(' ');
+                element.innerText = displayName + ': ' + data.state;
+            }
+        });
+    </script>
+</head>
+<body>
+    <h1>Reed Switch States</h1>
+    <ul>
+"""
+        for reed_id in sorted(reeds_config.keys()):
+            button = reeds_controller.reeds.get(reed_id)
+            if button:
+                state = "Closed" if button.is_pressed else "Open"
+            else:
+                state = "Unknown"
+            display_name = reed_id.replace('_', ' ').title()
+            html += f"<li id=\"reed-{reed_id}\">{display_name}: {state}</li>\n"
+        html += """
+    </ul>
+</body>
+</html>
+"""
+        return html
+    except Exception as e:
+        logger.error(f"Error generating reeds page: {e}")
+        return f"Error generating reeds page: {str(e)}", 500
+
 if __name__ == '__main__':
     logger.info("Starting application")
     arduino.start()

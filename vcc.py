@@ -1,16 +1,18 @@
+import serial
 import time
-import logging
-from modules.arduino import ArduinoController  # Adjust import
 
-logging.basicConfig(level=logging.DEBUG)
-ard = ArduinoController()
-failures = 0
-total = 10000  # Bump to 10k for better detection
-for i in range(total):
-    vcc = ard.get_vcc()
-    if vcc is None:
-        failures += 1
-    if i % 100 == 0:
-        print(f"Progress: {i}/{total}")
-    time.sleep(0.05)  # Mimic app call rate
-print(f"Failures: {failures}/{total}")
+SERIAL_PORT = '/dev/ttyACM0'  # Update if needed
+BAUD_RATE = 500000
+
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+    print(f"Connected to {SERIAL_PORT} at {BAUD_RATE} baud")
+    time.sleep(2)  # Wait for Arduino to stabilize
+    ser.write(b'GETVCC\n')
+    response = ser.readline().decode().strip()
+    print(f"Sent: GETVCC, Received: {response}")
+    ser.close()
+except serial.SerialException as e:
+    print(f"Serial error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")

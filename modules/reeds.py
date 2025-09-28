@@ -5,10 +5,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReedsController:
-    def __init__(self, config, on_trigger, get_current_phase):
+    def __init__(self, config, on_trigger, get_current_phase, on_state_change=None):
         self.config = config
         self.on_trigger = on_trigger
         self.get_current_phase = get_current_phase
+        self.on_state_change = on_state_change
         self.reeds = {}
         for reed_id, reed_data in self.config.items():
             pin = reed_data.get('pin')
@@ -27,22 +28,26 @@ class ReedsController:
                 logger.error(f"Failed to initialize reed {reed_id}: {e}")
         logger.info("ReedsController initialized")
 
-    def evaluate_initial_states(self):
+    def evaluate_open_reeds(self):
         phase = self.get_current_phase()
         if phase is None:
-            logger.warning("Cannot evaluate initial reed states without current phase")
+            logger.warning("Cannot evaluate open reeds without current phase")
             return
-        logger.info(f"Evaluating initial reed states for phase {phase}")
+        logger.info(f"Evaluating open reeds for phase {phase}")
         for reed_id, button in self.reeds.items():
             if not button.is_pressed:  # is_pressed False means open/released
-                logger.debug(f"Initial: Reed {reed_id} is open, applying settings")
+                logger.debug(f"Reed {reed_id} is open, applying settings")
                 self.handle_open(reed_id)
             else:
-                logger.debug(f"Initial: Reed {reed_id} is closed, no action")
+                logger.debug(f"Reed {reed_id} is closed, no action")
+                if self.on_state_change:
+                    self.on_state_change(reed_id, 'Closed')
 
     def handle_open(self, reed_id):
         phase = self.get_current_phase()
         logger.debug(f"Reed {reed_id} opened in phase {phase}")
+        if self.on_state_change:
+            self.on_state_change(reed_id, 'Open')
         if phase not in self.config[reed_id]:
             logger.debug(f"No action for reed {reed_id} in phase {phase}")
             return  # No action for this phase
@@ -54,6 +59,8 @@ class ReedsController:
 
     def handle_close(self, reed_id):
         logger.debug(f"Reed {reed_id} closed")
+        if self.on_state_change:
+            self.on_state_change(reed_id, 'Closed')
         unique_channels = set()
         for phase in ['day', 'evening', 'night']:
             if phase in self.config[reed_id]:

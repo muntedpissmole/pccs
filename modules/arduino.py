@@ -112,7 +112,6 @@ class ArduinoController:
                 self.ser.write(cmd.encode())
                 self.ser.flush()
                 response = self.ser.readline().decode().strip()
-                # logger.debug(f"Received: {response}")  # Commented out to suppress VCC debug logs
                 if response.startswith("VCC "):
                     parts = response.split()
                     if len(parts) == 2:

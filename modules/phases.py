@@ -1,4 +1,5 @@
 # modules/phases.py
+# modules/phases.py
 import threading
 import time as time_module
 from datetime import datetime, timedelta
@@ -7,13 +8,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PhaseManager:
-    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio):
+    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config):
         self.config_manager = config_manager
         self.handle_apply_scene = handle_apply_scene
         self.get_last_gps_data = get_last_gps_data
         self.get_computed_dt = get_computed_dt
         self.get_has_gps_fix = get_has_gps_fix
         self.socketio = socketio
+        self.screens_config = screens_config
         self.current_phase = None
         self.phase_to_scene = {}  # Empty to disable auto scene application; will be handled by rules engine
         self.reeds_controller = None  # Will be set after initialization
@@ -31,7 +33,7 @@ class PhaseManager:
 
     def parse_offset(self, offset_str):
         try:
-            # Extracts the number part, handling + or - 
+            # Extracts the number part, handling + or -
             num_str = offset_str.split(' ')[0]
             return int(num_str)
         except (ValueError, IndexError) as e:
@@ -94,20 +96,48 @@ class PhaseManager:
     def phase_check(self):
         new_phase = self.get_current_phase()
         if new_phase is not None and new_phase != self.current_phase:
-            if self.current_phase is None and self.reeds_controller is not None:
-                self.reeds_controller.evaluate_initial_states()
+            old_phase = self.current_phase
             self.current_phase = new_phase
+            # Apply scene if mapped
             scene_id = self.phase_to_scene.get(new_phase)
             if scene_id:
                 self.handle_apply_scene({'scene_id': scene_id})
+            # Update reed settings for open reeds
+            if self.reeds_controller is not None:
+                self.reeds_controller.evaluate_open_reeds()
             self.socketio.emit('update_phase', {'phase': new_phase})
-            logger.info(f"Phase changed to {new_phase}")
+            logger.info(f"Phase changed to {new_phase} from {old_phase}")
+
+            # Handle auto theme switch
+            auto_theme = self.config_manager.get('auto_theme', False)
+            if auto_theme and self.current_phase is not None:
+                should_be_dark = self.current_phase in ['evening', 'night']
+                current_dark = self.config_manager.get('dark_mode', False)
+                if should_be_dark != current_dark:
+                    self.config_manager.set('dark_mode', should_be_dark)
+                    self.socketio.emit('update_settings', self.config_manager.config)
+                    logger.info(f"Auto theme switch: set dark_mode to {should_be_dark} due to phase {self.current_phase}")
+
+            # Handle auto brightness
+            auto_brightness = self.config_manager.get('auto_brightness', False)
+            if auto_brightness:
+                brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(new_phase)
+                if brightness_level:
+                    for screen_name in self.screens_config:
+                        set_screen_brightness(screen_name, brightness_level)
 
     def start(self):
         logger.info("Starting phase loop thread")
+        self.phase_check()  # Evaluate and apply on startup
+        auto_brightness = self.config_manager.get('auto_brightness', False)
+        if auto_brightness and self.current_phase:
+            brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(self.current_phase)
+            if brightness_level:
+                for screen_name in self.screens_config:
+                    set_screen_brightness(screen_name, brightness_level)
         threading.Thread(target=self._phase_loop, daemon=True).start()
 
     def _phase_loop(self):
         while True:
             self.phase_check()
-            time_module.sleep(60)
+            time_module.sleep(10)  # Reduced from 60 to 10 for faster response

@@ -138,8 +138,6 @@ document.querySelectorAll('.control').forEach(control => {
             }
         });
 
-        // Removed the buggy toggle listener here—it was redundant and incorrectly applied 'red-mode' to non-color-toggle controls.
-
         slider.style.setProperty('--value', slider.value + '%');
         updatePercentage();
         if (!isColorToggle) {
@@ -183,6 +181,11 @@ lightControls.forEach((control, index) => {
             sceneBtns.forEach(b => b.classList.remove('active'));
             sendBrightness(lightId, parseInt(e.target.value));
         });
+
+        // Ignore server updates during drag
+        slider.addEventListener('pointerdown', () => {
+            control.classList.add('sync-lock');
+        });
     }
 
     if (toggle) {
@@ -210,6 +213,15 @@ lightControls.forEach((control, index) => {
             }
         });
     }
+});
+
+// Clear sync-lock after drag (with delay for pending broadcasts)
+document.addEventListener('pointerup', () => {
+    setTimeout(() => {
+        lightControls.forEach(control => {
+            control.classList.remove('sync-lock');
+        });
+    }, 500); // Adjust if needed
 });
 
 // Handle relay toggles
@@ -244,7 +256,7 @@ brightnessBtns.forEach(btn => {
         brightnessBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const level = btn.id.replace('brightness-', '');
-        socket.emit('set_setting', { key: 'brightness', value: level });
+        socket.emit('set_brightness_level', { level: level });
     });
 });
 
@@ -295,7 +307,7 @@ const humidity = document.getElementById('humidity');
 // Sync states from backend via WebSocket
 socket.on('update_states', (states) => {
     lightControls.forEach(control => {
-        if (control.classList.contains('locked')) return; // Skip if locked
+        if (control.classList.contains('locked') || control.classList.contains('sync-lock')) return; // Skip if locked or syncing
         const lightId = control.dataset.lightId;
         const targetState = states[lightId];
         if (!targetState) return;
@@ -498,7 +510,7 @@ socket.on('update_power', (data) => {
     document.getElementById('battery-value').textContent = data.battery != null ? `${data.battery.toFixed(1)}V / ${data.battery_pct}%` : '---';
     document.getElementById('water-value').textContent = data.water != null ? `${data.water}%` : '---';
     document.getElementById('solar-value').textContent = data.solar != null ? `${data.solar.toFixed(1)}A` : '---';
-    document.getElementById('load-value').textContent = data.load != null ? `${data.load.toFixed(1)}A` : '---';
+    document.getElementById('phase-value').textContent = data.phase ? data.phase.charAt(0).toUpperCase() + data.phase.slice(1) : '---';
 });
 
 // Handle backend-triggered toasts
@@ -545,6 +557,18 @@ socket.on('update_settings', (settings) => {
     }
 });
 
+socket.on('set_brightness_controls_enabled', (data) => {
+    const btns = document.querySelectorAll('.brightness-btn');
+    btns.forEach(btn => {
+        btn.disabled = !data.enabled;
+        if (!data.enabled) {
+            btn.classList.add('disabled');
+        } else {
+            btn.classList.remove('disabled');
+        }
+    });
+});
+
 let isFirstConnect = true;
 
 // Handle client-side connection toasts
@@ -579,7 +603,7 @@ function disableInterface() {
     document.getElementById('battery-value').textContent = '---';
     document.getElementById('water-value').textContent = '---';
     document.getElementById('solar-value').textContent = '---';
-    document.getElementById('load-value').textContent = '---';
+    document.getElementById('phase-value').textContent = '---';
     currentTemp.innerText = '--°C';
     condition.textContent = '---';
     minMax.innerText = '-- / --';

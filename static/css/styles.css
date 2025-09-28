@@ -679,6 +679,11 @@ select.night-time,
     box-shadow: none;
 }
 
+.brightness-btn.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
 .description {
     font-size: 12px;
     color: var(--text-color);
