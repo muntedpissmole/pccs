@@ -1,8 +1,0 @@
-astral
-geopy
-gpiozero
-pynmea2
-pyserial
-pytz
-Requests
-timezonefinder

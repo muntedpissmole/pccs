@@ -44,6 +44,12 @@ class GPSController:
         self.previous_tz_failed = False
         self.previous_sun_failed = False
         self.last_emit = 0
+        self.last_geo_time = 0
+        self.cached_town = 'Unknown'
+        self.cached_tz_str = self.default_tz
+        self.cached_sunrise_str = '---'
+        self.cached_sunset_str = '---'
+        self.geo_threshold = 0.001  # About 100m change
 
     def start(self):
         logger.info("Starting GPS update thread")
@@ -77,6 +83,7 @@ class GPSController:
     def _update_thread(self):
         while True:
             self.update()
+            time_module.sleep(1)  # Poll every 1 second to reduce CPU usage
             current_time = time_module.time()
             changed = (
                 self.fix != self.previous_fix or
@@ -93,33 +100,49 @@ class GPSController:
                     lat = self.lat
                     lon = self.lon
                     sats = self.sats
-                    try:
-                        location_res = self.geolocator.reverse((lat, lon), language='en')
-                        town = (
-                            location_res.raw['address'].get('suburb') or
-                            location_res.raw['address'].get('town') or
-                            location_res.raw['address'].get('city') or
-                            location_res.raw['address'].get('village') or
-                            location_res.raw['address'].get('village') or
-                            location_res.raw['address'].get('hamlet') or
-                            'Unknown'
-                        )
-                        logger.debug(f"Geolocation: {town}")
-                    except Exception as e:
-                        town = 'Unknown'
-                        geo_failed = True
-                        logger.error(f"Geolocation failed: {e}")
+                    # Check if we need to update geolocation (hourly or significant position change)
+                    position_changed = (
+                        self.previous_lat is None or self.previous_lon is None or
+                        abs(lat - self.previous_lat) > self.geo_threshold or
+                        abs(lon - self.previous_lon) > self.geo_threshold
+                    )
+                    if position_changed or (current_time - self.last_geo_time > 3600):
+                        try:
+                            location_res = self.geolocator.reverse((lat, lon), language='en')
+                            town = (
+                                location_res.raw['address'].get('suburb') or
+                                location_res.raw['address'].get('town') or
+                                location_res.raw['address'].get('city') or
+                                location_res.raw['address'].get('village') or
+                                location_res.raw['address'].get('village') or
+                                location_res.raw['address'].get('hamlet') or
+                                'Unknown'
+                            )
+                            self.cached_town = town
+                            logger.debug(f"Geolocation: {town}")
+                            self.last_geo_time = current_time
+                        except Exception as e:
+                            town = self.cached_town
+                            geo_failed = True
+                            logger.error(f"Geolocation failed: {e}")
+                    else:
+                        town = self.cached_town
                     using_gps_time = self.utc_time is not None and self.date is not None
                     now = dt_module.datetime.utcnow()
                     utc_dt = dt_module.datetime.combine(self.date, self.utc_time) if using_gps_time else now
-                    try:
-                        tz_str = self.tf.timezone_at(lng=lon, lat=lat)
-                        if tz_str is None:
-                            raise ValueError("No timezone found")
-                    except Exception as e:
-                        tz_str = self.default_tz
-                        tz_failed = True
-                        logger.error(f"Timezone lookup failed: {e}")
+                    # Timezone and sun calculations can be updated if position changed or hourly
+                    if position_changed or (current_time - self.last_geo_time > 3600):
+                        try:
+                            tz_str = self.tf.timezone_at(lng=lon, lat=lat)
+                            if tz_str is None:
+                                raise ValueError("No timezone found")
+                            self.cached_tz_str = tz_str
+                        except Exception as e:
+                            tz_str = self.cached_tz_str
+                            tz_failed = True
+                            logger.error(f"Timezone lookup failed: {e}")
+                    else:
+                        tz_str = self.cached_tz_str
                     tz = pytz.timezone(tz_str)
                     local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(tz)
                     gps_datetime_str = local_dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -128,24 +151,31 @@ class GPSController:
                     if hour == 0:
                         hour = 12
                     time_str = f"{hour}:{local_dt.minute:02d} {local_dt.strftime('%p')}"
-                    try:
-                        loc = LocationInfo(name="Custom", region="Custom", timezone=tz_str, latitude=lat, longitude=lon)
-                        s = sun(loc.observer, date=local_dt.date(), tzinfo=tz)
-                        sunrise_local = s['sunrise']
-                        sunset_local = s['sunset']
-                        sunrise_hour = sunrise_local.hour % 12
-                        if sunrise_hour == 0:
-                            sunrise_hour = 12
-                        sunrise_str = f"{sunrise_hour}:{sunrise_local.minute:02d} {sunrise_local.strftime('%p')}"
-                        sunset_hour = sunset_local.hour % 12
-                        if sunset_hour == 0:
-                            sunset_hour = 12
-                        sunset_str = f"{sunset_hour}:{sunset_local.minute:02d} {sunset_local.strftime('%p')}"
-                    except Exception as e:
-                        sunrise_str = '---'
-                        sunset_str = '---'
-                        sun_failed = True
-                        logger.error(f"Sunrise/sunset calculation failed: {e}")
+                    # Sunrise/sunset
+                    if position_changed or (current_time - self.last_geo_time > 3600) or self.date != self.previous_date:
+                        try:
+                            loc = LocationInfo(name="Custom", region="Custom", timezone=tz_str, latitude=lat, longitude=lon)
+                            s = sun(loc.observer, date=local_dt.date(), tzinfo=tz)
+                            sunrise_local = s['sunrise']
+                            sunset_local = s['sunset']
+                            sunrise_hour = sunrise_local.hour % 12
+                            if sunrise_hour == 0:
+                                sunrise_hour = 12
+                            sunrise_str = f"{sunrise_hour}:{sunrise_local.minute:02d} {sunrise_local.strftime('%p')}"
+                            sunset_hour = sunset_local.hour % 12
+                            if sunset_hour == 0:
+                                sunset_hour = 12
+                            sunset_str = f"{sunset_hour}:{sunset_local.minute:02d} {sunset_local.strftime('%p')}"
+                            self.cached_sunrise_str = sunrise_str
+                            self.cached_sunset_str = sunset_str
+                        except Exception as e:
+                            sunrise_str = self.cached_sunrise_str
+                            sunset_str = self.cached_sunset_str
+                            sun_failed = True
+                            logger.error(f"Sunrise/sunset calculation failed: {e}")
+                    else:
+                        sunrise_str = self.cached_sunrise_str
+                        sunset_str = self.cached_sunset_str
                     satellites_str = f"{sats} Satellites"
                     weather_data = self.weather.get_weather_data(lat, lon) if self.weather else None
                 else:

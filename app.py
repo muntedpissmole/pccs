@@ -569,6 +569,7 @@ def apply_reed_settings(settings):
     logger.debug(f"Applied reed settings: {settings}")
 reeds_config = static_config.get('reeds', {})
 reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase)
+phase_manager.set_reeds_controller(reeds_controller)
 @app.route('/phases')
 def show_phases():
     try:

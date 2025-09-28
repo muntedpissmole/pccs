@@ -16,7 +16,11 @@ class PhaseManager:
         self.socketio = socketio
         self.current_phase = None
         self.phase_to_scene = {}  # Empty to disable auto scene application; will be handled by rules engine
+        self.reeds_controller = None  # Will be set after initialization
         logger.info("PhaseManager initialized")
+
+    def set_reeds_controller(self, reeds_controller):
+        self.reeds_controller = reeds_controller
 
     def parse_time(self, time_str):
         try:
@@ -90,6 +94,8 @@ class PhaseManager:
     def phase_check(self):
         new_phase = self.get_current_phase()
         if new_phase is not None and new_phase != self.current_phase:
+            if self.current_phase is None and self.reeds_controller is not None:
+                self.reeds_controller.evaluate_initial_states()
             self.current_phase = new_phase
             scene_id = self.phase_to_scene.get(new_phase)
             if scene_id:

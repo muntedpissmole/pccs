@@ -138,15 +138,7 @@ document.querySelectorAll('.control').forEach(control => {
             }
         });
 
-        toggle.addEventListener('change', () => {
-            if (toggle.checked) {
-                control.classList.add('red-mode');
-                colorLabel.textContent = 'Red';
-            } else {
-                control.classList.remove('red-mode');
-                colorLabel.textContent = 'White';
-            }
-        });
+        // Removed the buggy toggle listener here—it was redundant and incorrectly applied 'red-mode' to non-color-toggle controls.
 
         slider.style.setProperty('--value', slider.value + '%');
         updatePercentage();

@@ -27,6 +27,19 @@ class ReedsController:
                 logger.error(f"Failed to initialize reed {reed_id}: {e}")
         logger.info("ReedsController initialized")
 
+    def evaluate_initial_states(self):
+        phase = self.get_current_phase()
+        if phase is None:
+            logger.warning("Cannot evaluate initial reed states without current phase")
+            return
+        logger.info(f"Evaluating initial reed states for phase {phase}")
+        for reed_id, button in self.reeds.items():
+            if not button.is_pressed:  # is_pressed False means open/released
+                logger.debug(f"Initial: Reed {reed_id} is open, applying settings")
+                self.handle_open(reed_id)
+            else:
+                logger.debug(f"Initial: Reed {reed_id} is closed, no action")
+
     def handle_open(self, reed_id):
         phase = self.get_current_phase()
         logger.debug(f"Reed {reed_id} opened in phase {phase}")

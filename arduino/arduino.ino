@@ -1,3 +1,6 @@
+#include <avr/io.h>
+#include <avr/sleep.h>
+
 struct PWMState {
   int current_value;
   int start_value;
@@ -6,33 +9,54 @@ struct PWMState {
   unsigned long duration;
 };
 PWMState pwm_states[14]; // Indices 1-13 for pins 1-13 (but skipping pin 1 to avoid TX conflict)
+
+ISR(ADC_vect) {
+  // Empty ISR just to wake from sleep
+}
+
 long readVcc() {
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  // Set the reference to AVCC and the multiplexer to the bandgap for ATmega32U4
+  ADMUX = (0 << REFS1) | (1 << REFS0) | (0 << ADLAR) | (1 << MUX4) | (1 << MUX3) | (1 << MUX2) | (1 << MUX1) | (0 << MUX0);
+  ADCSRB &= ~(1 << MUX5); // Ensure MUX5=0
+  
   delay(2); // Wait for Vref to settle
 
-  // Discard first conversion
-  ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA, ADSC)); // Wait
-  uint8_t low = ADCL; // Discard
-  uint8_t high = ADCH; // Discard
+  // Discard initial conversions for stability
+  for (int i = 0; i < 10; i++) {
+    ADCSRA |= (1 << ADSC); // Start conversion
+    while (ADCSRA & (1 << ADSC)); // Wait for completion
+    (void)ADCL; // Discard
+    (void)ADCH; // Discard
+  }
 
   long sum = 0;
-  int num = 16;
+  int num = 64; // Number of samples for averaging
   for (int i = 0; i < num; i++) {
-    ADCSRA |= _BV(ADSC); // Start conversion
-    while (bit_is_set(ADCSRA, ADSC)); // Wait
-    low = ADCL;
-    high = ADCH;
+    // Use ADC Noise Reduction Mode
+    ADCSRA |= (1 << ADIE); // Enable ADC interrupt
+    sleep_enable();
+    set_sleep_mode(SLEEP_MODE_ADC);
+    cli(); // Disable interrupts to start conversion safely
+    ADCSRA |= (1 << ADSC); // Start conversion
+    sei(); // Enable interrupts
+    sleep_cpu(); // Sleep until ADC complete
+    sleep_disable();
+    ADCSRA &= ~(1 << ADIE); // Disable ADC interrupt
+
+    uint8_t low = ADCL;
+    uint8_t high = ADCH;
     sum += (high << 8) | low;
   }
 
   long result = sum / num;
   if (result == 0) result = 1; // Avoid division by zero
-  result = 1125300L / result; // Calculate Vcc (in mV); adjust 1125300 if calibrated differently
+  result = 1125300L / result; // Calculate Vcc in mV; calibrate 1125300L if needed
   return result;
 }
+
 void setup() {
   Serial.begin(500000);
+  ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);  // Enable ADC with 128 prescaler
   for (int i = 2; i <= 13; i++) { // Skip pin 1 to avoid conflict with TX
     pinMode(i, OUTPUT);
     pwm_states[i].current_value = 0;
@@ -41,6 +65,7 @@ void setup() {
     analogWrite(i, 0);
   }
 }
+
 void loop() {
   unsigned long current_time = millis();
   for (int i = 2; i <= 13; i++) { // Skip pin 1
@@ -73,6 +98,7 @@ void loop() {
     }
   }
 }
+
 void processSet(String args) {
   int space_pos = args.indexOf(' ');
   if (space_pos != -1) {
@@ -86,6 +112,7 @@ void processSet(String args) {
     }
   }
 }
+
 void processRamp(String args) {
   int first_space = args.indexOf(' ');
   int second_space = args.indexOf(' ', first_space + 1);
@@ -101,6 +128,7 @@ void processRamp(String args) {
     }
   }
 }
+
 void processGet(String args) {
   int pin = args.toInt();
   if (pin >= 2 && pin <= 13) { // Skip pin 1
@@ -110,6 +138,7 @@ void processGet(String args) {
     Serial.println(pwm_states[pin].current_value);
   }
 }
+
 void processAnalog(String args) {
   int pin = args.toInt();
   if (pin >= 0 && pin <= 5) { // A0 to A5
@@ -126,6 +155,7 @@ void processAnalog(String args) {
     Serial.println(value, 3);
   }
 }
+
 void processGetVcc() {
   long vcc = readVcc();
   Serial.print("VCC ");
