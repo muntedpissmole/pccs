@@ -19,6 +19,7 @@ const socket = io();
 const themeToggle = document.getElementById('theme-toggle');
 themeToggle.addEventListener('change', () => {
     document.body.dataset.theme = themeToggle.checked ? 'dark' : 'light';
+    console.log('Emitting set_setting', { key: 'dark_mode', value: themeToggle.checked });
     socket.emit('set_setting', { key: 'dark_mode', value: themeToggle.checked });
 });
 
@@ -151,10 +152,12 @@ document.querySelectorAll('.control').forEach(control => {
 
 // Server communication
 function sendBrightness(lightId, value) {
+    console.log('Emitting set_brightness', { light_id: lightId, value: value });
     socket.emit('set_brightness', { light_id: lightId, value: value });
 }
 
 function sendToggle(lightId) {
+    console.log('Emitting toggle_color', { light_id: lightId });
     socket.emit('toggle_color', { light_id: lightId });
 }
 
@@ -177,6 +180,7 @@ lightControls.forEach((control, index) => {
 
     if (slider) {
         slider.addEventListener('input', (e) => {
+            if (control.classList.contains('locked')) return;
             const sceneBtns = document.querySelectorAll('.scene-btn');
             sceneBtns.forEach(b => b.classList.remove('active'));
             sendBrightness(lightId, parseInt(e.target.value));
@@ -190,6 +194,7 @@ lightControls.forEach((control, index) => {
 
     if (toggle) {
         toggle.addEventListener('change', () => {
+            if (control.classList.contains('locked')) return;
             if (!(isColorToggle && slider.value === '0')) {
                 const sceneBtns = document.querySelectorAll('.scene-btn');
                 sceneBtns.forEach(b => b.classList.remove('active'));
@@ -209,6 +214,7 @@ lightControls.forEach((control, index) => {
             } else {
                 const target = toggle.checked ? 100 : 0;
                 lockControl(control);
+                console.log('Emitting ramp_brightness', { light_id: lightId, target: target });
                 socket.emit('ramp_brightness', { light_id: lightId, target: target });
             }
         });
@@ -231,6 +237,7 @@ relayControls.forEach((control, index) => {
     const toggle = control.querySelector('input[type="checkbox"]');
     const name = relayNames[index];
     toggle.addEventListener('change', () => {
+        console.log('Emitting set_relay', { name: name, state: toggle.checked });
         socket.emit('set_relay', { name: name, state: toggle.checked });
     });
 });
@@ -244,6 +251,7 @@ sceneBtns.forEach(btn => {
         const sceneId = btn.dataset.sceneId;
         if (sceneId) {
             lightControls.forEach(lockControl);
+            console.log('Emitting apply_scene', { scene_id: sceneId });
             socket.emit('apply_scene', { scene_id: sceneId });
         }
     });
@@ -256,6 +264,7 @@ brightnessBtns.forEach(btn => {
         brightnessBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const level = btn.id.replace('brightness-', '');
+        console.log('Emitting set_brightness_level', { level: level });
         socket.emit('set_brightness_level', { level: level });
     });
 });
@@ -278,22 +287,29 @@ document.getElementById('settings-modal').addEventListener('click', (e) => {
 
 // Additional settings change listeners
 document.getElementById('auto-theme-toggle').addEventListener('change', (e) => {
+    console.log('Emitting set_setting', { key: 'auto_theme', value: e.target.checked });
     socket.emit('set_setting', { key: 'auto_theme', value: e.target.checked });
 });
 
 document.getElementById('auto-brightness-toggle').addEventListener('change', (e) => {
+    console.log('Emitting set_setting', { key: 'auto_brightness', value: e.target.checked });
     socket.emit('set_setting', { key: 'auto_brightness', value: e.target.checked });
 });
 
 document.querySelector('.evening-offset').addEventListener('change', (e) => {
+    console.log('Emitting set_setting', { key: 'evening_offset', value: e.target.value });
     socket.emit('set_setting', { key: 'evening_offset', value: e.target.value });
+    updateResultantTimes();
 });
 
 document.querySelector('.sunrise-offset').addEventListener('change', (e) => {
+    console.log('Emitting set_setting', { key: 'sunrise_offset', value: e.target.value });
     socket.emit('set_setting', { key: 'sunrise_offset', value: e.target.value });
+    updateResultantTimes();
 });
 
 document.querySelector('.night-time').addEventListener('change', (e) => {
+    console.log('Emitting set_setting', { key: 'night_time', value: e.target.value });
     socket.emit('set_setting', { key: 'night_time', value: e.target.value });
 });
 
@@ -306,6 +322,7 @@ const humidity = document.getElementById('humidity');
 
 // Sync states from backend via WebSocket
 socket.on('update_states', (states) => {
+    console.log('Received update_states', states);
     lightControls.forEach(control => {
         if (control.classList.contains('locked') || control.classList.contains('sync-lock')) return; // Skip if locked or syncing
         const lightId = control.dataset.lightId;
@@ -339,10 +356,17 @@ socket.on('update_states', (states) => {
             const br = targetState.brightness;
             control.classList.toggle('lit', br > 0);
         }
+
+        if (targetState.locked) {
+            lockControl(control);
+        } else {
+            unlockControl(control);
+        }
     });
 });
 
 socket.on('ramp_start', (data) => {
+    console.log('Received ramp_start', data);
     const { light_id, ramp_duration } = data;
     const control = lightControls.find(c => parseInt(c.dataset.lightId) === light_id);
     if (control) {
@@ -353,6 +377,7 @@ socket.on('ramp_start', (data) => {
 });
 
 socket.on('brightness_ramp_start', (data) => {
+    console.log('Received brightness_ramp_start', data);
     const { light_id, target_brightness, ramp_duration } = data;
     const control = lightControls.find(c => parseInt(c.dataset.lightId) === light_id);
     if (!control) return;
@@ -393,6 +418,7 @@ socket.on('brightness_ramp_start', (data) => {
 });
 
 socket.on('scene_ramp_start', (data) => {
+    console.log('Received scene_ramp_start', data);
     lightControls.forEach(control => {
         const lightId = control.dataset.lightId;
         const targetState = data.states[lightId];
@@ -455,6 +481,7 @@ socket.on('scene_ramp_start', (data) => {
 });
 
 socket.on('set_active_scene', (data) => {
+    console.log('Received set_active_scene', data);
     const sceneBtns = document.querySelectorAll('.scene-btn');
     sceneBtns.forEach(b => b.classList.remove('active'));
     if (data.scene_id) {
@@ -466,6 +493,7 @@ socket.on('set_active_scene', (data) => {
 });
 
 socket.on('update_gps', (data) => {
+    console.log('Received update_gps', data);
     document.getElementById('date-value').textContent = data.date || '---';
     document.getElementById('time-value').textContent = data.time || '---';
     document.getElementById('sunrise-value').textContent = data.sunrise || '---';
@@ -494,10 +522,12 @@ socket.on('update_gps', (data) => {
         humidity.innerText = '-- %';
         weatherIcon.className = 'fas fa-cloud';
     }
+    updateResultantTimes();
 });
 
 // Handle relay updates
 socket.on('update_relays', (states) => {
+    console.log('Received update_relays', states);
     relayControls.forEach((control, index) => {
         const toggle = control.querySelector('input[type="checkbox"]');
         const name = relayNames[index];
@@ -507,6 +537,7 @@ socket.on('update_relays', (states) => {
 
 // Handle power updates
 socket.on('update_power', (data) => {
+    console.log('Received update_power', data);
     document.getElementById('battery-value').textContent = data.battery != null ? `${data.battery.toFixed(1)}V / ${data.battery_pct}%` : '---';
     document.getElementById('water-value').textContent = data.water != null ? `${data.water}%` : '---';
     document.getElementById('solar-value').textContent = data.solar != null ? `${data.solar.toFixed(1)}A` : '---';
@@ -515,10 +546,12 @@ socket.on('update_power', (data) => {
 
 // Handle backend-triggered toasts
 socket.on('show_toast', (data) => {
+    console.log('Received show_toast', data);
     showToast(data.message, data.type || 'message');
 });
 
 socket.on('update_settings', (settings) => {
+    console.log('Received update_settings', settings);
     // Dark mode
     if ('dark_mode' in settings) {
         themeToggle.checked = settings.dark_mode;
@@ -555,9 +588,11 @@ socket.on('update_settings', (settings) => {
     if ('night_time' in settings) {
         document.querySelector('.night-time').value = settings.night_time;
     }
+    updateResultantTimes();
 });
 
 socket.on('set_brightness_controls_enabled', (data) => {
+    console.log('Received set_brightness_controls_enabled', data);
     const btns = document.querySelectorAll('.brightness-btn');
     btns.forEach(btn => {
         btn.disabled = !data.enabled;
@@ -569,10 +604,28 @@ socket.on('set_brightness_controls_enabled', (data) => {
     });
 });
 
+socket.on('update_phase', (data) => {
+    console.log('Received update_phase', data);
+    document.getElementById('phase-value').textContent = data.phase ? data.phase.charAt(0).toUpperCase() + data.phase.slice(1) : '---';
+});
+
+socket.on('update_sensors', (data) => {
+    console.log('Received update_sensors', data);
+    // Handle if needed
+});
+
+socket.on('update_reed_state', (data) => {
+    console.log('Received update_reed_state', data);
+    // Handle if needed in main page, but it's for /reeds
+});
+
 let isFirstConnect = true;
 
 // Handle client-side connection toasts
 socket.on('connect', () => {
+    console.log('Socket connected');
+    console.log('Emitting request_sync');
+    socket.emit('request_sync');
     if (!isFirstConnect) {
         showToast('System Online', 'message');
         if (offlineToast) {
@@ -586,6 +639,7 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', () => {
+    console.log('Socket disconnected');
     offlineToast = showToast('System Offline', 'warning', true, ['offline-toast']);
     disableInterface();
 });
@@ -616,4 +670,79 @@ function enableInterface() {
     document.querySelector('.controls').classList.remove('disabled');
     document.querySelector('.right-column').classList.remove('disabled');
     // Data will be refreshed by server emits
+}
+
+// Fallback polling every 60 seconds
+setInterval(() => {
+    if (socket.connected) {
+        console.log('Emitting periodic request_sync');
+        socket.emit('request_sync');
+    }
+}, 60000);
+
+// Function to parse time string to Date object
+function parseTime(timeStr) {
+    const [time, ampm] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    if (ampm === 'PM' && hours !== 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+    const date = new Date();
+    date.setHours(hours);
+    date.setMinutes(minutes);
+    date.setSeconds(0);
+    return date;
+}
+
+// Function to add minutes to a Date object
+function addMinutes(date, minutes) {
+    const newDate = new Date(date);
+    newDate.setMinutes(newDate.getMinutes() + minutes);
+    return newDate;
+}
+
+// Function to format Date to time string
+function formatTime(date) {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minStr = minutes < 10 ? '0' + minutes : minutes;
+    return `${hours}:${minStr} ${ampm}`;
+}
+
+// Function to parse offset string to number
+function parseOffset(offsetStr) {
+    const numStr = offsetStr.replace(/ mins/, '');
+    return parseInt(numStr, 10);
+}
+
+// Function to update resultant times
+function updateResultantTimes() {
+    const sunriseStr = document.getElementById('sunrise-value').textContent;
+    const sunsetStr = document.getElementById('sunset-value').textContent;
+    if (sunriseStr === '---' || sunsetStr === '---') {
+        document.getElementById('evening-resultant').style.display = 'none';
+        document.getElementById('morning-resultant').style.display = 'none';
+        return;
+    }
+
+    const eveningOffsetStr = document.querySelector('.evening-offset').value;
+    const morningOffsetStr = document.querySelector('.sunrise-offset').value;
+    const eveningOffset = parseOffset(eveningOffsetStr);
+    const morningOffset = parseOffset(morningOffsetStr);
+
+    const sunriseTime = parseTime(sunriseStr);
+    const sunsetTime = parseTime(sunsetStr);
+
+    const eveningTime = addMinutes(sunsetTime, eveningOffset);
+    const morningTime = addMinutes(sunriseTime, morningOffset);
+
+    const eveningFormatted = formatTime(eveningTime);
+    const morningFormatted = formatTime(morningTime);
+
+    document.getElementById('evening-resultant').textContent = ` (${eveningFormatted})`;
+    document.getElementById('morning-resultant').textContent = ` (${morningFormatted})`;
+    document.getElementById('evening-resultant').style.display = 'inline';
+    document.getElementById('morning-resultant').style.display = 'inline';
 }

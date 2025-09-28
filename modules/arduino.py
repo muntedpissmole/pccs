@@ -87,17 +87,16 @@ class ArduinoController:
 
     def get_analog(self, pin):
         cmd = f"ANALOG {pin}\n"
-        with self.lock:  # Add lock here
+        with self.lock:
             try:
                 self.ser.reset_input_buffer()
                 self.ser.write(cmd.encode())
-                time.sleep(0.2)
-                while self.ser.in_waiting > 0:
-                    response = self.ser.readline().decode().strip()
-                    if response.startswith("ANALOG "):
-                        parts = response.split()
-                        if len(parts) == 3 and int(parts[1]) == pin:
-                            return float(parts[2])
+                self.ser.flush()
+                response = self.ser.readline().decode().strip()
+                if response.startswith("ANALOG "):
+                    parts = response.split()
+                    if len(parts) == 3 and int(parts[1]) == pin:
+                        return float(parts[2])
                 logger.warning(f"Failed to get analog for pin {pin}")
                 return None
             except Exception as e:
@@ -123,3 +122,30 @@ class ArduinoController:
             except Exception as e:
                 logger.error(f"Error getting VCC: {e}")
                 return None
+                
+    def get_all_analogs_and_vcc(self):
+        cmd = "GETALL\n"
+        with self.lock:
+            try:
+                self.ser.reset_input_buffer()
+                self.ser.write(cmd.encode())
+                self.ser.flush()
+                response = self.ser.readline().decode().strip()
+                if response.startswith("ALL "):
+                    parts = response.split()
+                    if len(parts) == 5:
+                        vcc = int(parts[1]) if parts[1].isdigit() else None
+                        a0 = float(parts[2]) if '.' in parts[2] else None
+                        a1 = float(parts[3]) if '.' in parts[3] else None
+                        a2 = float(parts[4]) if '.' in parts[4] else None
+                        return vcc, a0, a1, a2
+                # If response doesn't match, fall back to individual calls as a safety net
+                logger.warning("Failed to get all via GETALL; falling back to individual reads")
+                vcc = self.get_vcc()
+                a0 = self.get_analog(0)
+                a1 = self.get_analog(1)
+                a2 = self.get_analog(2)
+                return vcc, a0, a1, a2
+            except Exception as e:
+                logger.error(f"Error getting all analogs and VCC: {e}")
+                return None, None, None, None

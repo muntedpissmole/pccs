@@ -1,3 +1,4 @@
+// arduino.cpp
 #include <avr/io.h>
 #include <avr/sleep.h>
 
@@ -32,16 +33,8 @@ long readVcc() {
   long sum = 0;
   int num = 64; // Number of samples for averaging
   for (int i = 0; i < num; i++) {
-    // Use ADC Noise Reduction Mode
-    ADCSRA |= (1 << ADIE); // Enable ADC interrupt
-    sleep_enable();
-    set_sleep_mode(SLEEP_MODE_ADC);
-    cli(); // Disable interrupts to start conversion safely
     ADCSRA |= (1 << ADSC); // Start conversion
-    sei(); // Enable interrupts
-    sleep_cpu(); // Sleep until ADC complete
-    sleep_disable();
-    ADCSRA &= ~(1 << ADIE); // Disable ADC interrupt
+    while (ADCSRA & (1 << ADSC)); // Wait for completion
 
     uint8_t low = ADCL;
     uint8_t high = ADCH;
@@ -95,6 +88,8 @@ void loop() {
       processAnalog(command.substring(7));
     } else if (command.startsWith("GETVCC")) {
       processGetVcc();
+    } else if (command == "GETALL") {
+      processGetAll();
     }
   }
 }
@@ -142,13 +137,7 @@ void processGet(String args) {
 void processAnalog(String args) {
   int pin = args.toInt();
   if (pin >= 0 && pin <= 5) { // A0 to A5
-    long sum = 0;
-    int num_reads = 64;
-    for (int i = 0; i < num_reads; i++) {
-      sum += analogRead(A0 + pin);
-      delayMicroseconds(50);
-    }
-    float value = static_cast<float>(sum) / num_reads;
+    float value = getAnalogAvg(pin);
     Serial.print("ANALOG ");
     Serial.print(pin);
     Serial.print(" ");
@@ -160,4 +149,29 @@ void processGetVcc() {
   long vcc = readVcc();
   Serial.print("VCC ");
   Serial.println(vcc);
+}
+
+void processGetAll() {
+  long vcc = readVcc();
+  float a0 = getAnalogAvg(0);
+  float a1 = getAnalogAvg(1);
+  float a2 = getAnalogAvg(2);
+  Serial.print("ALL ");
+  Serial.print(vcc);
+  Serial.print(" ");
+  Serial.print(a0, 3);
+  Serial.print(" ");
+  Serial.print(a1, 3);
+  Serial.print(" ");
+  Serial.println(a2, 3);
+}
+
+float getAnalogAvg(int pin) {
+  long sum = 0;
+  int num_reads = 64;
+  for (int i = 0; i < num_reads; i++) {
+      sum += analogRead(A0 + pin);
+      delayMicroseconds(50);
+  }
+  return static_cast<float>(sum) / num_reads;
 }

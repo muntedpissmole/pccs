@@ -1,5 +1,4 @@
 # modules/phases.py
-# modules/phases.py
 import threading
 import time as time_module
 from datetime import datetime, timedelta
@@ -8,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PhaseManager:
-    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config):
+    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, set_screen_brightness, current_screen_levels, screen_sids):
         self.config_manager = config_manager
         self.handle_apply_scene = handle_apply_scene
         self.get_last_gps_data = get_last_gps_data
@@ -16,13 +15,21 @@ class PhaseManager:
         self.get_has_gps_fix = get_has_gps_fix
         self.socketio = socketio
         self.screens_config = screens_config
+        self.set_screen_brightness = set_screen_brightness
+        self.current_screen_levels = current_screen_levels
+        self.screen_sids = screen_sids
         self.current_phase = None
         self.phase_to_scene = {}  # Empty to disable auto scene application; will be handled by rules engine
         self.reeds_controller = None  # Will be set after initialization
+        self.rules_engine = None
+        self.prev_dt = None
         logger.info("PhaseManager initialized")
 
     def set_reeds_controller(self, reeds_controller):
         self.reeds_controller = reeds_controller
+
+    def set_rules_engine(self, rules_engine):
+        self.rules_engine = rules_engine
 
     def parse_time(self, time_str):
         try:
@@ -107,6 +114,8 @@ class PhaseManager:
                 self.reeds_controller.evaluate_open_reeds()
             self.socketio.emit('update_phase', {'phase': new_phase})
             logger.info(f"Phase changed to {new_phase} from {old_phase}")
+            if self.rules_engine:
+                self.rules_engine.on_phase_change(new_phase)
 
             # Handle auto theme switch
             auto_theme = self.config_manager.get('auto_theme', False)
@@ -124,7 +133,32 @@ class PhaseManager:
                 brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(new_phase)
                 if brightness_level:
                     for screen_name in self.screens_config:
-                        set_screen_brightness(screen_name, brightness_level)
+                        self.set_screen_brightness(screen_name, brightness_level)
+                        self.current_screen_levels[screen_name] = brightness_level
+                        if screen_name in self.screen_sids:
+                            self.socketio.emit('update_brightness_level', {'level': brightness_level}, to=self.screen_sids[screen_name])
+
+    def check_all_off_time(self):
+        if not self.get_has_gps_fix():
+            return
+        current_dt = self.get_computed_dt()
+        if current_dt is None:
+            return
+        gps_data = self.get_last_gps_data()
+        sunrise_str = gps_data.get('sunrise', '---')
+        if sunrise_str == '---':
+            return
+        sunrise_time = self.parse_time(sunrise_str)
+        if sunrise_time is None:
+            return
+        today = current_dt.date()
+        sunrise_dt = datetime.combine(today, sunrise_time)
+        all_off_dt = sunrise_dt + timedelta(hours=1)
+        if self.prev_dt is not None and self.prev_dt < all_off_dt <= current_dt:
+            if self.rules_engine:
+                self.rules_engine.on_time_event("all_off_after_sunrise")
+            logger.info("Triggered all off after sunrise event")
+        self.prev_dt = current_dt
 
     def start(self):
         logger.info("Starting phase loop thread")
@@ -134,10 +168,15 @@ class PhaseManager:
             brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(self.current_phase)
             if brightness_level:
                 for screen_name in self.screens_config:
-                    set_screen_brightness(screen_name, brightness_level)
+                    self.set_screen_brightness(screen_name, brightness_level)
+                    self.current_screen_levels[screen_name] = brightness_level
+                    if screen_name in self.screen_sids:
+                        self.socketio.emit('update_brightness_level', {'level': brightness_level}, to=self.screen_sids[screen_name])
+        self.prev_dt = self.get_computed_dt()
         threading.Thread(target=self._phase_loop, daemon=True).start()
 
     def _phase_loop(self):
         while True:
             self.phase_check()
+            self.check_all_off_time()
             time_module.sleep(10)  # Reduced from 60 to 10 for faster response

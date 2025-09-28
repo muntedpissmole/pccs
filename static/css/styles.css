@@ -707,3 +707,7 @@ select.night-time,
     opacity: 0.5;
     pointer-events: none;
 }
+
+.resultant-time {
+    margin-left: 5px;
+}

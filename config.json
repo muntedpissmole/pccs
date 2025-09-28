@@ -115,13 +115,14 @@
       "pin": 26,
       "day": {},
       "evening": {"channel": 7, "brightness": 30},
-      "night": {"channel": 7, "brightness": 5}
+      "night": {"channel": 7, "brightness": 5},
+      "lock_on_close": true
     }
   },
   "screens": {
     "kitchen": {
       "ip": "10.10.10.10",
-      "brightness_path": "/sys/class/backlight/10-0045/brightness",
+      "brightness_path": "/sys/class/backlight/11-0045/brightness",
       "levels": {
         "low": 20,
         "medium": 128,
@@ -130,7 +131,7 @@
     },
     "tent": {
       "ip": "10.10.10.11",
-      "brightness_path": "/sys/class/backlight/10-0045/brightness",
+      "brightness_path": "/sys/class/backlight/11-0045/brightness",
       "levels": {
         "low": 20,
         "medium": 128,

@@ -35,6 +35,7 @@ from modules.gpio import GPIOController
 from modules.config import ConfigManager
 from modules.phases import PhaseManager
 from modules.reeds import ReedsController
+from modules.rules import RulesEngine
 def handle_event(event, data):
     logger.debug(f"Handling event: {event} with data: {data}")
     socketio.emit(event, data)
@@ -103,6 +104,7 @@ def broadcast_gps(data):
             sunset_dt = datetime.combine(computed_dt.date(), sunset_time)
             sunset_offset_dt = sunset_dt + timedelta(minutes=evening_offset_mins)
             last_gps_data['sunset_offset'] = sunset_offset_dt.strftime('%I:%M %p')
+    logger.debug(f"Broadcasting 'update_gps' with data: {last_gps_data}")
     socketio.emit('update_gps', last_gps_data)
 weather = WeatherController(on_event=handle_event)
 arduino = ArduinoController(on_event=handle_event)
@@ -254,10 +256,12 @@ config_manager = ConfigManager()
 config = config_manager.config
 lights_config = static_config.get('lights', {})
 screens_config = static_config.get('screens', {})
+current_screen_levels = {name: 'medium' for name in screens_config}
+screen_sids = {}
 states = {}
 for lid_str, lconf in lights_config.items():
     lid = int(lid_str)
-    state = {'brightness': 0}
+    state = {'brightness': 0, 'locked': False}
     if 'pin' in lconf:
         state['pin'] = lconf['pin']
     else:
@@ -280,11 +284,12 @@ for lid, state in states.items():
 ramp_rate_ms = static_config.get('ramp_rate', 1) * 1000
 scene_ramp_rate = static_config.get('scene_ramp_rate', 2)
 gamma = config_manager.get('gamma', 2.5) # Keep gamma in dynamic config for potential future edits
-def calculate_pwm(brightness):
+def calculate_pwm(brightness, active_color=None):
     normalized = brightness / 100.0
-    return int(math.pow(normalized, gamma) * 255)
+    return int(normalized * 255)
 def broadcast_states():
-    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None)} for k, v in states.items()}
+    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False)} for k, v in states.items()}
+    logger.debug(f"Broadcasting 'update_states' with data: {response_states}")
     socketio.emit('update_states', response_states)
 def find_matching_scene():
     scenes = static_config.get('scenes', {})
@@ -312,6 +317,7 @@ def find_matching_scene():
     return None
 def update_active_scene():
     matching_scene = find_matching_scene()
+    logger.debug(f"Broadcasting 'set_active_scene' with data: {{'scene_id': {matching_scene}}}")
     socketio.emit('set_active_scene', {'scene_id': matching_scene})
 @app.route('/')
 def home():
@@ -325,34 +331,81 @@ def get_computed_dt():
     return None
 def get_has_gps_fix():
     return has_gps_fix
+def sync_client(is_screen, screen_name=None):
+    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False)} for k, v in states.items()}
+    emit('update_states', response_states)
+    logger.debug(f"Emitting 'update_states' to client with data: {response_states}")
+
+    matching_scene = find_matching_scene()
+    emit('set_active_scene', {'scene_id': matching_scene})
+    logger.debug(f"Emitting 'set_active_scene' to client with data: {{'scene_id': {matching_scene}}}")
+
+    relay_states = gpio.get_relay_states()
+    emit('update_relays', relay_states)
+    logger.debug(f"Emitting 'update_relays' to client with data: {relay_states}")
+
+    sensor_states = gpio.get_sensor_states()
+    emit('update_sensors', sensor_states)
+    logger.debug(f"Emitting 'update_sensors' to client with data: {sensor_states}")
+
+    emit('update_settings', config)
+    logger.debug(f"Emitting 'update_settings' to client with data: {config}")
+
+    emit('update_phase', {'phase': phase_manager.current_phase})
+    logger.debug(f"Emitting 'update_phase' to client with data: {{'phase': {phase_manager.current_phase}}}")
+
+    emit('update_gps', last_gps_data)
+    logger.debug(f"Emitting 'update_gps' to client with data: {last_gps_data}")
+
+    # Emit current reed states
+    for reed_id, button in reeds_controller.reeds.items():
+        state = "Closed" if button.is_pressed else "Open"
+        emit('update_reed_state', {'reed_id': reed_id, 'state': state})
+        logger.debug(f"Emitting 'update_reed_state' to client with data: {{'reed_id': {reed_id}, 'state': {state}}}")
+
+    emit('set_brightness_controls_enabled', {'enabled': is_screen})
+    logger.debug(f"Emitting 'set_brightness_controls_enabled' to client with data: {{'enabled': {is_screen}}}")
+
+    if is_screen and screen_name:
+        level = current_screen_levels.get(screen_name, 'medium')
+        emit('update_brightness_level', {'level': level})
+        logger.debug(f"Emitting 'update_brightness_level' to client with data: {{'level': {level}}}")
+
 @socketio.on('connect')
 def handle_connect():
     logger.info("Client connected")
     remote_addr = flask.request.remote_addr
     is_screen = any(remote_addr == conf['ip'] for conf in screens_config.values())
-    emit('set_brightness_controls_enabled', {'enabled': is_screen})
-    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None)} for k, v in states.items()}
-    emit('update_states', response_states)
-    matching_scene = find_matching_scene()
-    emit('set_active_scene', {'scene_id': matching_scene})
-    emit('update_relays', gpio.get_relay_states())
-    emit('update_sensors', gpio.get_sensor_states())
-    emit('update_settings', config)
-    emit('update_phase', {'phase': phase_manager.current_phase})
-    emit('update_gps', last_gps_data)
-    # Emit current reed states
-    for reed_id, button in reeds_controller.reeds.items():
-        state = "Closed" if button.is_pressed else "Open"
-        emit('update_reed_state', {'reed_id': reed_id, 'state': state})
+    screen_name = None
+    if is_screen:
+        screen_name = next((name for name, conf in screens_config.items() if conf['ip'] == remote_addr), None)
+        if screen_name:
+            screen_sids[screen_name] = flask.request.sid
+    sync_client(is_screen, screen_name)
+
+@socketio.on('request_sync')
+def handle_request_sync():
+    logger.debug("Received 'request_sync'")
+    remote_addr = flask.request.remote_addr
+    is_screen = any(remote_addr == conf['ip'] for conf in screens_config.values())
+    screen_name = None
+    if is_screen:
+        screen_name = next((name for name, conf in screens_config.items() if conf['ip'] == remote_addr), None)
+    sync_client(is_screen, screen_name)
+
 @socketio.on('set_brightness')
 def handle_set_brightness(data):
+    logger.debug(f"Received 'set_brightness' with data: {data}")
     light_id = data['light_id']
     value = data['value']
     if light_id not in states:
         logger.warning(f"Invalid light_id: {light_id}")
         return
+    if states[light_id].get('locked', False):
+        logger.warning(f"Ignoring set_brightness for locked light {light_id}")
+        return
     state = states[light_id]
-    pwm_value = calculate_pwm(value)
+    pwm_value = calculate_pwm(value, state.get('active'))
     if 'pin' in state:
         arduino.set_pwm(state['pin'], pwm_value)
     else:
@@ -371,11 +424,16 @@ def handle_set_brightness(data):
     broadcast_states()
     update_active_scene()
     logger.debug(f"Set brightness for light {light_id} to {value}")
+
 @socketio.on('toggle_color')
 def handle_toggle_color(data):
+    logger.debug(f"Received 'toggle_color' with data: {data}")
     light_id = data['light_id']
     if light_id not in states:
         logger.warning(f"Invalid light_id: {light_id}")
+        return
+    if states[light_id].get('locked', False):
+        logger.warning(f"Ignoring toggle_color for locked light {light_id}")
         return
     state = states[light_id]
     if 'white_pin' not in state:
@@ -383,7 +441,7 @@ def handle_toggle_color(data):
         return
     current_active = state['active']
     new_active = 'red' if current_active == 'white' else 'white'
-    pwm_value = calculate_pwm(state['brightness'])
+    pwm_value = calculate_pwm(state['brightness'], new_active)
     old_pin = state[current_active + '_pin']
     new_pin = state[new_active + '_pin']
     arduino.ramp_pwm(new_pin, pwm_value, ramp_rate_ms)
@@ -395,31 +453,41 @@ def handle_toggle_color(data):
         else:
             arduino.ramp_pwm(state['green_pin'], 0, ramp_rate_ms)
     state['active'] = new_active
+    logger.debug(f"Emitting 'ramp_start' to all with data: {{'light_id': {light_id}, 'ramp_duration': {ramp_rate_ms}}}")
     socketio.emit('ramp_start', {'light_id': light_id, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
     update_active_scene()
     logger.debug(f"Toggled color for light {light_id} to {new_active}")
+
 @socketio.on('ramp_brightness')
 def handle_ramp_brightness(data):
+    logger.debug(f"Received 'ramp_brightness' with data: {data}")
     light_id = data['light_id']
     target = data['target']
     if light_id not in states or 'pin' not in states[light_id]:
         logger.warning(f"Invalid light_id or no pin for ramp: {light_id}")
         return
+    if states[light_id].get('locked', False):
+        logger.warning(f"Ignoring ramp_brightness for locked light {light_id}")
+        return
     state = states[light_id]
     pwm_value = calculate_pwm(target)
     arduino.ramp_pwm(state['pin'], pwm_value, ramp_rate_ms)
     state['brightness'] = target
+    logger.debug(f"Emitting 'brightness_ramp_start' to all with data: {{'light_id': {light_id}, 'target_brightness': {target}, 'ramp_duration': {ramp_rate_ms}}}")
     socketio.emit('brightness_ramp_start', {'light_id': light_id, 'target_brightness': target, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
     update_active_scene()
     logger.debug(f"Ramping brightness for light {light_id} to {target}")
+
 def apply_settings(settings, duration_sec):
     duration_ms = duration_sec * 1000
     future_states = {k: v.copy() for k, v in states.items()}
     for light_id_str, target in settings.items():
         light_id = int(light_id_str)
         if light_id not in states:
+            continue
+        if states[light_id].get('locked', False):
             continue
         state = states[light_id]
         future_state = future_states[light_id]
@@ -431,7 +499,7 @@ def apply_settings(settings, duration_sec):
         else:
             target_brightness = target
             target_color = None  # For non-color lights
-        pwm_value = calculate_pwm(target_brightness)
+        pwm_value = calculate_pwm(target_brightness, target_color or state.get('active'))
         if 'pin' in state:
             arduino.ramp_pwm(state['pin'], pwm_value, duration_ms)
         else:
@@ -461,6 +529,7 @@ def apply_settings(settings, duration_sec):
         future_state['brightness'] = target_brightness
     # Prepare response with future states
     response_states = {str(k): {'brightness': future_states[k]['brightness'], 'active': future_states[k].get('active', None)} for k in future_states}
+    logger.debug(f"Broadcasting 'scene_ramp_start' with data: {{'states': {response_states}, 'ramp_duration': {duration_ms}}}")
     socketio.emit('scene_ramp_start', {'states': response_states, 'ramp_duration': duration_ms})
     def apply_after_ramp():
         for light_id_str in settings:
@@ -472,9 +541,7 @@ def apply_settings(settings, duration_sec):
         update_active_scene()
     # Schedule apply after ramp
     threading.Timer(duration_sec + 0.5, apply_after_ramp).start()
-@socketio.on('apply_scene')
-def handle_apply_scene(data):
-    scene_id = data['scene_id']
+def apply_scene(scene_id):
     scenes = static_config.get('scenes', {})
     if scene_id not in scenes:
         logger.warning(f"Invalid scene_id: {scene_id}")
@@ -482,20 +549,28 @@ def handle_apply_scene(data):
     scene = scenes[scene_id]
     apply_settings(scene, scene_ramp_rate)
     logger.info(f"Applied scene: {scene_id}")
+@socketio.on('apply_scene')
+def handle_apply_scene(data):
+    logger.debug(f"Received 'apply_scene' with data: {data}")
+    scene_id = data['scene_id']
+    apply_scene(scene_id)
 @socketio.on('set_relay')
 def handle_set_relay(data):
+    logger.debug(f"Received 'set_relay' with data: {data}")
     name = data['name']
     state = data['state']
     gpio.set_relay(name, state)
     logger.debug(f"Set relay {name} to {state}")
 @socketio.on('set_setting')
 def handle_set_setting(data):
+    logger.debug(f"Received 'set_setting' with data: {data}")
     key = data['key']
     value = data['value']
     config_manager.set(key, value)
     if key == 'gamma':
         global gamma
         gamma = value
+    logger.debug(f"Broadcasting 'update_settings' with data: {config_manager.config}")
     socketio.emit('update_settings', config_manager.config)
     if key in ['sunrise_offset', 'evening_offset', 'night_time']:
         broadcast_gps({})
@@ -504,11 +579,16 @@ def handle_set_setting(data):
         if current_phase:
             brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(current_phase)
             if brightness_level:
-                for screen_name in screens_config:
-                    set_screen_brightness(screen_name, brightness_level)
+                for s_name in screens_config:
+                    set_screen_brightness(s_name, brightness_level)
+                    current_screen_levels[s_name] = brightness_level
+                    if s_name in screen_sids:
+                        logger.debug(f"Emitting 'update_brightness_level' to sid {screen_sids[s_name]} with data: {{'level': {brightness_level}}}")
+                        socketio.emit('update_brightness_level', {'level': brightness_level}, to=screen_sids[s_name])
     logger.debug(f"Set setting {key} to {value}")
 @socketio.on('set_brightness_level')
 def handle_set_brightness_level(data):
+    logger.debug(f"Received 'set_brightness_level' with data: {data}")
     level = data.get('level')
     if level not in ['low', 'medium', 'high']:
         logger.warning(f"Invalid brightness level: {level}")
@@ -521,6 +601,7 @@ def handle_set_brightness_level(data):
             break
     if screen_name:
         set_screen_brightness(screen_name, level)
+        current_screen_levels[screen_name] = level
     else:
         logger.warning(f"No screen found for IP: {remote_addr}")
 def time_update_loop():
@@ -577,19 +658,19 @@ def power_update_loop():
     alpha = 0.3  # EMA smoothing factor, adjust as needed (0.1-0.5)
     while True:
         time_module.sleep(1)
-        vcc_samples = []
-        for _ in range(3):  # Fewer samples for VCC since it's usually stable
-            vcc = arduino.get_vcc()
-            if vcc is not None:
-                vcc_samples.append(vcc)
-            time_module.sleep(0.01)
-        vcc_mv = statistics.median(vcc_samples) if vcc_samples else None
-        if vcc_mv is not None and not (4000 <= vcc_mv <= 6000):
-            vcc_mv = None
-            logger.warning(f"Invalid VCC reading: {vcc_mv}")
-        vref = vcc_mv / 1000.0 if vcc_mv else 5.0
-        voltage_raw = get_averaged_analog(0)
+        vcc_mv, voltage_raw, water_raw, solar_raw = arduino.get_all_analogs_and_vcc()
+        
         battery_voltage = last_battery_voltage
+        water_pct = last_water_pct
+        solar_current = last_solar_current
+        
+        if vcc_mv is not None and 4000 <= vcc_mv <= 6000:
+            vref = vcc_mv / 1000.0
+        else:
+            vref = 5.0
+            if vcc_mv is not None:
+                logger.warning(f"Invalid VCC reading: {vcc_mv}")
+        
         if voltage_raw is not None:
             v_a0 = voltage_raw * vref / 1023.0
             new_battery_voltage = round(v_a0 * 5, 1)
@@ -598,9 +679,7 @@ def power_update_loop():
             last_battery_voltage = battery_voltage
         else:
             logger.warning("Failed to read battery analog")
-        battery_pct = voltage_to_soc(battery_voltage) if battery_voltage is not None else None
-        water_raw = get_averaged_analog(1)
-        water_pct = last_water_pct
+        
         if water_raw is not None:
             v_a1 = water_raw * vref / 1023.0
             if abs(vref - v_a1) > 0.01:
@@ -614,8 +693,7 @@ def power_update_loop():
                 water_pct = 0
         else:
             logger.warning("Failed to read water analog")
-        solar_raw = get_averaged_analog(2)
-        new_solar_current = None
+        
         if solar_raw is not None:
             v_a2 = solar_raw * vref / 1023.0
             ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5326, 'sensitivity': 0.0125})
@@ -623,18 +701,21 @@ def power_update_loop():
             sensitivity = ct_solar['sensitivity']
             new_solar_current = (v_a2 - zero_offset) / sensitivity
             new_solar_current = max(0, new_solar_current)
-        else:
-            logger.warning("Failed to read solar analog")
-        if new_solar_current is not None:
             solar_current = alpha * new_solar_current + (1 - alpha) * last_solar_current if last_solar_current is not None else new_solar_current
             solar_current = round(solar_current, 1)
             last_solar_current = solar_current
         else:
-            solar_current = last_solar_current
+            logger.warning("Failed to read solar analog")
+        
         # Add detailed logging for debugging
-        logger.debug(f"Raw analogs: A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
-        socketio.emit('update_power', {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase})
+        logger.debug(f"Raw values: VCC={vcc_mv if vcc_mv is not None else 'None'}, A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
+        
+        battery_pct = voltage_to_soc(battery_voltage) if battery_voltage is not None else None
+        power_data = {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase}
+        logger.debug(f"Broadcasting 'update_power' with data: {power_data}")
+        socketio.emit('update_power', power_data)
         logger.debug(f"Power update: battery={battery_voltage}, battery_pct={battery_pct}, water={water_pct}, solar={solar_current}, phase={phase_manager.current_phase}")
+
 def set_screen_brightness(screen_name, level):
     if screen_name not in screens_config:
         logger.warning(f"Unknown screen {screen_name}")
@@ -653,7 +734,7 @@ def set_screen_brightness(screen_name, level):
         logger.info(f"Set {screen_name} brightness to {level} ({value})")
     else:
         logger.error(f"Failed to set {screen_name} brightness, code {result}")
-phase_manager = PhaseManager(config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config)
+phase_manager = PhaseManager(config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, set_screen_brightness, current_screen_levels, screen_sids)
 def apply_reed_settings(settings):
     # Convert reed phase setting to settings dict
     channel_str = str(settings['channel'])
@@ -670,13 +751,50 @@ state_queue = queue.Queue()
 def process_state_updates():
     while True:
         reed_id, state = state_queue.get()
+        logger.debug(f"Broadcasting 'update_reed_state' with data: {{'reed_id': {reed_id}, 'state': {state}}}")
         socketio.emit('update_reed_state', {'reed_id': reed_id, 'state': state})
 socketio.start_background_task(process_state_updates)
 def broadcast_reed_state(reed_id, state):
     state_queue.put((reed_id, state))
+def set_light_locked(light_id, locked):
+    if light_id in states:
+        states[light_id]['locked'] = locked
+        broadcast_states()
 reeds_config = static_config.get('reeds', {})
-reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state)
+reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state, on_lock=set_light_locked)
 phase_manager.set_reeds_controller(reeds_controller)
+def auto_wake_screen(screen_name):
+    current_phase = phase_manager.current_phase
+    level_map = {'day': 'high', 'evening': 'medium', 'night': 'low'}
+    level = level_map.get(current_phase, 'medium')
+    set_screen_brightness(screen_name, level)
+    current_screen_levels[screen_name] = level
+    if screen_name in screen_sids:
+        socketio.emit('update_brightness_level', {'level': level}, to=screen_sids[screen_name])
+
+def sleep_screen(screen_name):
+    conf = screens_config[screen_name]
+    ip = conf['ip']
+    path = conf['brightness_path']
+    username = 'pi'
+    cmd = f"ssh {username}@{ip} \"echo 0 > {path}\""
+    result = os.system(cmd)
+    if result == 0:
+        logger.info(f"Slept screen {screen_name}")
+    else:
+        logger.error(f"Failed to sleep screen {screen_name}, code {result}")
+    current_screen_levels[screen_name] = 'off'
+    if screen_name in screen_sids:
+        socketio.emit('update_brightness_level', {'level': 'off'}, to=screen_sids[screen_name])
+action_handlers = {
+    'apply_scene': apply_scene,
+    'auto_wake_screen': auto_wake_screen,
+    'sleep_screen': sleep_screen
+}
+rules_engine = RulesEngine('rules.json', phase_manager, reeds_controller, get_computed_dt, action_handlers)
+reeds_controller.set_rules_engine(rules_engine)
+phase_manager.set_rules_engine(rules_engine)
+rules_engine.evaluate_on_startup()
 @app.route('/phases')
 def show_phases():
     try:
@@ -703,7 +821,7 @@ def show_phases():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sun Phases</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
     <script>
         var socket = io();
         socket.on('update_gps', function(data) {{
@@ -752,7 +870,7 @@ def show_reeds():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reed Switch States</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
     <script>
         var socket = io();
         socket.on('update_reed_state', function(data) {
@@ -796,4 +914,5 @@ if __name__ == '__main__':
     threading.Thread(target=power_update_loop, daemon=True).start()
     phase_manager.start()
     socketio.run(app, debug=True, use_reloader=False, host='0.0.0.0', allow_unsafe_werkzeug=True)
+    reeds_controller.stop_polling()
     logger.info("Application shutdown")

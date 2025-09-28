@@ -1,0 +1,164 @@
+[
+  {
+    "id": "evening_start_with_open_panel",
+    "trigger": "phase_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_phase": "evening"
+        },
+        {
+          "or": [
+            {
+              "reed_open": "kitchen_panel"
+            },
+            {
+              "reed_open": "storage_panel"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "apply_scene": "evening"
+      }
+    ],
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "panel_open_in_evening",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Open"
+        },
+        {
+          "reed_id": [
+            "kitchen_panel",
+            "storage_panel"
+          ]
+        },
+        {
+          "phase": "evening"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "apply_scene": "evening"
+      }
+    ],
+    "once_per_day": true,
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "night_start_with_open_panel",
+    "trigger": "phase_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_phase": "night"
+        },
+        {
+          "or": [
+            {
+              "reed_open": "kitchen_panel"
+            },
+            {
+              "reed_open": "storage_panel"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "apply_scene": "night"
+      }
+    ],
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "panel_open_in_night",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Open"
+        },
+        {
+          "reed_id": [
+            "kitchen_panel",
+            "storage_panel"
+          ]
+        },
+        {
+          "phase": "night"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "apply_scene": "night"
+      }
+    ],
+    "once_per_day": true,
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "kitchen_panel_open_wake_screen",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Open"
+        },
+        {
+          "reed_id": "kitchen_panel"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "auto_wake_screen": "kitchen"
+      }
+    ],
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "kitchen_panel_close_sleep_screen",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Closed"
+        },
+        {
+          "reed_id": "kitchen_panel"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "sleep_screen": "kitchen"
+      }
+    ],
+    "evaluate_on_startup": true
+  },
+  {
+    "id": "all_off_after_sunrise",
+    "trigger": "time_event",
+    "conditions": {
+      "event_type": "all_off_after_sunrise"
+    },
+    "actions": [
+      {
+        "apply_scene": "all off"
+      }
+    ],
+    "once_per_day": true,
+    "evaluate_on_startup": false
+  }
+]
