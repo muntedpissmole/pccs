@@ -364,8 +364,21 @@
                             <label>Shutdown System</label>
                             <p class="description">Turn off the control system and touchscreens.</p>
                         </div>
-                        <button class="shutdown-btn" onclick="alert('Shutting down the system...');">Shutdown</button>
+                        <button class="shutdown-btn">Shutdown</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shutdown-confirm-modal">
+        <div class="modal-content">
+            <div class="modal-body">
+                <h2>Confirm Shutdown</h2>
+                <p>Are you sure you want to shut down the system? This will turn off kitchen-pi, tent-pi, and control-pi.</p>
+                <div class="confirm-buttons">
+                    <button class="confirm-btn no">No</button>
+                    <button class="confirm-btn yes">Yes</button>
                 </div>
             </div>
         </div>

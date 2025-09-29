@@ -247,7 +247,7 @@ const sceneBtns = document.querySelectorAll('.scene-btn');
 sceneBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         sceneBtns.forEach(b => b.classList.remove('active'));
-
+        btn.classList.add('active');
         const sceneId = btn.dataset.sceneId;
         if (sceneId) {
             lightControls.forEach(lockControl);
@@ -282,6 +282,29 @@ function closeSettings() {
 document.getElementById('settings-modal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('settings-modal')) {
         closeSettings();
+    }
+});
+
+// Shutdown button
+document.querySelector('.shutdown-btn').addEventListener('click', () => {
+    document.getElementById('shutdown-confirm-modal').style.display = 'flex';
+});
+
+// Shutdown confirm modal
+document.querySelector('.confirm-btn.no').addEventListener('click', () => {
+    document.getElementById('shutdown-confirm-modal').style.display = 'none';
+});
+
+document.querySelector('.confirm-btn.yes').addEventListener('click', () => {
+    document.getElementById('shutdown-confirm-modal').style.display = 'none';
+    showToast('Shutting down the system...', 'warning');
+    console.log('Emitting shutdown_system');
+    socket.emit('shutdown_system');
+});
+
+document.getElementById('shutdown-confirm-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('shutdown-confirm-modal')) {
+        document.getElementById('shutdown-confirm-modal').style.display = 'none';
     }
 });
 
@@ -320,11 +343,10 @@ const condition = document.getElementById('condition');
 const minMax = document.getElementById('min-max');
 const humidity = document.getElementById('humidity');
 
-// Sync states from backend via WebSocket
 socket.on('update_states', (states) => {
     console.log('Received update_states', states);
     lightControls.forEach(control => {
-        if (control.classList.contains('locked') || control.classList.contains('sync-lock')) return; // Skip if locked or syncing
+        if (control.classList.contains('sync-lock')) return; // Skip if syncing
         const lightId = control.dataset.lightId;
         const targetState = states[lightId];
         if (!targetState) return;
@@ -617,6 +639,16 @@ socket.on('update_sensors', (data) => {
 socket.on('update_reed_state', (data) => {
     console.log('Received update_reed_state', data);
     // Handle if needed in main page, but it's for /reeds
+});
+
+socket.on('update_brightness_level', (data) => {
+    console.log('Received update_brightness_level', data);
+    const level = data.level;
+    brightnessBtns.forEach(b => b.classList.remove('active'));
+    if (level !== 'off') {
+        const btn = document.querySelector(`#brightness-${level}`);
+        if (btn) btn.classList.add('active');
+    }
 });
 
 let isFirstConnect = true;

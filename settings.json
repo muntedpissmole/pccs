@@ -1,5 +1,5 @@
 {
-    "dark_mode": false,
+    "dark_mode": true,
     "auto_theme": true,
     "auto_brightness": true,
     "evening_offset": "-30 mins",

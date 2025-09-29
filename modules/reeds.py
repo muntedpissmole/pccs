@@ -88,6 +88,8 @@ class ReedsController:
                         unique_channels.add(pd['channel'])
             for ch in unique_channels:
                 self.on_lock(ch, False)
+        if self.rules_engine:
+            self.rules_engine.on_reed_state_change(reed_id, 'Open')
         if phase not in self.config[reed_id]:
             logger.warning(f"No action for reed {reed_id} in phase {phase} - phase not in config")
             return  # No action for this phase
@@ -97,8 +99,6 @@ class ReedsController:
             return  # Invalid config; channel required
         logger.info(f"Triggering on_trigger for reed {reed_id} in phase {phase} with settings: {settings}")
         self.on_trigger(settings)
-        if self.rules_engine:
-            self.rules_engine.on_reed_state_change(reed_id, 'Open')
 
     def handle_close(self, reed_id):
         logger.debug(f"handle_close called for reed {reed_id}")

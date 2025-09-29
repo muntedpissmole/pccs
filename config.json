@@ -89,7 +89,7 @@
   "reeds": {
     "kitchen_panel": {
       "pin": 23,
-      "day": {"channel": 1, "brightness": 100, "color": "white"},
+      "day": {},
       "evening": {"channel": 1, "brightness": 40, "color": "white"},
       "night": {"channel": 1, "brightness": 10, "color": "red"}
     },

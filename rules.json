@@ -14,6 +14,9 @@
             },
             {
               "reed_open": "storage_panel"
+            },
+            {
+              "reed_open": "rooftop_tent"
             }
           ]
         }
@@ -24,7 +27,8 @@
         "apply_scene": "evening"
       }
     ],
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "Phase changed to evening with at least one panel (kitchen, storage, or rooftop tent) open. Applying evening lighting scene."
   },
   {
     "id": "panel_open_in_evening",
@@ -37,7 +41,8 @@
         {
           "reed_id": [
             "kitchen_panel",
-            "storage_panel"
+            "storage_panel",
+            "rooftop_tent"
           ]
         },
         {
@@ -51,7 +56,8 @@
       }
     ],
     "once_per_day": true,
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "A panel (kitchen, storage, or rooftop tent) opened during evening phase. Applying evening lighting scene."
   },
   {
     "id": "night_start_with_open_panel",
@@ -68,6 +74,9 @@
             },
             {
               "reed_open": "storage_panel"
+            },
+            {
+              "reed_open": "rooftop_tent"
             }
           ]
         }
@@ -78,7 +87,8 @@
         "apply_scene": "night"
       }
     ],
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "Phase changed to night with at least one panel (kitchen, storage, or rooftop tent) open. Applying night lighting scene."
   },
   {
     "id": "panel_open_in_night",
@@ -91,7 +101,8 @@
         {
           "reed_id": [
             "kitchen_panel",
-            "storage_panel"
+            "storage_panel",
+            "rooftop_tent"
           ]
         },
         {
@@ -105,7 +116,8 @@
       }
     ],
     "once_per_day": true,
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "A panel (kitchen, storage, or rooftop tent) opened during night phase. Applying night lighting scene."
   },
   {
     "id": "kitchen_panel_open_wake_screen",
@@ -125,7 +137,8 @@
         "auto_wake_screen": "kitchen"
       }
     ],
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "Kitchen panel opened. Waking up the kitchen screen automatically."
   },
   {
     "id": "kitchen_panel_close_sleep_screen",
@@ -145,7 +158,53 @@
         "sleep_screen": "kitchen"
       }
     ],
-    "evaluate_on_startup": true
+    "evaluate_on_startup": true,
+    "description": "Kitchen panel closed. Putting the kitchen screen to sleep."
+  },
+  {
+    "id": "tent_reed_open_wake_screen",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Open"
+        },
+        {
+          "reed_id": "rooftop_tent"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "auto_wake_screen": "tent"
+      }
+    ],
+    "evaluate_on_startup": true,
+    "description": "Rooftop tent opened. Waking up the tent screen automatically."
+  },
+  {
+    "id": "tent_reed_close_sleep_screen",
+    "trigger": "reed_state_changed",
+    "conditions": {
+      "and": [
+        {
+          "new_state": "Closed"
+        },
+        {
+          "reed_id": "rooftop_tent"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "sleep_screen": "tent"
+      },
+      {
+        "apply_scene": "all off"
+      }
+    ],
+    "evaluate_on_startup": true,
+    "description": "Rooftop tent closed. Turning off all lighting and putting the tent screen to sleep for safety—preventing lights and electronics from being pressed against flammable canvas and bedding."
   },
   {
     "id": "all_off_after_sunrise",
@@ -159,6 +218,7 @@
       }
     ],
     "once_per_day": true,
-    "evaluate_on_startup": false
+    "evaluate_on_startup": false,
+    "description": "Time event after sunrise. Applying 'all off' scene to turn off all lights."
   }
 ]

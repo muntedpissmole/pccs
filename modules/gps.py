@@ -1,4 +1,4 @@
-# modules/gps.py
+# modules.gps.py
 import serial
 import pynmea2
 import threading
@@ -56,29 +56,30 @@ class GPSController:
         threading.Thread(target=self._update_thread, daemon=True).start()
 
     def update(self):
-        line = self.ser.readline().decode('ascii', errors='replace').strip()
-        if line.startswith('$'):
-            try:
-                msg = pynmea2.parse(line)
-                if isinstance(msg, pynmea2.types.talker.GGA):
-                    self.fix = msg.gps_qual and int(msg.gps_qual) > 0
-                    if self.fix:
-                        self.lat = msg.latitude
-                        self.lon = msg.longitude
-                        self.sats = int(msg.num_sats)
-                    else:
-                        self.lat = None
-                        self.lon = None
-                        self.sats = 0
-                elif isinstance(msg, pynmea2.types.talker.RMC):
-                    if msg.status == 'A':
-                        self.utc_time = msg.timestamp
-                        self.date = msg.datestamp
-                    else:
-                        self.utc_time = None
-                        self.date = None
-            except pynmea2.ParseError as e:
-                logger.debug(f"GPS parse error: {e}")
+        while self.ser.in_waiting > 0:
+            line = self.ser.readline().decode('ascii', errors='replace').strip()
+            if line.startswith('$'):
+                try:
+                    msg = pynmea2.parse(line)
+                    if isinstance(msg, pynmea2.types.talker.GGA):
+                        self.fix = msg.gps_qual and int(msg.gps_qual) > 0
+                        if self.fix:
+                            self.lat = msg.latitude
+                            self.lon = msg.longitude
+                            self.sats = int(msg.num_sats)
+                        else:
+                            self.lat = None
+                            self.lon = None
+                            self.sats = 0
+                    elif isinstance(msg, pynmea2.types.talker.RMC):
+                        if msg.status == 'A':
+                            self.utc_time = msg.timestamp
+                            self.date = msg.datestamp
+                        else:
+                            self.utc_time = None
+                            self.date = None
+                except pynmea2.ParseError as e:
+                    logger.debug(f"GPS parse error: {e}")
 
     def _update_thread(self):
         while True:
@@ -114,35 +115,51 @@ class GPSController:
                                 location_res.raw['address'].get('town') or
                                 location_res.raw['address'].get('city') or
                                 location_res.raw['address'].get('village') or
-                                location_res.raw['address'].get('village') or
                                 location_res.raw['address'].get('hamlet') or
                                 'Unknown'
                             )
                             self.cached_town = town
                             logger.debug(f"Geolocation: {town}")
+
+                            # Get state for timezone mapping (Australia-specific)
+                            state = location_res.raw['address'].get('state')
+                            country = location_res.raw['address'].get('country')
+                            if country == 'Australia' and state:
+                                australian_state_to_tz = {
+                                    'Victoria': 'Australia/Melbourne',
+                                    'New South Wales': 'Australia/Sydney',
+                                    'Queensland': 'Australia/Brisbane',
+                                    'South Australia': 'Australia/Adelaide',
+                                    'Western Australia': 'Australia/Perth',
+                                    'Tasmania': 'Australia/Hobart',
+                                    'Northern Territory': 'Australia/Darwin',
+                                    'Australian Capital Territory': 'Australia/Canberra',
+                                }
+                                tz_str = australian_state_to_tz.get(state)
+                                if tz_str:
+                                    logger.debug(f"Using state-based timezone for {state}: {tz_str}")
+                                else:
+                                    raise ValueError(f"No timezone mapping for state: {state}")
+                            else:
+                                # Fallback to TimezoneFinder for non-Australia or missing state
+                                tz_str = self.tf.timezone_at(lng=lon, lat=lat)
+                                if tz_str is None:
+                                    raise ValueError("No timezone found")
+
+                            self.cached_tz_str = tz_str
                             self.last_geo_time = current_time
                         except Exception as e:
                             town = self.cached_town
-                            geo_failed = True
-                            logger.error(f"Geolocation failed: {e}")
+                            tz_str = self.cached_tz_str
+                            geo_failed = True if 'geolocation' in str(e).lower() else self.previous_geo_failed
+                            tz_failed = True if 'timezone' in str(e).lower() else self.previous_tz_failed
+                            logger.error(f"Geolocation or timezone failed: {e}")
                     else:
                         town = self.cached_town
+                        tz_str = self.cached_tz_str
                     using_gps_time = self.utc_time is not None and self.date is not None
                     now = dt_module.datetime.utcnow()
                     utc_dt = dt_module.datetime.combine(self.date, self.utc_time) if using_gps_time else now
-                    # Timezone and sun calculations can be updated if position changed or hourly
-                    if position_changed or (current_time - self.last_geo_time > 3600):
-                        try:
-                            tz_str = self.tf.timezone_at(lng=lon, lat=lat)
-                            if tz_str is None:
-                                raise ValueError("No timezone found")
-                            self.cached_tz_str = tz_str
-                        except Exception as e:
-                            tz_str = self.cached_tz_str
-                            tz_failed = True
-                            logger.error(f"Timezone lookup failed: {e}")
-                    else:
-                        tz_str = self.cached_tz_str
                     tz = pytz.timezone(tz_str)
                     local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(tz)
                     gps_datetime_str = local_dt.strftime('%Y-%m-%d %H:%M:%S')

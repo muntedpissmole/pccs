@@ -1,4 +1,3 @@
-# app.py
 import json
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
@@ -17,7 +16,7 @@ import flask
 if not os.path.exists('logs'):
     os.makedirs('logs')
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -140,7 +139,12 @@ def validate_static_config(config):
         for light_id_str, setting in scene_data.items():
             if not light_id_str.isdigit():
                 raise ValueError(f"Light ID '{light_id_str}' in scene '{scene_name}' must be a digit string")
+            light_data = config['lights'].get(light_id_str)
+            if light_data is None:
+                raise ValueError(f"Light ID '{light_id_str}' in scene '{scene_name}' not defined in lights")
             if isinstance(setting, dict):
+                if 'pin' in light_data:
+                    raise ValueError(f"Dict setting with color for mono light '{light_id_str}' in scene '{scene_name}'")
                 if 'brightness' not in setting or not isinstance(setting['brightness'], (int, float)):
                     raise ValueError(f"Invalid or missing 'brightness' in setting for light '{light_id_str}' in scene '{scene_name}'")
                 if 'color' not in setting or not isinstance(setting['color'], str) or setting['color'] not in allowed_colors:
@@ -293,27 +297,40 @@ def broadcast_states():
     socketio.emit('update_states', response_states)
 def find_matching_scene():
     scenes = static_config.get('scenes', {})
+    logger.debug(f"Broadcasting current states for matching: { {str(k): {'brightness': v['brightness'], 'active': v.get('active'), 'locked': v.get('locked', False)} for k, v in states.items()} }")
     for scene_id, scene in scenes.items():
+        logger.debug(f"Checking scene '{scene_id}' with config: {scene}")
         match = True
         for light_id_str, target in scene.items():
             light_id = int(light_id_str)
             if light_id not in states:
                 match = False
+                logger.debug(f"No state for light {light_id} in scene '{scene_id}'")
                 break
             state = states[light_id]
+            if state.get('locked', False):
+                logger.debug(f"Skipping check for locked light {light_id} in scene '{scene_id}'")
+                continue
             if isinstance(target, dict):
                 if 'brightness' not in target or 'color' not in target:
                     match = False
+                    logger.debug(f"Invalid target dict for light {light_id} in scene '{scene_id}'")
                     break
-                if state['brightness'] != target['brightness'] or (target['brightness'] > 0 and state['active'] != target['color']):
+                brightness_match = state['brightness'] == target['brightness']
+                color_match = target['brightness'] <= 0 or state.get('active') == target['color']
+                if not brightness_match or not color_match:
                     match = False
+                    logger.debug(f"Mismatch for light {light_id} in scene '{scene_id}': brightness {state['brightness']} vs {target['brightness']}, color {state.get('active')} vs {target.get('color') if target['brightness'] > 0 else 'ignored'}")
                     break
             else:
                 if state['brightness'] != target:
                     match = False
+                    logger.debug(f"Brightness mismatch for light {light_id} in scene '{scene_id}': {state['brightness']} vs {target}")
                     break
         if match:
+            logger.debug(f"Matched scene: '{scene_id}'")
             return scene_id
+    logger.debug("No matching scene found")
     return None
 def update_active_scene():
     matching_scene = find_matching_scene()
@@ -623,9 +640,7 @@ def voltage_to_soc(voltage):
         (13.1, 70),
         (13.2, 80),
         (13.3, 90),
-        (13.5, 99),
-        (13.8, 99.5),
-        (14.6, 100),
+        (13.5, 100),  # Updated to 100% at 13.5V
     ]
     if voltage <= soc_table[0][0]:
         return 0
@@ -673,9 +688,9 @@ def power_update_loop():
         
         if voltage_raw is not None:
             v_a0 = voltage_raw * vref / 1023.0
-            new_battery_voltage = round(v_a0 * 5, 1)
-            battery_voltage = alpha * new_battery_voltage + (1 - alpha) * last_battery_voltage if last_battery_voltage is not None else new_battery_voltage
-            battery_voltage = round(battery_voltage, 1)
+            new_battery_voltage = round(v_a0 * 5.199, 1)  # Adjusted divider ratio slightly lower
+            logger.info(f"Raw A0: {voltage_raw:.2f}, VCC: {vcc_mv}mV, vref: {vref:.2f}V, v_a0: {v_a0:.2f}V, Battery: {new_battery_voltage:.1f}V")
+            battery_voltage = new_battery_voltage  # Bypass EMA for testing
             last_battery_voltage = battery_voltage
         else:
             logger.warning("Failed to read battery analog")
@@ -905,6 +920,21 @@ def show_reeds():
     except Exception as e:
         logger.error(f"Error generating reeds page: {e}")
         return f"Error generating reeds page: {str(e)}", 500
+
+@socketio.on('shutdown_system')
+def handle_shutdown_system():
+    logger.info("Received shutdown_system request")
+    username = 'pi'
+    for screen_name, conf in screens_config.items():
+        ip = conf['ip']
+        cmd = f"ssh {username}@{ip} 'sudo shutdown -h now'"
+        result = os.system(cmd)
+        if result == 0:
+            logger.info(f"Shutdown initiated for {screen_name} at {ip}")
+        else:
+            logger.error(f"Failed to shutdown {screen_name} at {ip}, code {result}")
+    # Shutdown local
+    os.system("sudo shutdown -h now")
 
 if __name__ == '__main__':
     logger.info("Starting application")

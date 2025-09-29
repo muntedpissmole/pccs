@@ -551,7 +551,8 @@ select.night-time,
     cursor: default !important;
 }
 
-#settings-modal {
+#settings-modal,
+#shutdown-confirm-modal {
     position: fixed;
     top: 0;
     left: 0;
@@ -563,6 +564,10 @@ select.night-time,
     justify-content: center;
     align-items: center;
     z-index: 1000;
+}
+
+#shutdown-confirm-modal .modal-content {
+    width: 600px;
 }
 
 .modal-content {
@@ -710,4 +715,44 @@ select.night-time,
 
 .resultant-time {
     margin-left: 5px;
+}
+
+h2 {
+    font-size: 24px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.modal-body p {
+    font-size: 16px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.confirm-btn {
+    background: var(--control-bg);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 30px;
+    box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--text-color);
+    transition: box-shadow 0.2s, background 0.3s, color 0.3s;
+    font-family: 'Poppins', sans-serif;
+}
+
+.confirm-btn.yes {
+    background: var(--error-color-light);
+    color: #fff;
+}
+
+.confirm-btn:active {
+    box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
 }
