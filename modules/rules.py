@@ -6,11 +6,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class RulesEngine:
-    def __init__(self, rules_file, phase_manager, reeds_controller, get_computed_dt, action_handlers):
+    def __init__(self, rules_file, phase_manager, reeds_controller, get_computed_dt, action_handlers, on_rule_fired=None):
         self.phase_manager = phase_manager
         self.reeds_controller = reeds_controller
         self.get_computed_dt = get_computed_dt
         self.action_handlers = action_handlers
+        self.on_rule_fired = on_rule_fired
         self.last_execution = {}
         self.rules = []
         try:
@@ -100,6 +101,8 @@ class RulesEngine:
                     continue
             if 'conditions' in rule and not self.evaluate_condition(rule['conditions'], context):
                 continue
+            if self.on_rule_fired:
+                self.on_rule_fired(rule)
             self.execute_actions(rule.get('actions', []))
             if rule.get('once_per_day', False):
                 self.last_execution[rule_id] = current_dt
@@ -139,6 +142,8 @@ class RulesEngine:
                 logger.debug(f"Skipping unknown trigger {trigger} on startup")
                 continue
             if satisfied:
+                if self.on_rule_fired:
+                    self.on_rule_fired(rule)
                 self.execute_actions(rule.get('actions', []))
                 if rule.get('once_per_day', False):
                     self.last_execution[rule_id] = current_dt
