@@ -209,6 +209,11 @@ body {
     pointer-events: none;
 }
 
+.control.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
 .control.red-mode {
     --fill-color: var(--error-color);
     --thumb-border-color: var(--error-color);
@@ -690,10 +695,11 @@ select.night-time,
 }
 
 .description {
-    font-size: 12px;
+    font-size: 8px;
     color: var(--text-color);
     opacity: 0.7;
     margin: 0;
+    text-align: left;
 }
 
 .setting-header {
@@ -724,8 +730,8 @@ h2 {
 }
 
 .modal-body p {
-    font-size: 16px;
-    text-align: center;
+    font-size: 12px;
+    text-align: left;
     margin-bottom: 20px;
 }
 

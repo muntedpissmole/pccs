@@ -180,9 +180,7 @@ lightControls.forEach((control, index) => {
 
     if (slider) {
         slider.addEventListener('input', (e) => {
-            if (control.classList.contains('locked')) return;
-            const sceneBtns = document.querySelectorAll('.scene-btn');
-            sceneBtns.forEach(b => b.classList.remove('active'));
+            if (control.classList.contains('locked') || control.classList.contains('disabled')) return;
             sendBrightness(lightId, parseInt(e.target.value));
         });
 
@@ -194,11 +192,7 @@ lightControls.forEach((control, index) => {
 
     if (toggle) {
         toggle.addEventListener('change', () => {
-            if (control.classList.contains('locked')) return;
-            if (!(isColorToggle && slider.value === '0')) {
-                const sceneBtns = document.querySelectorAll('.scene-btn');
-                sceneBtns.forEach(b => b.classList.remove('active'));
-            }
+            if (control.classList.contains('locked') || control.classList.contains('disabled')) return;
             if (isColorToggle) {
                 // Optimistic update
                 const colorLabel = control.querySelector('.color-label');
@@ -380,30 +374,28 @@ socket.on('update_states', (states) => {
         }
 
         if (targetState.locked) {
-            lockControl(control);
+            control.classList.add('locked');
         } else {
-            unlockControl(control);
+            control.classList.remove('locked');
+        }
+
+        if (targetState.reed_locked) {
+            control.classList.add('disabled');
+        } else {
+            control.classList.remove('disabled');
         }
     });
 });
 
-socket.on('ramp_start', (data) => {
-    console.log('Received ramp_start', data);
-    const { light_id, ramp_duration } = data;
-    const control = lightControls.find(c => parseInt(c.dataset.lightId) === light_id);
-    if (control) {
-        setTimeout(() => {
-            unlockControl(control);
-        }, ramp_duration + 100);
-    }
-});
+// Remove ramp_start since handled by state
+// socket.on('ramp_start', ...); remove
 
 socket.on('brightness_ramp_start', (data) => {
     console.log('Received brightness_ramp_start', data);
     const { light_id, target_brightness, ramp_duration } = data;
     const control = lightControls.find(c => parseInt(c.dataset.lightId) === light_id);
     if (!control) return;
-    lockControl(control);
+    // lockControl(control); removed, handled by state
 
     const slider = control.querySelector('input[type="range"]');
     const percentage = control.querySelector('.percentage');
@@ -431,7 +423,7 @@ socket.on('brightness_ramp_start', (data) => {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            unlockControl(control);
+            // unlockControl(control); removed
             control.classList.remove('ramping');
         }
     }
@@ -497,9 +489,7 @@ socket.on('scene_ramp_start', (data) => {
 
         requestAnimationFrame(animate);
     });
-    setTimeout(() => {
-        lightControls.forEach(unlockControl);
-    }, data.ramp_duration + 100);
+    // No need for setTimeout unlock, handled by server
 });
 
 socket.on('set_active_scene', (data) => {

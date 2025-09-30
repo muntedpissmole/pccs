@@ -265,7 +265,7 @@ screen_sids = {}
 states = {}
 for lid_str, lconf in lights_config.items():
     lid = int(lid_str)
-    state = {'brightness': 0, 'locked': False}
+    state = {'brightness': 0, 'locked': False, 'reed_locked': False}
     if 'pin' in lconf:
         state['pin'] = lconf['pin']
     else:
@@ -292,7 +292,7 @@ def calculate_pwm(brightness, active_color=None):
     normalized = brightness / 100.0
     return int(normalized * 255)
 def broadcast_states():
-    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False)} for k, v in states.items()}
+    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False), 'reed_locked': v.get('reed_locked', False)} for k, v in states.items()}
     logger.debug(f"Broadcasting 'update_states' with data: {response_states}")
     socketio.emit('update_states', response_states)
 def find_matching_scene():
@@ -308,7 +308,7 @@ def find_matching_scene():
                 logger.debug(f"No state for light {light_id} in scene '{scene_id}'")
                 break
             state = states[light_id]
-            if state.get('locked', False):
+            if state.get('reed_locked', False) or state.get('locked', False):
                 logger.debug(f"Skipping check for locked light {light_id} in scene '{scene_id}'")
                 continue
             if isinstance(target, dict):
@@ -349,7 +349,7 @@ def get_computed_dt():
 def get_has_gps_fix():
     return has_gps_fix
 def sync_client(is_screen, screen_name=None):
-    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False)} for k, v in states.items()}
+    response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False), 'reed_locked': v.get('reed_locked', False)} for k, v in states.items()}
     emit('update_states', response_states)
     logger.debug(f"Emitting 'update_states' to client with data: {response_states}")
 
@@ -418,7 +418,7 @@ def handle_set_brightness(data):
     if light_id not in states:
         logger.warning(f"Invalid light_id: {light_id}")
         return
-    if states[light_id].get('locked', False):
+    if states[light_id].get('reed_locked', False) or states[light_id].get('locked', False):
         logger.warning(f"Ignoring set_brightness for locked light {light_id}")
         return
     state = states[light_id]
@@ -449,13 +449,15 @@ def handle_toggle_color(data):
     if light_id not in states:
         logger.warning(f"Invalid light_id: {light_id}")
         return
-    if states[light_id].get('locked', False):
+    if states[light_id].get('reed_locked', False) or states[light_id].get('locked', False):
         logger.warning(f"Ignoring toggle_color for locked light {light_id}")
         return
     state = states[light_id]
     if 'white_pin' not in state:
         logger.warning(f"Light {light_id} does not support color toggle")
         return
+    states[light_id]['locked'] = True
+    broadcast_states()
     current_active = state['active']
     new_active = 'red' if current_active == 'white' else 'white'
     pwm_value = calculate_pwm(state['brightness'], new_active)
@@ -470,11 +472,15 @@ def handle_toggle_color(data):
         else:
             arduino.ramp_pwm(state['green_pin'], 0, ramp_rate_ms)
     state['active'] = new_active
-    logger.debug(f"Emitting 'ramp_start' to all with data: {{'light_id': {light_id}, 'ramp_duration': {ramp_rate_ms}}}")
-    socketio.emit('ramp_start', {'light_id': light_id, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
     update_active_scene()
+    threading.Timer(ramp_rate_ms / 1000 + 0.5, lambda: unlock_light(light_id)).start()
     logger.debug(f"Toggled color for light {light_id} to {new_active}")
+
+def unlock_light(light_id):
+    if light_id in states:
+        states[light_id]['locked'] = False
+        broadcast_states()
 
 @socketio.on('ramp_brightness')
 def handle_ramp_brightness(data):
@@ -484,9 +490,11 @@ def handle_ramp_brightness(data):
     if light_id not in states or 'pin' not in states[light_id]:
         logger.warning(f"Invalid light_id or no pin for ramp: {light_id}")
         return
-    if states[light_id].get('locked', False):
+    if states[light_id].get('reed_locked', False) or states[light_id].get('locked', False):
         logger.warning(f"Ignoring ramp_brightness for locked light {light_id}")
         return
+    states[light_id]['locked'] = True
+    broadcast_states()
     state = states[light_id]
     pwm_value = calculate_pwm(target)
     arduino.ramp_pwm(state['pin'], pwm_value, ramp_rate_ms)
@@ -495,17 +503,20 @@ def handle_ramp_brightness(data):
     socketio.emit('brightness_ramp_start', {'light_id': light_id, 'target_brightness': target, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
     update_active_scene()
+    threading.Timer(ramp_rate_ms / 1000 + 0.5, lambda: unlock_light(light_id)).start()
     logger.debug(f"Ramping brightness for light {light_id} to {target}")
 
 def apply_settings(settings, duration_sec):
     duration_ms = duration_sec * 1000
     future_states = {k: v.copy() for k, v in states.items()}
+    lights_to_lock = []
     for light_id_str, target in settings.items():
         light_id = int(light_id_str)
         if light_id not in states:
             continue
-        if states[light_id].get('locked', False):
+        if states[light_id].get('reed_locked', False):
             continue
+        lights_to_lock.append(light_id)
         state = states[light_id]
         future_state = future_states[light_id]
         if isinstance(target, dict):
@@ -544,20 +555,25 @@ def apply_settings(settings, duration_sec):
                         arduino.ramp_pwm(state['green_pin'], 0, duration_ms)
                 future_state['active'] = new_active
         future_state['brightness'] = target_brightness
+    for lid in lights_to_lock:
+        states[lid]['locked'] = True
+    broadcast_states()
     # Prepare response with future states
     response_states = {str(k): {'brightness': future_states[k]['brightness'], 'active': future_states[k].get('active', None)} for k in future_states}
     logger.debug(f"Broadcasting 'scene_ramp_start' with data: {{'states': {response_states}, 'ramp_duration': {duration_ms}}}")
     socketio.emit('scene_ramp_start', {'states': response_states, 'ramp_duration': duration_ms})
-    def apply_after_ramp():
+    def apply_after_ramp(lights_to_lock, future_states, settings):
         for light_id_str in settings:
             light_id = int(light_id_str)
             states[light_id]['brightness'] = future_states[light_id]['brightness']
             if 'active' in future_states[light_id]:
                 states[light_id]['active'] = future_states[light_id]['active']
+        for lid in lights_to_lock:
+            states[lid]['locked'] = False
         broadcast_states()
         update_active_scene()
     # Schedule apply after ramp
-    threading.Timer(duration_sec + 0.5, apply_after_ramp).start()
+    threading.Timer(duration_sec + 0.5, apply_after_ramp, args=(lights_to_lock, future_states, settings)).start()
 def apply_scene(scene_id):
     scenes = static_config.get('scenes', {})
     if scene_id not in scenes:
@@ -771,12 +787,12 @@ def process_state_updates():
 socketio.start_background_task(process_state_updates)
 def broadcast_reed_state(reed_id, state):
     state_queue.put((reed_id, state))
-def set_light_locked(light_id, locked):
+def set_light_reed_locked(light_id, reed_locked):
     if light_id in states:
-        states[light_id]['locked'] = locked
+        states[light_id]['reed_locked'] = reed_locked
         broadcast_states()
 reeds_config = static_config.get('reeds', {})
-reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state, on_lock=set_light_locked)
+reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state, on_lock=set_light_reed_locked)
 phase_manager.set_reeds_controller(reeds_controller)
 def auto_wake_screen(screen_name):
     current_phase = phase_manager.current_phase
