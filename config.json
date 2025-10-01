@@ -1,9 +1,8 @@
 {
   "ramp_rate": 1,
   "scene_ramp_rate": 2,
-
-  "toast_display_time": 10,
-
+  "system_toast_display_time": 5,
+  "rules_toast_display_time": 10,
   "lights": {
     "1": {
       "white_pin": 2,
