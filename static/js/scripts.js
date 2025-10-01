@@ -445,13 +445,13 @@ socket.on('scene_ramp_start', (data) => {
         const colorLabel = isColorToggle ? control.querySelector('.color-label') : null;
 
         const target_brightness = targetState.brightness;
-        const targetActive = targetState.active;
+        const target_active = targetState.active;
 
         let colorChanged = false;
         let newToggleChecked = null;
-        if (isColorToggle && targetActive && targetActive !== (toggle.checked ? 'red' : 'white')) {
+        if (isColorToggle && target_active && target_active !== (toggle.checked ? 'red' : 'white')) {
             colorChanged = true;
-            newToggleChecked = targetActive === 'red';
+            newToggleChecked = target_active === 'red';
         }
 
         const start_brightness = parseFloat(slider.value);
@@ -559,7 +559,7 @@ socket.on('update_power', (data) => {
 // Handle backend-triggered toasts
 socket.on('show_toast', (data) => {
     console.log('Received show_toast', data);
-    showToast(data.message, data.type || 'message');
+    showToast(data.message, data.type || 'message', false, [], data.duration);
 });
 
 socket.on('update_settings', (settings) => {
@@ -600,6 +600,12 @@ socket.on('update_settings', (settings) => {
     if ('night_time' in settings) {
         document.querySelector('.night-time').value = settings.night_time;
     }
+
+    // Toast duration
+    if ('system_toast_display_time_ms' in settings) {
+        toastDuration = settings.system_toast_display_time_ms;
+    }
+
     updateResultantTimes();
 });
 

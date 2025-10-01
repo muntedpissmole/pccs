@@ -1,8 +1,9 @@
 const toastArea = document.querySelector('.toast-area');
 let toastQueue = [];
-const toastHeight = 50; // Approximate height including padding
+const toastHeight = 60; // Approximate height including padding
 const gap = 10;
 let offlineToast = null;
+let toastDuration = 5000;
 
 function updateToastPositions() {
     const toasts = Array.from(toastArea.children);
@@ -28,7 +29,7 @@ function createToast(message, type, persistent = false, additionalClasses = []) 
 
     if (!persistent) {
         toastElem.addEventListener('click', () => removeToast(toastElem));
-        setTimeout(() => removeToast(toastElem), 5000);
+        setTimeout(() => removeToast(toastElem), toastDuration);
     }
 
     return toastElem;

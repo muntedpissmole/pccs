@@ -28,7 +28,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Evening phase begins and a panel is open. Applying evening lighting scene."
+    "description": "Evening phase begins and a panel is open. Applying evening lighting scene.",
+    "show_toast": true
   },
   {
     "id": "panel_open_in_evening",
@@ -57,7 +58,8 @@
     ],
     "once_per_day": true,
     "evaluate_on_startup": true,
-    "description": "A panel opened during evening phase. Applying evening lighting scene."
+    "description": "A panel opened during evening phase. Applying evening lighting scene.",
+    "show_toast": true
   },
   {
     "id": "night_start_with_open_panel",
@@ -88,7 +90,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Night phase begins and a panel is open. Applying night lighting scene."
+    "description": "Night phase begins and a panel is open. Applying night lighting scene.",
+    "show_toast": true
   },
   {
     "id": "panel_open_in_night",
@@ -117,7 +120,8 @@
     ],
     "once_per_day": true,
     "evaluate_on_startup": true,
-    "description": "A panel opened during night phase. Applying night lighting scene."
+    "description": "A panel opened during night phase. Applying night lighting scene.",
+    "show_toast": true
   },
   {
     "id": "kitchen_panel_open_wake_screen",
@@ -138,7 +142,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Kitchen panel opened. Waking up the kitchen screen."
+    "description": "Kitchen panel opened. Waking up the kitchen screen.",
+    "show_toast": false
   },
   {
     "id": "kitchen_panel_close_sleep_screen",
@@ -159,7 +164,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Kitchen panel closed. Putting the kitchen screen to sleep."
+    "description": "Kitchen panel closed. Putting the kitchen screen to sleep.",
+    "show_toast": true
   },
   {
     "id": "tent_reed_open_wake_screen",
@@ -180,7 +186,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Rooftop tent opened. Waking up the tent screen."
+    "description": "Rooftop tent opened. Waking up the tent screen.",
+    "show_toast": true
   },
   {
     "id": "tent_reed_close_sleep_screen",
@@ -204,7 +211,8 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Rooftop tent closed. Turning off tent lighting screen."
+    "description": "Rooftop tent closed. Turning off tent lighting screen.",
+    "show_toast": true
   },
   {
     "id": "all_off_after_sunrise",
@@ -219,6 +227,7 @@
     ],
     "once_per_day": true,
     "evaluate_on_startup": false,
-    "description": "Day phase begins. Turning off all lighting."
+    "description": "Day phase begins. Turning off all lighting.",
+    "show_toast": true
   }
 ]

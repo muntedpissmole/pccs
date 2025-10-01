@@ -6,5 +6,8 @@
     "morning_offset": "+30 mins",
     "night_time": "8:00 PM",
     "brightness": "medium",
-    "sunrise_offset": "+30 mins"
+    "sunrise_offset": "+30 mins",
+    "toast_display_time_ms": 10000,
+    "system_toast_display_time_ms": 5000,
+    "rules_toast_display_time_ms": 10000
 }

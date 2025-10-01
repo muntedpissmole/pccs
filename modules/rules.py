@@ -101,7 +101,7 @@ class RulesEngine:
                     continue
             if 'conditions' in rule and not self.evaluate_condition(rule['conditions'], context):
                 continue
-            if self.on_rule_fired:
+            if rule.get('show_toast', False) and self.on_rule_fired:
                 self.on_rule_fired(rule)
             self.execute_actions(rule.get('actions', []))
             if rule.get('once_per_day', False):
@@ -142,7 +142,7 @@ class RulesEngine:
                 logger.debug(f"Skipping unknown trigger {trigger} on startup")
                 continue
             if satisfied:
-                if self.on_rule_fired:
+                if rule.get('show_toast', False) and self.on_rule_fired:
                     self.on_rule_fired(rule)
                 self.execute_actions(rule.get('actions', []))
                 if rule.get('once_per_day', False):
