@@ -318,9 +318,6 @@ def find_matching_scene():
                 logger.debug(f"No state for light {light_id} in scene '{scene_id}'")
                 break
             state = states[light_id]
-            if state.get('reed_locked', False) or state.get('locked', False):
-                logger.debug(f"Skipping check for locked light {light_id} in scene '{scene_id}'")
-                continue
             if isinstance(target, dict):
                 if 'brightness' not in target or 'color' not in target:
                     match = False
@@ -348,7 +345,7 @@ def update_active_scene():
     socketio.emit('set_active_scene', {'scene_id': matching_scene})
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('10inch.html')
 def get_last_gps_data():
     return last_gps_data
 def get_computed_dt():

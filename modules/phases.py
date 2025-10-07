@@ -102,7 +102,7 @@ class PhaseManager:
 
     def phase_check(self):
         new_phase = self.get_current_phase()
-        if new_phase is not None and new_phase != self.current_phase:
+        if new_phase != self.current_phase:
             old_phase = self.current_phase
             self.current_phase = new_phase
             # Apply scene if mapped
