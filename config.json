@@ -128,7 +128,8 @@
         "low": 20,
         "medium": 128,
         "high": 255
-      }
+      },
+      "username": "radxa"
     },
     "tent": {
       "ip": "10.10.10.11",
@@ -137,7 +138,8 @@
         "low": 20,
         "medium": 128,
         "high": 255
-      }
+      },
+      "username": "pi"
     }
   }
 }

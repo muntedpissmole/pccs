@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pissmole – Tent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_5inch.css') }}">
+</head>
+<body data-theme="dark">
+    <div id="app">
+        <!-- Full height now used for controls + scenes -->
+        <div class="main-area">
+            <div class="controls">
+                <div class="page active" data-page="1">
+                    <div class="control color-toggle" data-id="1"><i class="fas fa-sink"></i> Kitchen</div>
+                    <div class="control" data-id="2"><i class="fas fa-utensils"></i> Bench</div>
+                    <div class="control" data-id="3"><i class="fas fa-box"></i> Storage Panel</div>
+                    <div class="control" data-id="4"><i class="fas fa-inbox"></i> Rear Drawer</div>
+                </div>
+                <div class="page" data-page="2">
+                    <div class="control" data-id="5"><i class="fas fa-wand-magic-sparkles"></i> Accent</div>
+                    <div class="control color-toggle" data-id="6"><i class="fas fa-store"></i> Awning</div>
+                    <div class="control" data-id="7"><i class="fas fa-campground"></i> Rooftop Tent</div>
+                    <div class="control" data-id="8"><i class="fas fa-toilet"></i> Ensuite</div>
+                </div>
+                <div class="page" data-page="3">
+                    <div class="toggle-row"><i class="fas fa-faucet"></i> Water          <label class="toggle"><input type="checkbox" data-relay="water"><span class="slider"></span></label></div>
+                    <div class="toggle-row"><i class="fas fa-plug"></i> Fridge & Oven   <label class="toggle"><input type="checkbox" data-relay="fridge_and_oven"><span class="slider"></span></label></div>
+                    <div class="toggle-row"><i class="fas fa-lightbulb"></i> Floodlights   <label class="toggle"><input type="checkbox" data-relay="floodlights"><span class="slider"></span></label></div>
+                    <div class="toggle-row"><i class="fas fa-bolt"></i> Lighting       <label class="toggle"><input type="checkbox" data-relay="lighting_circuits"><span class="slider"></span></label></div>
+                </div>
+
+                <div class="bottom-bar">
+                    <div class="pagination">
+                        <span class="dot active"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <i class="fas fa-cog icon settings" onclick="openSettings()"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scenes">
+                <button class="scene-btn" data-scene-id="evening">Evening</button>
+                <button class="scene-btn" data-scene-id="night">Night</button>
+                <button class="scene-btn" data-scene-id="bathroom">Bathroom</button>
+                <button class="scene-btn" data-scene-id="all off">All Off</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-area"></div>
+
+    <!-- Settings modal – tiny version, only brightness + shutdown -->
+    <div id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="setting-card">
+                    <label>Brightness</label>
+                    <div class="brightness-buttons">
+                        <button class="brightness-btn" id="brightness-low">Low</button>
+                        <button class="brightness-btn active" id="brightness-medium">Med</button>
+                        <button class="brightness-btn" id="brightness-high">High</button>
+                    </div>
+                </div>
+                <div class="setting-card">
+                    <button class="shutdown-btn">Shutdown System</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/toasts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>

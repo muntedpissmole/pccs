@@ -56,8 +56,8 @@
         "apply_scene": "evening"
       }
     ],
-    "once_per_day": true,
-    "evaluate_on_startup": true,
+    "once_per_day": false,
+    "evaluate_on_startup": false,
     "description": "A panel opened during evening phase. Applying evening lighting scene.",
     "show_toast": true
   },
@@ -118,8 +118,8 @@
         "apply_scene": "night"
       }
     ],
-    "once_per_day": true,
-    "evaluate_on_startup": true,
+    "once_per_day": false,
+    "evaluate_on_startup": false,
     "description": "A panel opened during night phase. Applying night lighting scene.",
     "show_toast": true
   },
@@ -143,7 +143,7 @@
     ],
     "evaluate_on_startup": true,
     "description": "Kitchen panel opened. Waking up the kitchen screen.",
-    "show_toast": false
+    "show_toast": true
   },
   {
     "id": "kitchen_panel_close_sleep_screen",
@@ -205,9 +205,6 @@
     "actions": [
       {
         "sleep_screen": "tent"
-      },
-      {
-        "apply_scene": "all off"
       }
     ],
     "evaluate_on_startup": true,
@@ -225,7 +222,7 @@
         "apply_scene": "all off"
       }
     ],
-    "once_per_day": true,
+    "once_per_day": false,
     "evaluate_on_startup": false,
     "description": "Day phase begins. Turning off all lighting.",
     "show_toast": true

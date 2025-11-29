@@ -346,6 +346,9 @@ def update_active_scene():
 @app.route('/')
 def home():
     return render_template('10inch.html')
+@app.route('/5inch')
+def fiveinch():
+    return render_template('5inch.html')
 def get_last_gps_data():
     return last_gps_data
 def get_computed_dt():
@@ -773,7 +776,7 @@ def set_screen_brightness(screen_name, level):
     value = conf['levels'][level]
     ip = conf['ip']
     path = conf['brightness_path']
-    username = 'pi'
+    username = conf.get('username', 'pi')
     cmd = f"ssh {username}@{ip} \"echo {value} > {path}\""
     result = os.system(cmd)
     if result == 0:
@@ -822,7 +825,7 @@ def sleep_screen(screen_name):
     conf = screens_config[screen_name]
     ip = conf['ip']
     path = conf['brightness_path']
-    username = 'pi'
+    username = conf.get('username', 'pi')
     cmd = f"ssh {username}@{ip} \"echo 0 > {path}\""
     result = os.system(cmd)
     if result == 0:
@@ -954,17 +957,55 @@ def show_reeds():
 
 @socketio.on('shutdown_system')
 def handle_shutdown_system():
-    logger.info("Received shutdown_system request")
-    username = 'pi'
+    logger.info("Received 'shutdown_system' request from client – initiating shutdown sequence")
+
+    successful = []
+    failed = []
+
     for screen_name, conf in screens_config.items():
-        ip = conf['ip']
-        cmd = f"ssh {username}@{ip} 'sudo shutdown -h now'"
+        ip = conf.get('ip')
+        username = conf.get('username', 'pi')  # uses per-screen username, falls back to 'pi'
+        if not ip:
+            logger.warning(f"Screen '{screen_name}' has no IP defined – skipping")
+            continue
+
+        cmd = f"ssh -o ConnectTimeout=5 {username}@{ip} 'sudo shutdown -h now'"
+        logger.info(f"Shutting down {screen_name} → {username}@{ip}")
+        
         result = os.system(cmd)
+        
         if result == 0:
-            logger.info(f"Shutdown initiated for {screen_name} at {ip}")
+            logger.info(f"Shutdown command sent successfully to {screen_name} ({username}@{ip})")
+            successful.append(screen_name)
         else:
-            logger.error(f"Failed to shutdown {screen_name} at {ip}, code {result}")
-    # Shutdown local
+            # os.system returns the exit code << 8, so we shift it back for readability
+            exit_code = result >> 8
+            logger.error(f"Failed to send shutdown to {screen_name} ({username}@{ip}) – exit code {exit_code}")
+            failed.append(screen_name)
+
+    # Summary toast to all connected clients
+    if successful and not failed:
+        socketio.emit('show_toast', {
+            'message': f"Shutting down: {', '.join(successful)}. Good night!",
+            'duration': 8000
+        })
+    elif successful and failed:
+        socketio.emit('show_toast', {
+            'message': f"Partial shutdown: {', '.join(successful)} OK, {', '.join(failed)} failed",
+            'duration': 10000,
+            'type': 'warning'
+        })
+    elif failed:
+        socketio.emit('show_toast', {
+            'message': f"Shutdown failed for: {', '.join(failed)}",
+            'duration': 10000,
+            'type': 'error'
+        })
+
+    # Finally shut down control-pi itself
+    logger.info("Shutting down control-pi (local) in 3 seconds...")
+    socketio.emit('show_toast', {'message': 'Control-Pi shutting down...', 'duration': 5000})
+    time_module.sleep(3)
     os.system("sudo shutdown -h now")
 
 if __name__ == '__main__':
