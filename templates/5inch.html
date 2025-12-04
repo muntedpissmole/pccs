@@ -3,70 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pissmole – Tent</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>The Pissmole Camping Control System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles_5inch.css') }}">
 </head>
 <body data-theme="dark">
     <div id="app">
-        <!-- Full height now used for controls + scenes -->
-        <div class="main-area">
-            <div class="controls">
-                <div class="page active" data-page="1">
-                    <div class="control color-toggle" data-id="1"><i class="fas fa-sink"></i> Kitchen</div>
-                    <div class="control" data-id="2"><i class="fas fa-utensils"></i> Bench</div>
-                    <div class="control" data-id="3"><i class="fas fa-box"></i> Storage Panel</div>
-                    <div class="control" data-id="4"><i class="fas fa-inbox"></i> Rear Drawer</div>
+        <div class="top-section">
+            <div class="env">
+                <div class="card">
+                    <div class="header"><i class="fas fa-calendar-day"></i><span class="descriptor">Date</span></div>
+                    <div class="value" id="date-value">---</div>
+                    <div class="header"><i class="fas fa-clock"></i><span class="descriptor">Time</span></div>
+                    <div class="value" id="time-value">---</div>
                 </div>
-                <div class="page" data-page="2">
-                    <div class="control" data-id="5"><i class="fas fa-wand-magic-sparkles"></i> Accent</div>
-                    <div class="control color-toggle" data-id="6"><i class="fas fa-store"></i> Awning</div>
-                    <div class="control" data-id="7"><i class="fas fa-campground"></i> Rooftop Tent</div>
-                    <div class="control" data-id="8"><i class="fas fa-toilet"></i> Ensuite</div>
+                <div class="card">
+                    <div class="header"><i class="fas fa-sun"></i><span class="descriptor">Sunrise</span></div>
+                    <div class="value" id="sunrise-value">---</div>
+                    <div class="header"><i class="fas fa-moon"></i><span class="descriptor">Sunset</span></div>
+                    <div class="value" id="sunset-value">---</div>
                 </div>
-                <div class="page" data-page="3">
-                    <div class="toggle-row"><i class="fas fa-faucet"></i> Water          <label class="toggle"><input type="checkbox" data-relay="water"><span class="slider"></span></label></div>
-                    <div class="toggle-row"><i class="fas fa-plug"></i> Fridge & Oven   <label class="toggle"><input type="checkbox" data-relay="fridge_and_oven"><span class="slider"></span></label></div>
-                    <div class="toggle-row"><i class="fas fa-lightbulb"></i> Floodlights   <label class="toggle"><input type="checkbox" data-relay="floodlights"><span class="slider"></span></label></div>
-                    <div class="toggle-row"><i class="fas fa-bolt"></i> Lighting       <label class="toggle"><input type="checkbox" data-relay="lighting_circuits"><span class="slider"></span></label></div>
+                <div class="card">
+                    <div class="header"><i class="fas fa-solar-panel"></i><span class="descriptor">Solar</span></div>
+                    <div class="value" id="solar-value">---</div>
+                    <div class="header"><i class="fas fa-adjust"></i><span class="descriptor">Phase</span></div>
+                    <div class="value" id="phase-value">---</div>
+                </div>
+                <div class="card">
+                    <div class="header"><i class="fas fa-battery-full"></i><span class="descriptor">Battery</span></div>
+                    <div class="value" id="battery-value">---</div>
+                    <div class="header"><i class="fas fa-water"></i><span class="descriptor">Water Tank</span></div>
+                    <div class="value" id="water-value">---</div>
+                </div>
+                <div class="card">
+                    <div class="header"><i class="fas fa-satellite"></i><span class="descriptor">GPS</span></div>
+                    <div class="value" id="satellites-value">---</div>
+                    <div class="header"><i class="fas fa-map-marker-alt"></i><span class="descriptor">Location</span></div>
+                    <div class="value" id="location-value">---</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-section">
+            <section class="controls">
+                <div class="slider-container">
+                    <div class="pages">
+
+                        <div class="page">
+                            <div class="control color-toggle">
+                                <label><i class="fas fa-sink"></i>Kitchen: <span class="color-label">White</span></label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                            <div class="control">
+                                <label><i class="fas fa-utensils"></i>Kitchen: Bench</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                            <div class="control">
+                                <label><i class="fas fa-box"></i>Storage Panel</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                        </div>
+
+                        <div class="page">
+                            <div class="control">
+                                <label><i class="fas fa-inbox"></i>Rear Drawer</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                            <div class="control">
+                                <label><i class="fas fa-wand-magic-sparkles"></i>Accent</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                            <div class="control color-toggle">
+                                <label><i class="fas fa-store"></i>Awning: <span class="color-label">White</span></label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                        </div>
+
+                        <div class="page">
+                            <div class="control">
+                                <label><i class="fas fa-campground"></i>Rooftop Tent</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                            <div class="control">
+                                <label><i class="fas fa-toilet"></i>Ensuite</label>
+                                <span class="percentage">0%</span>
+                                <div class="slider-wrapper"><input type="range" min="0" max="100" value="0" orient="vertical"></div>
+                                <div class="on-off-toggle"><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            </div>
+                        </div>
+
+                        <div class="page">
+                            <div class="control simple"><label><i class="fas fa-faucet"></i> Water</label><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            <div class="control simple"><label><i class="fas fa-plug"></i> Fridge and Oven</label><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            <div class="control simple"><label><i class="fas fa-lightbulb"></i> Floodlights</label><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                            <div class="control simple"><label><i class="fas fa-bolt"></i> Lighting Circuits</label><label class="toggle"><input type="checkbox"><span class="slider"></span></label></div>
+                        </div>
+
+                    </div>
                 </div>
 
-                <div class="bottom-bar">
-                    <div class="pagination">
+                <div class="pagination">
+                    <i class="fas fa-sync-alt icon refresh" onclick="location.reload();"></i>
+                    <div class="dots-wrapper">
                         <span class="dot active"></span>
                         <span class="dot"></span>
                         <span class="dot"></span>
-                        <i class="fas fa-cog icon settings" onclick="openSettings()"></i>
+                        <span class="dot"></span>
                     </div>
+                    <i class="fas fa-cog icon settings" onclick="openSettings();"></i>
                 </div>
-            </div>
+                <div class="toast-area"></div>
+            </section>
 
-            <div class="scenes">
-                <button class="scene-btn" data-scene-id="evening">Evening</button>
-                <button class="scene-btn" data-scene-id="night">Night</button>
-                <button class="scene-btn" data-scene-id="bathroom">Bathroom</button>
-                <button class="scene-btn" data-scene-id="all off">All Off</button>
+            <div class="right-column">
+                <div class="weather-card card">
+                    <div class="header"><i class="fas fa-cloud" id="weather-icon"></i><span class="descriptor"><span id="condition">---</span></span></div>
+                    <div class="value" id="current-temp">---°C</div>
+                    <div class="header"><i class="fas fa-arrow-down"></i><span class="descriptor">Min</span> <i class="fas fa-arrow-up"></i><span class="descriptor">Max</span></div>
+                    <div class="value" id="min-max">--- / ---</div>
+                    <div class="header"><i class="fas fa-tint"></i><span class="descriptor">Humidity</span></div>
+                    <div class="value" id="humidity">--- %</div>
+                </div>
+                <div class="scenes-card card">
+                    <button class="scene-btn" data-scene-id="evening"><i class="fas fa-cloud-sun"></i> Evening</button>
+                    <button class="scene-btn" data-scene-id="night"><i class="fas fa-moon"></i> Night</button>
+                    <button class="scene-btn" data-scene-id="bathroom"><i class="fas fa-shower"></i> Bathroom</button>
+                    <button class="scene-btn" data-scene-id="all off"><i class="fas fa-power-off"></i> All Off</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="toast-area"></div>
-
-    <!-- Settings modal – tiny version, only brightness + shutdown -->
     <div id="settings-modal">
         <div class="modal-content">
             <div class="modal-body">
-                <div class="setting-card">
-                    <label>Brightness</label>
-                    <div class="brightness-buttons">
-                        <button class="brightness-btn" id="brightness-low">Low</button>
-                        <button class="brightness-btn active" id="brightness-medium">Med</button>
-                        <button class="brightness-btn" id="brightness-high">High</button>
+                <div class="settings-row row1">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Dark Mode</label>
+                            <p class="description">Switch between dark mode and light mode.</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="theme-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Brightness</label>
+                            <p class="description">Set the brightness of the touchscreen.</p>
+                        </div>
+                        <div class="brightness-buttons">
+                            <button class="brightness-btn" id="brightness-low">Low</button>
+                            <button class="brightness-btn active" id="brightness-medium">Medium</button>
+                            <button class="brightness-btn" id="brightness-high">High</button>
+                        </div>
                     </div>
                 </div>
-                <div class="setting-card">
-                    <button class="shutdown-btn">Shutdown System</button>
+                <div class="settings-row row2">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Auto Theme Switch</label>
+                            <p class="description">Activate dark mode in the evening and light mode in the morning.</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="auto-theme-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Auto Brightness</label>
+                            <p class="description">Set the touchscreen brightness to low in the evening and medium in the morning.</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="auto-brightness-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-row row3">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Evening Offset<span id="evening-resultant" class="resultant-time" style="display:none;"></span></label>
+                            <p class="description">How long before sunset evening scenes and automation activate.</p>
+                        </div>
+                        <div class="select-wrapper">
+                            <select class="evening-offset">
+                                <option>-60 mins</option>
+                                <option>-45 mins</option>
+                                <option selected>-30 mins</option>
+                                <option>-15 mins</option>
+                                <option>0 mins</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Morning Offset<span id="morning-resultant" class="resultant-time" style="display:none;"></span></label>
+                            <p class="description">How long after sunrise morning scenes and automation activate.</p>
+                        </div>
+                        <div class="select-wrapper">
+                            <select class="sunrise-offset">
+                                <option>0 mins</option>
+                                <option>+15 mins</option>
+                                <option selected>+30 mins</option>
+                                <option>+45 mins</option>
+                                <option>+60 mins</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-row row4">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Night Time</label>
+                            <p class="description">The time that evening transitions to night and any night scenes and automation activate.</p>
+                        </div>
+                        <div class="select-wrapper">
+                            <select class="night-time">
+                                <option>7:00 PM</option>
+                                <option>7:30 PM</option>
+                                <option selected>8:00 PM</option>
+                                <option>8:30 PM</option>
+                                <option>9:00 PM</option>
+                                <option>9:30 PM</option>
+                                <option>10:00 PM</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <label>Shutdown System</label>
+                            <p class="description">Turn off the control system and touchscreens.</p>
+                        </div>
+                        <button class="shutdown-btn">Shutdown</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shutdown-confirm-modal">
+        <div class="modal-content">
+            <div class="modal-body">
+                <h2>Confirm Shutdown</h2>
+                <p>Are you sure you want to shut down the system? This will turn off kitchen-pi, tent-pi, and control-pi.</p>
+                <div class="confirm-buttons">
+                    <button class="confirm-btn no">No</button>
+                    <button class="confirm-btn yes">Yes</button>
                 </div>
             </div>
         </div>

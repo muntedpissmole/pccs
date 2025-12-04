@@ -610,13 +610,15 @@ def handle_set_setting(data):
     key = data['key']
     value = data['value']
     config_manager.set(key, value)
+
     if key == 'gamma':
         global gamma
         gamma = value
-    logger.debug(f"Broadcasting 'update_settings' with data: {config_manager.config}")
-    socketio.emit('update_settings', config_manager.config)
     if key in ['sunrise_offset', 'evening_offset', 'night_time']:
+        phase_manager.phase_check()
+    else:
         broadcast_gps({})
+    socketio.emit('update_settings', config_manager.config)
     if key == 'auto_brightness' and value:
         current_phase = phase_manager.current_phase
         if current_phase:

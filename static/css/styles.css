@@ -755,7 +755,7 @@ h2 {
 }
 
 .confirm-btn.yes {
-    background: var(--error-color-light);
+    background: var(--error-color);
     color: #fff;
 }
 

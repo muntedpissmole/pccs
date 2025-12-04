@@ -26,24 +26,15 @@ class ReedsController:
             try:
                 button = Button(pin, pull_up=True, bounce_time=0.3)
                 self.reeds[reed_id] = button
-
-                is_closed = button.is_pressed
-                current_state = "Closed" if is_closed else "Open"
-
-                if self.on_state_change:
-                    self.on_state_change(reed_id, current_state)
-
-                if not is_closed:  # Reed is physically open at startup
-                    settings = self.get_phase_settings(reed_id)
-                    if settings:
-                        self.on_trigger(settings)
-
-                    if self.config[reed_id].get('lock_on_close', False):
-                        for ch in self.get_all_channels(reed_id):
-                            self.on_lock(int(ch), False)
-
             except Exception as e:
                 logger.error(f"Failed to initialize reed {reed_id} on pin {pin}: {str(e)}", exc_info=True)
+
+        # Apply initial states
+        for reed_id, button in self.reeds.items():
+            if button.is_pressed:
+                self.handle_close(reed_id)
+            else:
+                self.handle_open(reed_id)
 
         # Now initialise software state tracking so change detection works correctly
         for reed_id, button in self.reeds.items():

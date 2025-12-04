@@ -61,7 +61,9 @@ class ConfigManager:
             logger.error(f"Failed to save config to {self.file_path}: {e}")
 
     def get(self, key, default=None):
-        return self.config.get(key, default)
+        with open(self.file_path, 'r') as f:
+            fresh = json.load(f)
+        return fresh.get(key, default)
 
     def set(self, key, value):
         self.config[key] = value
