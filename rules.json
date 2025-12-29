@@ -28,7 +28,7 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Evening phase begins and a panel is open. Applying evening lighting scene.",
+    "description": "Evening begins, applying evening lighting scene.",
     "show_toast": true
   },
   {
@@ -58,7 +58,7 @@
     ],
     "once_per_day": false,
     "evaluate_on_startup": false,
-    "description": "A panel opened during evening phase. Applying evening lighting scene.",
+    "description": "A panel opened, applying evening lighting scene.",
     "show_toast": true
   },
   {
@@ -90,7 +90,7 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Night phase begins and a panel is open. Applying night lighting scene.",
+    "description": "Night begins, applying night lighting scene.",
     "show_toast": true
   },
   {
@@ -120,7 +120,7 @@
     ],
     "once_per_day": false,
     "evaluate_on_startup": false,
-    "description": "A panel opened during night phase. Applying night lighting scene.",
+    "description": "A panel opened, applying night lighting scene.",
     "show_toast": true
   },
   {
@@ -164,7 +164,7 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Kitchen panel closed. Putting the kitchen screen to sleep.",
+    "description": "Kitchen panel closed. Turning off kitchen touchscreen.",
     "show_toast": true
   },
   {
@@ -208,7 +208,7 @@
       }
     ],
     "evaluate_on_startup": true,
-    "description": "Rooftop tent closed. Turning off tent lighting screen.",
+    "description": "Rooftop tent closed. Turning off tent touchscreen.",
     "show_toast": true
   },
   {
@@ -224,7 +224,7 @@
     ],
     "once_per_day": false,
     "evaluate_on_startup": false,
-    "description": "Day phase begins. Turning off all lighting.",
+    "description": "Day begins, turning off all lighting.",
     "show_toast": true
   }
 ]
