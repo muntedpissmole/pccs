@@ -337,6 +337,12 @@ const condition = document.getElementById('condition');
 const minMax = document.getElementById('min-max');
 const humidity = document.getElementById('humidity');
 
+const weatherIconMobile = document.getElementById('weather-icon-mobile');
+const currentTempMobile = document.getElementById('current-temp-mobile');
+const conditionMobile = document.getElementById('condition-mobile');
+const minMaxMobile = document.getElementById('min-max-mobile');
+const humidityMobile = document.getElementById('humidity-mobile');
+
 socket.on('update_states', (states) => {
     console.log('Received update_states', states);
     lightControls.forEach(control => {
@@ -512,13 +518,13 @@ socket.on('update_gps', (data) => {
     document.getElementById('sunset-value').textContent = data.sunset || '---';
     document.getElementById('satellites-value').textContent = data.satellites || '---';
     document.getElementById('location-value').textContent = data.location || '---';
-    if (data.weather) {
-        currentTemp.innerText = `${data.weather.temp_C}°C`;
-        condition.textContent = data.weather.condition;
-        minMax.innerText = `${data.weather.min_temp_C}°C / ${data.weather.max_temp_C}°C`;
-        humidity.innerText = `${data.weather.humidity}%`;
 
+    if (data.weather) {
+        const temp = `${data.weather.temp_C}°C`;
+        const minmax = `${data.weather.min_temp_C}°C / ${data.weather.max_temp_C}°C`;
+        const hum = `${data.weather.humidity}%`;
         const desc = data.weather.condition.toLowerCase();
+
         let iconClass = 'fa-cloud';
         if (desc.includes('sunny') || desc.includes('clear')) iconClass = 'fa-sun';
         if (desc.includes('cloud') || desc.includes('overcast')) iconClass = 'fa-cloud';
@@ -526,14 +532,41 @@ socket.on('update_gps', (data) => {
         if (desc.includes('snow')) iconClass = 'fa-snowflake';
         if (desc.includes('fog')) iconClass = 'fa-smog';
         if (desc.includes('thunder')) iconClass = 'fa-cloud-bolt';
-        weatherIcon.className = 'fas ' + iconClass;
+
+        // Update desktop weather card
+        if (weatherIcon) weatherIcon.className = 'fas ' + iconClass;
+        if (currentTemp) currentTemp.innerText = temp;
+        if (condition) condition.textContent = data.weather.condition;
+        if (minMax) minMax.innerText = minmax;
+        if (humidity) humidity.innerText = hum;
+
+        // Update mobile weather card (duplicate)
+        if (weatherIconMobile) weatherIconMobile.className = 'fas ' + iconClass;
+        if (currentTempMobile) currentTempMobile.innerText = temp;
+        if (conditionMobile) conditionMobile.textContent = data.weather.condition;
+        if (minMaxMobile) minMaxMobile.innerText = minmax;
+        if (humidityMobile) humidityMobile.innerText = hum;
     } else {
-        currentTemp.innerText = '--°C';
-        condition.textContent = '---';
-        minMax.innerText = '-- / --';
-        humidity.innerText = '-- %';
-        weatherIcon.className = 'fas fa-cloud';
+        // Fallback when no weather data
+        const fallbackTemp = '--°C';
+        const fallbackMinMax = '-- / --';
+        const fallbackHum = '-- %';
+
+        // Desktop fallback
+        if (currentTemp) currentTemp.innerText = fallbackTemp;
+        if (condition) condition.textContent = '---';
+        if (minMax) minMax.innerText = fallbackMinMax;
+        if (humidity) humidity.innerText = fallbackHum;
+        if (weatherIcon) weatherIcon.className = 'fas fa-cloud';
+
+        // Mobile fallback
+        if (currentTempMobile) currentTempMobile.innerText = fallbackTemp;
+        if (conditionMobile) conditionMobile.textContent = '---';
+        if (minMaxMobile) minMaxMobile.innerText = fallbackMinMax;
+        if (humidityMobile) humidityMobile.innerText = fallbackHum;
+        if (weatherIconMobile) weatherIconMobile.className = 'fas fa-cloud';
     }
+
     updateResultantTimes();
 });
 
@@ -675,7 +708,8 @@ socket.on('disconnect', () => {
 function disableInterface() {
     document.querySelector('.controls').classList.add('disabled');
     document.querySelector('.right-column').classList.add('disabled');
-    // Set all data to ---
+
+    // Reset all data to ---
     document.getElementById('date-value').textContent = '---';
     document.getElementById('time-value').textContent = '---';
     document.getElementById('sunrise-value').textContent = '---';
@@ -686,12 +720,19 @@ function disableInterface() {
     document.getElementById('water-value').textContent = '---';
     document.getElementById('solar-value').textContent = '---';
     document.getElementById('phase-value').textContent = '---';
-    currentTemp.innerText = '--°C';
-    condition.textContent = '---';
-    minMax.innerText = '-- / --';
-    humidity.innerText = '-- %';
-    weatherIcon.className = 'fas fa-cloud';
-    // Optionally reset lights to 0, but since disconnected, maybe not
+
+    // Reset both weather cards
+    if (currentTemp) currentTemp.innerText = '--°C';
+    if (condition) condition.textContent = '---';
+    if (minMax) minMax.innerText = '-- / --';
+    if (humidity) humidity.innerText = '-- %';
+    if (weatherIcon) weatherIcon.className = 'fas fa-cloud';
+
+    if (currentTempMobile) currentTempMobile.innerText = '--°C';
+    if (conditionMobile) conditionMobile.textContent = '---';
+    if (minMaxMobile) minMaxMobile.innerText = '-- / --';
+    if (humidityMobile) humidityMobile.innerText = '-- %';
+    if (weatherIconMobile) weatherIconMobile.className = 'fas fa-cloud';
 }
 
 function enableInterface() {

@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Pissmole Camping Control System</title>
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body data-theme="dark">
+<body data-theme="dark" {% if force_mobile %}class="force-mobile"{% endif %}>
     <div id="app">
         <div class="top-section">
             <div class="env">
@@ -71,6 +71,27 @@
                         <span class="descriptor">Location</span>
                     </div>
                     <div class="value" id="location-value">---</div>
+                </div>
+
+                <!-- Mobile-only weather card (hidden on desktop) -->
+                <div class="weather-card card weather-card-mobile">
+                    <div class="header">
+                        <i class="fas fa-cloud" id="weather-icon-mobile"></i>
+                        <span class="descriptor"><span id="condition-mobile">---</span></span>
+                    </div>
+                    <div class="value" id="current-temp-mobile">---°C</div>
+                    <div class="header">
+                        <i class="fas fa-arrow-down"></i>
+                        <span class="descriptor">Min</span>
+                        <i class="fas fa-arrow-up"></i>
+                        <span class="descriptor">Max</span>
+                    </div>
+                    <div class="value" id="min-max-mobile">--- / ---</div>
+                    <div class="header">
+                        <i class="fas fa-tint"></i>
+                        <span class="descriptor">Humidity</span>
+                    </div>
+                    <div class="value" id="humidity-mobile">--- %</div>
                 </div>
             </div>
         </div>
@@ -228,11 +249,12 @@
                     </div>
                     <i class="fas fa-cog icon settings" onclick="openSettings();"></i>
                 </div>
-                <div class="toast-area">
-                </div>
+                <div class="toast-area"></div>
             </section>
+
             <div class="right-column">
-                <div class="weather-card card">
+                <!-- Desktop-only weather card (hidden on mobile) -->
+                <div class="weather-card card weather-card-desktop">
                     <div class="header">
                         <i class="fas fa-cloud" id="weather-icon"></i>
                         <span class="descriptor"><span id="condition">---</span></span>

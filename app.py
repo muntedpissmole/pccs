@@ -325,13 +325,16 @@ def update_active_scene():
     matching_scene = find_matching_scene()
     socketio.emit('set_active_scene', {'scene_id': matching_scene})
 
+from flask import render_template, request
+
 @app.route('/')
 def home():
-    return render_template('10inch.html')
+    force_mobile = request.args.get('view') == 'mobile'
+    return render_template('index.html', force_mobile=force_mobile)
 
-@app.route('/5inch')
-def fiveinch():
-    return render_template('5inch.html')
+@app.route('/mobile')
+def mobile():
+    return render_template('index.html', force_mobile=True)
 
 def get_last_gps_data():
     return last_gps_data
