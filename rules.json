@@ -29,7 +29,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Evening begins, applying evening lighting scene.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "panel_open_in_evening",
@@ -59,7 +60,8 @@
     "once_per_day": false,
     "evaluate_on_startup": false,
     "description": "A panel opened, applying evening lighting scene.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "night_start_with_open_panel",
@@ -91,7 +93,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Night begins, applying night lighting scene.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "panel_open_in_night",
@@ -121,7 +124,8 @@
     "once_per_day": false,
     "evaluate_on_startup": false,
     "description": "A panel opened, applying night lighting scene.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "kitchen_panel_open_wake_screen",
@@ -143,7 +147,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Kitchen panel opened. Waking up the kitchen screen.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "kitchen_panel_close_sleep_screen",
@@ -165,7 +170,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Kitchen panel closed. Turning off kitchen touchscreen.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   },
   {
     "id": "tent_reed_open_wake_screen",
@@ -187,7 +193,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Rooftop tent opened. Waking up the tent screen.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": false
   },
   {
     "id": "tent_reed_close_sleep_screen",
@@ -209,7 +216,8 @@
     ],
     "evaluate_on_startup": true,
     "description": "Rooftop tent closed. Turning off tent touchscreen.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": false
   },
   {
     "id": "all_off_after_sunrise",
@@ -225,6 +233,7 @@
     "once_per_day": false,
     "evaluate_on_startup": false,
     "description": "Day begins, turning off all lighting.",
-    "show_toast": true
+    "show_toast": true,
+    "enabled": true
   }
 ]

@@ -46,6 +46,7 @@ base_gps_datetime = None
 last_sync_time = None
 has_gps_fix = False
 
+# NEW: Event to signal when reliable GPS time is available
 gps_ready_event = threading.Event()
 
 def broadcast_gps(data):
@@ -59,7 +60,7 @@ def broadcast_gps(data):
             if base_gps_datetime is None:
                 base_gps_datetime = new_gps_dt
                 last_sync_time = current_system
-                gps_ready_event.set()
+                gps_ready_event.set()  # Critical: signal that time is now reliable
                 logger.info("GPS time acquired and synchronized")
                 socketio.emit('show_toast', {'message': 'GPS time acquired', 'duration': 3000})
             else:
@@ -230,8 +231,6 @@ def validate_static_config(config):
                 raise ValueError(f"Missing or invalid 'ip' for screen '{name}'")
             if 'username' in sconf and not isinstance(sconf['username'], str):
                 raise ValueError(f"Invalid 'username' for screen '{name}'")
-            if 'enabled' in sconf and not isinstance(sconf['enabled'], bool):
-                raise ValueError(f"'enabled' for screen '{name}' must be true or false")
     system_toast_sec = config.get('system_toast_display_time')
     if system_toast_sec is not None:
         if not isinstance(system_toast_sec, int) or system_toast_sec <= 0:
@@ -253,9 +252,7 @@ config_manager = ConfigManager()
 config = config_manager.config
 lights_config = static_config.get('lights', {})
 screens_config = static_config.get('screens', {})
-
-# Only track power state for enabled screens
-current_screen_levels = {name: 'off' for name, conf in screens_config.items() if conf.get('enabled', True)}
+current_screen_levels = {name: 'off' for name in screens_config}  # 'on' or 'off'
 screen_sids = {}
 states = {}
 for lid_str, lconf in lights_config.items():
@@ -295,33 +292,42 @@ def broadcast_states():
 
 def find_matching_scene():
     scenes = static_config.get('scenes', {})
+    logger.debug(f"Broadcasting current states for matching: { {str(k): {'brightness': v['brightness'], 'active': v.get('active'), 'locked': v.get('locked', False)} for k, v in states.items()} }")
     for scene_id, scene in scenes.items():
+        logger.debug(f"Checking scene '{scene_id}' with config: {scene}")
         match = True
         for light_id_str, target in scene.items():
             light_id = int(light_id_str)
             if light_id not in states:
                 match = False
+                logger.debug(f"No state for light {light_id} in scene '{scene_id}'")
                 break
             state = states[light_id]
             if isinstance(target, dict):
                 if 'brightness' not in target or 'color' not in target:
                     match = False
+                    logger.debug(f"Invalid target dict for light {light_id} in scene '{scene_id}'")
                     break
                 brightness_match = state['brightness'] == target['brightness']
                 color_match = target['brightness'] <= 0 or state.get('active') == target['color']
                 if not brightness_match or not color_match:
                     match = False
+                    logger.debug(f"Mismatch for light {light_id} in scene '{scene_id}': brightness {state['brightness']} vs {target['brightness']}, color {state.get('active')} vs {target.get('color') if target['brightness'] > 0 else 'ignored'}")
                     break
             else:
                 if state['brightness'] != target:
                     match = False
+                    logger.debug(f"Brightness mismatch for light {light_id} in scene '{scene_id}': {state['brightness']} vs {target}")
                     break
         if match:
+            logger.debug(f"Matched scene: '{scene_id}'")
             return scene_id
+    logger.debug("No matching scene found")
     return None
 
 def update_active_scene():
     matching_scene = find_matching_scene()
+    logger.debug(f"Broadcasting 'set_active_scene' with data: {{'scene_id': {matching_scene}}}")
     socketio.emit('set_active_scene', {'scene_id': matching_scene})
 
 @app.route('/')
@@ -367,10 +373,10 @@ def sync_client(is_screen, screen_name=None):
 def handle_connect():
     logger.info("Client connected")
     remote_addr = flask.request.remote_addr
-    is_screen = any(remote_addr == conf['ip'] and conf.get('enabled', True) for conf in screens_config.values())
+    is_screen = any(remote_addr == conf['ip'] for conf in screens_config.values())
     screen_name = None
     if is_screen:
-        screen_name = next((name for name, conf in screens_config.items() if remote_addr == conf['ip'] and conf.get('enabled', True)), None)
+        screen_name = next((name for name, conf in screens_config.items() if conf['ip'] == remote_addr), None)
         if screen_name:
             screen_sids[screen_name] = flask.request.sid
     sync_client(is_screen, screen_name)
@@ -379,21 +385,20 @@ def handle_connect():
 def handle_request_sync():
     logger.debug("Received 'request_sync'")
     remote_addr = flask.request.remote_addr
-    is_screen = any(remote_addr == conf['ip'] and conf.get('enabled', True) for conf in screens_config.values())
+    is_screen = any(remote_addr == conf['ip'] for conf in screens_config.values())
     screen_name = None
     if is_screen:
-        screen_name = next((name for name, conf in screens_config.items() if remote_addr == conf['ip'] and conf.get('enabled', True)), None)
+        screen_name = next((name for name, conf in screens_config.items() if conf['ip'] == remote_addr), None)
     sync_client(is_screen, screen_name)
 
+# === Screen Power Control (HDMI only) ===
+
 def set_screen_power(screen_name, powered_on):
-    """Turn screen HDMI power on or off — only for enabled screens"""
+    """Turn screen HDMI power on or off"""
     if screen_name not in screens_config:
         logger.warning(f"Unknown screen: {screen_name}")
         return
     conf = screens_config[screen_name]
-    if not conf.get('enabled', True):
-        logger.debug(f"Skipping HDMI control for disabled screen: {screen_name}")
-        return
     ip = conf['ip']
     username = conf.get('username', 'pi')
     state = 'on' if powered_on else 'off'
@@ -413,6 +418,7 @@ def auto_wake_screen(screen_name):
 def sleep_screen(screen_name):
     set_screen_power(screen_name, False)
 
+# === Light control handlers remain unchanged ===
 @socketio.on('set_brightness')
 def handle_set_brightness(data):
     logger.debug(f"Received 'set_brightness' with data: {data}")
@@ -613,6 +619,7 @@ def handle_set_setting(data):
         broadcast_gps({})
     socketio.emit('update_settings', config_manager.config)
 
+# Deprecated handler - kept for compatibility but does nothing
 @socketio.on('set_brightness_level')
 def handle_set_brightness_level(data):
     logger.debug(f"Ignoring deprecated 'set_brightness_level': {data}")
@@ -781,7 +788,9 @@ rules_engine = RulesEngine('rules.json', phase_manager, reeds_controller, get_co
 reeds_controller.set_rules_engine(rules_engine)
 phase_manager.set_rules_engine(rules_engine)
 
+# === ROBUST STARTUP: Wait for GPS time before evaluating rules and phase ===
 def wait_for_gps_and_initialize():
+    # Show persistent toast while waiting
     socketio.emit('show_toast', {'message': 'Waiting for GPS time...', 'duration': 0})
     logger.info("Waiting for GPS time before running time-dependent startup logic...")
 
@@ -792,175 +801,341 @@ def wait_for_gps_and_initialize():
         logger.info("GPS time ready — executing startup rules and phase check")
         socketio.emit('show_toast', {'message': 'GPS time acquired', 'duration': 3000})
 
+    # Now safe to evaluate all startup rules (including screen power based on reed state)
     rules_engine.evaluate_on_startup()
+
+    # Force correct initial phase — no 'force' arg needed since we waited for time
     phase_manager.phase_check()
 
     logger.info("Time-dependent initialization complete")
 
+# Start the waiter in background
 threading.Thread(target=wait_for_gps_and_initialize, daemon=True).start()
 
 @app.route('/phases')
+
 def show_phases():
+
     try:
+
         gps_data = get_last_gps_data()
+
         sunrise_str = gps_data.get('sunrise', '---')
+
         sunset_str = gps_data.get('sunset', '---')
+
         location = gps_data.get('location', '')
+
         date_str = gps_data.get('date', '')
+
         computed_dt = get_computed_dt()
+
         has_fix = get_has_gps_fix()
+
         current_phase = phase_manager.current_phase or 'Unknown'
+
         evening_offset_str = config_manager.get('evening_offset', '-30 mins')
+
         morning_offset_str = config_manager.get('sunrise_offset', '+30 mins')
+
         night_time_str = config_manager.get('night_time', '8:00 PM')
+
         sunrise_offset_str = gps_data.get('sunrise_offset', '---')
+
         sunset_offset_str = gps_data.get('sunset_offset', '---')
-        title = "Sun Phases"
+
+        title = "Sunrise and Sunset Times"
+
         if location and date_str:
+
             title += f" ({location}, {date_str})"
+
         html = f"""
+
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Sun Phases</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+
     <script>
+
         var socket = io();
+
         socket.on('update_gps', function(data) {{
+
             document.getElementById('title').innerText = 'Sunrise and Sunset Times' + (data.location && data.date ? ' (' + data.location + ', ' + data.date + ')' : '');
+
             document.getElementById('sunrise').innerText = data.sunrise || '---';
+
             document.getElementById('sunset').innerText = data.sunset || '---';
+
             document.getElementById('sunrise_offset').innerText = data.sunrise_offset || '---';
+
             document.getElementById('sunset_offset').innerText = data.sunset_offset || '---';
+
             document.getElementById('morning_offset_str').innerText = data.morning_offset_str || '+30 mins';
+
             document.getElementById('evening_offset_str').innerText = data.evening_offset_str || '-30 mins';
+
             document.getElementById('night_time').innerText = data.night_time || '8:00 PM';
+
         }});
+
         socket.on('update_phase', function(data) {{
+
             document.getElementById('current_phase').innerText = data.phase || 'Unknown';
+
         }});
+
         socket.on('update_settings', function(config) {{
+
             document.getElementById('morning_offset_str').innerText = config.sunrise_offset || '+30 mins';
+
             document.getElementById('evening_offset_str').innerText = config.evening_offset || '-30 mins';
+
             document.getElementById('night_time').innerText = config.night_time || '8:00 PM';
+
         }});
+
     </script>
+
 </head>
+
 <body>
+
     <h1 id="title">{title}</h1>
+
     <p><strong>Sunrise:</strong> <span id="sunrise">{sunrise_str}</span></p>
+
     <p><strong>Sunrise with offset (<span id="morning_offset_str">{morning_offset_str}</span>):</strong> <span id="sunrise_offset">{sunrise_offset_str}</span></p>
+
     <p><strong>Sunset:</strong> <span id="sunset">{sunset_str}</span></p>
+
     <p><strong>Sunset with offset (<span id="evening_offset_str">{evening_offset_str}</span>):</strong> <span id="sunset_offset">{sunset_offset_str}</span></p>
+
     <p><strong>Night start time:</strong> <span id="night_time">{night_time_str}</span></p>
+
     <p><strong>Current Phase:</strong> <span id="current_phase">{current_phase}</span></p>
+
 </body>
+
 </html>
+
         """
+
         return html
+
     except Exception as e:
+
         logger.error(f"Error generating phases page: {e}")
+
         return f"Error generating phases page: {str(e)}", 500
 
+
+
 @app.route('/reeds')
+
 def show_reeds():
+
     try:
+
         html = """
+
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Reed Switch States</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+
     <script>
+
         var socket = io();
+
         socket.on('update_reed_state', function(data) {
+
             var element = document.getElementById('reed-' + data.reed_id);
+
             if (element) {
+
                 var displayName = data.reed_id.replace(/_/g, ' ').split(' ').map(function(word) {
+
                     return word.charAt(0).toUpperCase() + word.slice(1);
+
                 }).join(' ');
+
                 element.innerText = displayName + ': ' + data.state;
+
             }
+
         });
+
     </script>
+
 </head>
+
 <body>
+
     <h1>Reed Switch States</h1>
+
     <ul>
+
 """
+
         for reed_id in sorted(reeds_config.keys()):
+
             button = reeds_controller.reeds.get(reed_id)
+
             if button:
+
                 state = "Closed" if button.is_pressed else "Open"
+
             else:
+
                 state = "Unknown"
+
             display_name = reed_id.replace('_', ' ').title()
+
             html += f"<li id=\"reed-{reed_id}\">{display_name}: {state}</li>\n"
+
         html += """
+
     </ul>
+
 </body>
+
 </html>
+
 """
+
         return html
+
     except Exception as e:
+
         logger.error(f"Error generating reeds page: {e}")
+
         return f"Error generating reeds page: {str(e)}", 500
 
+
+
 @socketio.on('shutdown_system')
+
 def handle_shutdown_system():
+
     logger.info("Received 'shutdown_system' request from client – initiating shutdown sequence")
 
+
+
     successful = []
+
     failed = []
 
+
+
     for screen_name, conf in screens_config.items():
-        if not conf.get('enabled', True):
-            logger.info(f"Skipping disabled screen during shutdown: {screen_name}")
-            continue
+
         ip = conf.get('ip')
-        username = conf.get('username', 'pi')
+
+        username = conf.get('username', 'pi')  # uses per-screen username, falls back to 'pi'
+
         if not ip:
+
             logger.warning(f"Screen '{screen_name}' has no IP defined – skipping")
+
             continue
 
+
+
         cmd = f"ssh -o ConnectTimeout=5 {username}@{ip} 'sudo shutdown -h now'"
+
         logger.info(f"Shutting down {screen_name} → {username}@{ip}")
+
+
 
         result = os.system(cmd)
 
+
+
         if result == 0:
-            logger.info(f"Shutdown command sent successfully to {screen_name}")
+
+            logger.info(f"Shutdown command sent successfully to {screen_name} ({username}@{ip})")
+
             successful.append(screen_name)
+
         else:
+
+            # os.system returns the exit code << 8, so we shift it back for readability
+
             exit_code = result >> 8
-            logger.error(f"Failed to send shutdown to {screen_name} – exit code {exit_code}")
+
+            logger.error(f"Failed to send shutdown to {screen_name} ({username}@{ip}) – exit code {exit_code}")
+
             failed.append(screen_name)
 
+
+
+    # Summary toast to all connected clients
+
     if successful and not failed:
+
         socketio.emit('show_toast', {
+
             'message': f"Shutting down: {', '.join(successful)}. Good night!",
+
             'duration': 8000
-        })
-    elif successful and failed:
-        socketio.emit('show_toast', {
-            'message': f"Partial shutdown: {', '.join(successful)} OK, {', '.join(failed)} failed",
-            'duration': 10000,
-            'type': 'warning'
-        })
-    elif failed:
-        socketio.emit('show_toast', {
-            'message': f"Shutdown failed for: {', '.join(failed)}",
-            'duration': 10000,
-            'type': 'error'
+
         })
 
+    elif successful and failed:
+
+        socketio.emit('show_toast', {
+
+            'message': f"Partial shutdown: {', '.join(successful)} OK, {', '.join(failed)} failed",
+
+            'duration': 10000,
+
+            'type': 'warning'
+
+        })
+
+    elif failed:
+
+        socketio.emit('show_toast', {
+
+            'message': f"Shutdown failed for: {', '.join(failed)}",
+
+            'duration': 10000,
+
+            'type': 'error'
+
+        })
+
+
+
+    # Finally shut down control-pi itself
+
     logger.info("Shutting down control-pi (local) in 3 seconds...")
+
     socketio.emit('show_toast', {'message': 'Control-Pi shutting down...', 'duration': 5000})
+
     time_module.sleep(3)
+
     os.system("sudo shutdown -h now")
 
 def suppression_cleanup():

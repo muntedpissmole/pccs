@@ -88,23 +88,35 @@ class RulesEngine:
         if current_dt is None:
             logger.warning("Cannot trigger rules without current datetime")
             return
+
         for rule in self.rules:
-            if rule.get('trigger') != trigger_type:
-                continue
             rule_id = rule.get('id')
             if not rule_id:
                 logger.warning("Rule missing id, skipping")
                 continue
+
+            # Skip if the rule is explicitly disabled
+            if rule.get('enabled', True) is False:
+                logger.debug(f"Skipping disabled rule: {rule_id}")
+                continue
+
+            if rule.get('trigger') != trigger_type:
+                continue
+
             if rule.get('once_per_day', False):
                 last = self.last_execution.get(rule_id)
                 if last and last.date() == current_dt.date():
                     logger.debug(f"Skipping rule {rule_id} (already executed today)")
                     continue
+
             if 'conditions' in rule and not self.evaluate_condition(rule['conditions'], context):
                 continue
+
             if rule.get('show_toast', False) and self.on_rule_fired:
                 self.on_rule_fired(rule)
+
             self.execute_actions(rule.get('actions', []))
+
             if rule.get('once_per_day', False):
                 self.last_execution[rule_id] = current_dt
                 logger.debug(f"Updated last execution for {rule_id}")
@@ -115,23 +127,34 @@ class RulesEngine:
         if current_dt is None:
             logger.warning("Cannot evaluate rules on startup without current datetime")
             return
+
         for rule in self.rules:
             if not rule.get('evaluate_on_startup', False):
                 continue
+
             rule_id = rule.get('id')
             if not rule_id:
                 continue
+
+            # Skip if the rule is explicitly disabled
+            if rule.get('enabled', True) is False:
+                logger.debug(f"Skipping disabled rule on startup: {rule_id}")
+                continue
+
             if rule.get('once_per_day', False):
                 last = self.last_execution.get(rule_id)
                 if last and last.date() == current_dt.date():
                     logger.debug(f"Skipping rule {rule_id} on startup (already executed today)")
                     continue
+
             trigger = rule.get('trigger')
             satisfied = False
+
             if trigger == 'phase_changed':
                 context = {'new_phase': current_phase}
                 if 'conditions' in rule:
                     satisfied = self.evaluate_condition(rule['conditions'], context)
+
             elif trigger == 'reed_state_changed':
                 for reed_id, button in self.reeds_controller.reeds.items():
                     state = "Closed" if button.is_pressed else "Open"
@@ -142,6 +165,8 @@ class RulesEngine:
                         self.execute_actions(rule.get('actions', []))
                         if rule.get('once_per_day', False):
                             self.last_execution[rule_id] = current_dt
+                continue  # No further processing needed for this trigger type on startup
+
             else:
                 logger.debug(f"Skipping unknown trigger {trigger} on startup")
                 continue

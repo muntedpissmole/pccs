@@ -127,7 +127,8 @@
     },
     "tent": {
       "ip": "10.10.10.11",
-      "username": "pi"
+      "username": "pi",
+      "enabled": false
     }
   }
 }
