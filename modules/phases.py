@@ -6,8 +6,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PhaseManager:
-    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, set_screen_brightness, current_screen_levels, screen_sids):
+    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, current_screen_levels, screen_sids):
         self.config_manager = config_manager
         self.handle_apply_scene = handle_apply_scene
         self.get_last_gps_data = get_last_gps_data
@@ -15,11 +16,10 @@ class PhaseManager:
         self.get_has_gps_fix = get_has_gps_fix
         self.socketio = socketio
         self.screens_config = screens_config
-        self.set_screen_brightness = set_screen_brightness
-        self.current_screen_levels = current_screen_levels
+        self.current_screen_levels = current_screen_levels    # Still useful for tracking on/off state
         self.screen_sids = screen_sids
         self.current_phase = None
-        self.phase_to_scene = {}  # Empty dict disables direct phase → scene mapping (handled by rules engine)
+        self.phase_to_scene = {}  # Empty — phase → scene mapping is handled by rules engine
         self.reeds_controller = None
         self.rules_engine = None
         self.prev_dt = None
@@ -42,7 +42,6 @@ class PhaseManager:
     def parse_offset(self, offset_str):
         """Parse offset like '+30 mins' or '-45 mins' into integer minutes"""
         try:
-            # Extract the number (with optional leading + or -)
             num_str = offset_str.strip().split()[0]
             return int(num_str)
         except (ValueError, IndexError) as e:
@@ -90,11 +89,11 @@ class PhaseManager:
         sunset_dt = datetime.combine(today, sunset_time)
 
         # Phase start times
-        day_start = sunrise_dt + timedelta(minutes=morning_offset_mins)      # e.g., sunrise +30 mins
-        evening_start = sunset_dt + timedelta(minutes=evening_offset_mins)   # e.g., sunset -30 mins
+        day_start = sunrise_dt + timedelta(minutes=morning_offset_mins)
+        evening_start = sunset_dt + timedelta(minutes=evening_offset_mins)
         night_start = datetime.combine(today, night_time)
 
-        # If night_time is before evening_start (e.g., night at 7 PM, evening at 8 PM), push to next day
+        # If night_time is before evening_start, push to next day
         if night_start <= evening_start:
             night_start += timedelta(days=1)
 
@@ -114,11 +113,6 @@ class PhaseManager:
             old_phase = self.current_phase
             self.current_phase = new_phase
 
-            # Direct scene application is disabled (handled by rules engine)
-            # scene_id = self.phase_to_scene.get(new_phase)
-            # if scene_id:
-            #     self.handle_apply_scene({'scene_id': scene_id})
-
             # Update reed overrides based on current phase
             if self.reeds_controller is not None:
                 self.reeds_controller.evaluate_open_reeds()
@@ -129,7 +123,7 @@ class PhaseManager:
             if self.rules_engine:
                 self.rules_engine.on_phase_change(new_phase)
 
-            # Auto theme switch
+            # Auto theme switch (dark mode)
             auto_theme = self.config_manager.get('auto_theme', False)
             if auto_theme and new_phase is not None:
                 should_be_dark = new_phase in ['evening', 'night']
@@ -138,19 +132,6 @@ class PhaseManager:
                     self.config_manager.set('dark_mode', should_be_dark)
                     self.socketio.emit('update_settings', self.config_manager.config)
                     logger.info(f"Auto theme: dark_mode → {should_be_dark}")
-
-            # Auto screen brightness
-            auto_brightness = self.config_manager.get('auto_brightness', False)
-            if auto_brightness and new_phase:
-                level_map = {'day': 'high', 'evening': 'medium', 'night': 'low'}
-                level = level_map.get(new_phase)
-                if level:
-                    for screen_name in self.screens_config:
-                        self.set_screen_brightness(screen_name, level)
-                        self.current_screen_levels[screen_name] = level
-                        if screen_name in self.screen_sids:
-                            self.socketio.emit('update_brightness_level', {'level': level},
-                                               to=self.screen_sids[screen_name])
 
     def check_all_off_time(self):
         """Trigger a custom event 1 hour after sunrise (used by rules)"""
@@ -184,19 +165,6 @@ class PhaseManager:
         logger.info("Starting PhaseManager loop")
         self.phase_check()  # Initial evaluation on startup
 
-        # Apply auto brightness on startup if enabled
-        auto_brightness = self.config_manager.get('auto_brightness', False)
-        if auto_brightness and self.current_phase:
-            level_map = {'day': 'high', 'evening': 'medium', 'night': 'low'}
-            level = level_map.get(self.current_phase)
-            if level:
-                for screen_name in self.screens_config:
-                    self.set_screen_brightness(screen_name, level)
-                    self.current_screen_levels[screen_name] = level
-                    if screen_name in self.screen_sids:
-                        self.socketio.emit('update_brightness_level', {'level': level},
-                                           to=self.screen_sids[screen_name])
-
         self.prev_dt = self.get_computed_dt()
         threading.Thread(target=self._phase_loop, daemon=True).start()
 
@@ -204,4 +172,4 @@ class PhaseManager:
         while True:
             self.phase_check()
             self.check_all_off_time()
-            time_module.sleep(10)  # Check every 10 seconds for responsive transitions
+            time_module.sleep(10)  # Check every 10 seconds

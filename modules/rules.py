@@ -5,6 +5,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
 class RulesEngine:
     def __init__(self, rules_file, phase_manager, reeds_controller, get_computed_dt, action_handlers, on_rule_fired=None):
         self.phase_manager = phase_manager
@@ -136,11 +137,15 @@ class RulesEngine:
                     state = "Closed" if button.is_pressed else "Open"
                     context = {'reed_id': reed_id, 'new_state': state}
                     if 'conditions' in rule and self.evaluate_condition(rule['conditions'], context):
-                        satisfied = True
-                        break
+                        if rule.get('show_toast', False) and self.on_rule_fired:
+                            self.on_rule_fired(rule)
+                        self.execute_actions(rule.get('actions', []))
+                        if rule.get('once_per_day', False):
+                            self.last_execution[rule_id] = current_dt
             else:
                 logger.debug(f"Skipping unknown trigger {trigger} on startup")
                 continue
+
             if satisfied:
                 if rule.get('show_toast', False) and self.on_rule_fired:
                     self.on_rule_fired(rule)

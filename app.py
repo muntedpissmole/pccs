@@ -46,6 +46,9 @@ base_gps_datetime = None
 last_sync_time = None
 has_gps_fix = False
 
+# NEW: Event to signal when reliable GPS time is available
+gps_ready_event = threading.Event()
+
 def broadcast_gps(data):
     global last_gps_data, base_gps_datetime, last_sync_time, has_gps_fix
     if 'has_fix' in data:
@@ -57,6 +60,9 @@ def broadcast_gps(data):
             if base_gps_datetime is None:
                 base_gps_datetime = new_gps_dt
                 last_sync_time = current_system
+                gps_ready_event.set()  # Critical: signal that time is now reliable
+                logger.info("GPS time acquired and synchronized")
+                socketio.emit('show_toast', {'message': 'GPS time acquired', 'duration': 3000})
             else:
                 base_gps_datetime = new_gps_dt
                 last_sync_time = current_system
@@ -221,20 +227,10 @@ def validate_static_config(config):
         for name, sconf in screens.items():
             if not isinstance(sconf, dict):
                 raise ValueError(f"Screen '{name}' must be a dictionary")
-            required = ['ip', 'brightness_path', 'levels']
-            for r in required:
-                if r not in sconf:
-                    raise ValueError(f"Missing '{r}' for screen '{name}'")
-            if not isinstance(sconf['ip'], str):
-                raise ValueError(f"Invalid 'ip' for screen '{name}'")
-            if not isinstance(sconf['brightness_path'], str):
-                raise ValueError(f"Invalid 'brightness_path' for screen '{name}'")
-            levels = sconf['levels']
-            if not isinstance(levels, dict):
-                raise ValueError(f"'levels' for screen '{name}' must be dict")
-            for l in ['low', 'medium', 'high']:
-                if l not in levels or not isinstance(levels[l], int):
-                    raise ValueError(f"Missing or invalid level '{l}' for screen '{name}'")
+            if 'ip' not in sconf or not isinstance(sconf['ip'], str):
+                raise ValueError(f"Missing or invalid 'ip' for screen '{name}'")
+            if 'username' in sconf and not isinstance(sconf['username'], str):
+                raise ValueError(f"Invalid 'username' for screen '{name}'")
     system_toast_sec = config.get('system_toast_display_time')
     if system_toast_sec is not None:
         if not isinstance(system_toast_sec, int) or system_toast_sec <= 0:
@@ -256,7 +252,7 @@ config_manager = ConfigManager()
 config = config_manager.config
 lights_config = static_config.get('lights', {})
 screens_config = static_config.get('screens', {})
-current_screen_levels = {name: 'medium' for name in screens_config}
+current_screen_levels = {name: 'off' for name in screens_config}  # 'on' or 'off'
 screen_sids = {}
 states = {}
 for lid_str, lconf in lights_config.items():
@@ -357,32 +353,21 @@ def get_has_gps_fix():
 def sync_client(is_screen, screen_name=None):
     response_states = {str(k): {'brightness': v['brightness'], 'active': v.get('active', None), 'locked': v.get('locked', False), 'reed_locked': v.get('reed_locked', False)} for k, v in states.items()}
     emit('update_states', response_states)
-    logger.debug(f"Emitting 'update_states' to client with data: {response_states}")
     matching_scene = find_matching_scene()
     emit('set_active_scene', {'scene_id': matching_scene})
-    logger.debug(f"Emitting 'set_active_scene' to client with data: {{'scene_id': {matching_scene}}}")
     relay_states = gpio.get_relay_states()
     emit('update_relays', relay_states)
-    logger.debug(f"Emitting 'update_relays' to client with data: {relay_states}")
     sensor_states = gpio.get_sensor_states()
     emit('update_sensors', sensor_states)
-    logger.debug(f"Emitting 'update_sensors' to client with data: {sensor_states}")
     emit('update_settings', config)
-    logger.debug(f"Emitting 'update_settings' to client with data: {config}")
     emit('update_phase', {'phase': phase_manager.current_phase})
-    logger.debug(f"Emitting 'update_phase' to client with data: {{'phase': {phase_manager.current_phase}}}")
     emit('update_gps', last_gps_data)
-    logger.debug(f"Emitting 'update_gps' to client with data: {last_gps_data}")
     for reed_id, button in reeds_controller.reeds.items():
         state = "Closed" if button.is_pressed else "Open"
         emit('update_reed_state', {'reed_id': reed_id, 'state': state})
-        logger.debug(f"Emitting 'update_reed_state' to client with data: {{'reed_id': {reed_id}, 'state': {state}}}")
-    emit('set_brightness_controls_enabled', {'enabled': is_screen})
-    logger.debug(f"Emitting 'set_brightness_controls_enabled' to client with data: {{'enabled': {is_screen}}}")
     if is_screen and screen_name:
-        level = current_screen_levels.get(screen_name, 'medium')
-        emit('update_brightness_level', {'level': level})
-        logger.debug(f"Emitting 'update_brightness_level' to client with data: {{'level': {level}}}")
+        powered = current_screen_levels.get(screen_name, 'off') == 'on'
+        emit('update_screen_power', {'powered': powered})
 
 @socketio.on('connect')
 def handle_connect():
@@ -406,6 +391,34 @@ def handle_request_sync():
         screen_name = next((name for name, conf in screens_config.items() if conf['ip'] == remote_addr), None)
     sync_client(is_screen, screen_name)
 
+# === Screen Power Control (HDMI only) ===
+
+def set_screen_power(screen_name, powered_on):
+    """Turn screen HDMI power on or off"""
+    if screen_name not in screens_config:
+        logger.warning(f"Unknown screen: {screen_name}")
+        return
+    conf = screens_config[screen_name]
+    ip = conf['ip']
+    username = conf.get('username', 'pi')
+    state = 'on' if powered_on else 'off'
+    cmd = f"ssh {username}@{ip} \"sudo sh -c 'echo {state} > /sys/class/drm/card0-HDMI-A-1/status'\""
+    result = os.system(cmd)
+    if result == 0:
+        logger.info(f"{screen_name}: HDMI display turned {state.upper()}")
+    else:
+        logger.error(f"{screen_name}: Failed to turn HDMI {state.upper()} (code: {result >> 8})")
+    current_screen_levels[screen_name] = 'on' if powered_on else 'off'
+    if screen_name in screen_sids:
+        socketio.emit('update_screen_power', {'powered': powered_on}, to=screen_sids[screen_name])
+
+def auto_wake_screen(screen_name):
+    set_screen_power(screen_name, True)
+
+def sleep_screen(screen_name):
+    set_screen_power(screen_name, False)
+
+# === Light control handlers remain unchanged ===
 @socketio.on('set_brightness')
 def handle_set_brightness(data):
     logger.debug(f"Received 'set_brightness' with data: {data}")
@@ -495,12 +508,10 @@ def handle_ramp_brightness(data):
     pwm_value = calculate_pwm(target)
     arduino.ramp_pwm(state['pin'], pwm_value, ramp_rate_ms)
     state['brightness'] = target
-    logger.debug(f"Emitting 'brightness_ramp_start' to all with data: {{'light_id': {light_id}, 'target_brightness': {target}, 'ramp_duration': {ramp_rate_ms}}}")
     socketio.emit('brightness_ramp_start', {'light_id': light_id, 'target_brightness': target, 'ramp_duration': ramp_rate_ms})
     broadcast_states()
     update_active_scene()
     threading.Timer(ramp_rate_ms / 1000 + 0.5, lambda: unlock_light(light_id)).start()
-    logger.debug(f"Ramping brightness for light {light_id} to {target}")
 
 def apply_settings(settings, duration_sec):
     duration_ms = duration_sec * 1000
@@ -554,7 +565,6 @@ def apply_settings(settings, duration_sec):
         states[lid]['locked'] = True
     broadcast_states()
     response_states = {str(k): {'brightness': future_states[k]['brightness'], 'active': future_states[k].get('active', None)} for k in future_states}
-    logger.debug(f"Broadcasting 'scene_ramp_start' with data: {{'states': {response_states}, 'ramp_duration': {duration_ms}}}")
     socketio.emit('scene_ramp_start', {'states': response_states, 'ramp_duration': duration_ms})
     def apply_after_ramp(lights_to_lock, future_states, settings):
         for light_id_str in settings:
@@ -608,37 +618,11 @@ def handle_set_setting(data):
     else:
         broadcast_gps({})
     socketio.emit('update_settings', config_manager.config)
-    if key == 'auto_brightness' and value:
-        current_phase = phase_manager.current_phase
-        if current_phase:
-            brightness_level = {'day': 'high', 'evening': 'medium', 'night': 'low'}.get(current_phase)
-            if brightness_level:
-                for s_name in screens_config:
-                    set_screen_brightness(s_name, brightness_level)
-                    current_screen_levels[s_name] = brightness_level
-                    if s_name in screen_sids:
-                        logger.debug(f"Emitting 'update_brightness_level' to sid {screen_sids[s_name]} with data: {{'level': {brightness_level}}}")
-                        socketio.emit('update_brightness_level', {'level': brightness_level}, to=screen_sids[s_name])
-    logger.debug(f"Set setting {key} to {value}")
 
+# Deprecated handler - kept for compatibility but does nothing
 @socketio.on('set_brightness_level')
 def handle_set_brightness_level(data):
-    logger.debug(f"Received 'set_brightness_level' with data: {data}")
-    level = data.get('level')
-    if level not in ['low', 'medium', 'high']:
-        logger.warning(f"Invalid brightness level: {level}")
-        return
-    remote_addr = flask.request.remote_addr
-    screen_name = None
-    for name, conf in screens_config.items():
-        if conf['ip'] == remote_addr:
-            screen_name = name
-            break
-    if screen_name:
-        set_screen_brightness(screen_name, level)
-        current_screen_levels[screen_name] = level
-    else:
-        logger.warning(f"No screen found for IP: {remote_addr}")
+    logger.debug(f"Ignoring deprecated 'set_brightness_level': {data}")
 
 def time_update_loop():
     while True:
@@ -741,7 +725,6 @@ def power_update_loop():
         power_data = {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase}
         logger.debug(f"Broadcasting 'update_power' with data: {power_data}")
         socketio.emit('update_power', power_data)
-        logger.debug(f"Power update: battery={battery_voltage}, battery_pct={battery_pct}, water={water_pct}, solar={solar_current}, phase={phase_manager.current_phase}")
 
 system_toast_display_time_sec = static_config.get('system_toast_display_time', 5)
 system_toast_display_time_ms = system_toast_display_time_sec * 1000
@@ -750,29 +733,10 @@ rules_toast_display_time_sec = static_config.get('rules_toast_display_time', 10)
 rules_toast_display_time_ms = rules_toast_display_time_sec * 1000
 config_manager.set('rules_toast_display_time_ms', rules_toast_display_time_ms)
 
-def set_screen_brightness(screen_name, level):
-    if screen_name not in screens_config:
-        logger.warning(f"Unknown screen {screen_name}")
-        return
-    conf = screens_config[screen_name]
-    if level not in conf['levels']:
-        logger.warning(f"Unknown level {level} for {screen_name}")
-        return
-    value = conf['levels'][level]
-    ip = conf['ip']
-    path = conf['brightness_path']
-    username = conf.get('username', 'pi')
-    cmd = f"ssh {username}@{ip} \"echo {value} > {path}\""
-    result = os.system(cmd)
-    if result == 0:
-        logger.info(f"Set {screen_name} brightness to {level} ({value})")
-    else:
-        logger.error(f"Failed to set {screen_name} brightness, code {result}")
-
 def handle_phase_scene(scene_id):
     apply_scene(scene_id, triggered_by_phase_change=True)
 
-phase_manager = PhaseManager(config_manager, handle_phase_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, set_screen_brightness, current_screen_levels, screen_sids)
+phase_manager = PhaseManager(config_manager, handle_phase_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, current_screen_levels, screen_sids)
 
 def apply_reed_settings(settings):
     channel_str = str(settings['channel'])
@@ -803,32 +767,16 @@ def set_light_reed_locked(light_id, reed_locked):
         broadcast_states()
 
 reeds_config = static_config.get('reeds', {})
-reeds_controller = ReedsController(reeds_config, apply_reed_settings, lambda: phase_manager.current_phase, broadcast_reed_state, on_lock=set_light_reed_locked)
+
+reeds_controller = ReedsController(
+    reeds_config,
+    apply_reed_settings,
+    lambda: phase_manager.current_phase,
+    None,
+    on_lock=set_light_reed_locked
+)
+
 phase_manager.set_reeds_controller(reeds_controller)
-
-def auto_wake_screen(screen_name):
-    current_phase = phase_manager.current_phase
-    level_map = {'day': 'high', 'evening': 'medium', 'night': 'low'}
-    level = level_map.get(current_phase, 'medium')
-    set_screen_brightness(screen_name, level)
-    current_screen_levels[screen_name] = level
-    if screen_name in screen_sids:
-        socketio.emit('update_brightness_level', {'level': level}, to=screen_sids[screen_name])
-
-def sleep_screen(screen_name):
-    conf = screens_config[screen_name]
-    ip = conf['ip']
-    path = conf['brightness_path']
-    username = conf.get('username', 'pi')
-    cmd = f"ssh {username}@{ip} \"echo 0 > {path}\""
-    result = os.system(cmd)
-    if result == 0:
-        logger.info(f"Slept screen {screen_name}")
-    else:
-        logger.error(f"Failed to sleep screen {screen_name}, code {result}")
-    current_screen_levels[screen_name] = 'off'
-    if screen_name in screen_sids:
-        socketio.emit('update_brightness_level', {'level': 'off'}, to=screen_sids[screen_name])
 
 action_handlers = {
     'apply_scene': apply_scene,
@@ -839,160 +787,355 @@ action_handlers = {
 rules_engine = RulesEngine('rules.json', phase_manager, reeds_controller, get_computed_dt, action_handlers, on_rule_fired=lambda rule: socketio.emit('show_toast', {'message': rule.get('description', 'Rule fired'), 'duration': config_manager.get('rules_toast_display_time_ms')}))
 reeds_controller.set_rules_engine(rules_engine)
 phase_manager.set_rules_engine(rules_engine)
-rules_engine.evaluate_on_startup()
+
+# === ROBUST STARTUP: Wait for GPS time before evaluating rules and phase ===
+def wait_for_gps_and_initialize():
+    # Show persistent toast while waiting
+    socketio.emit('show_toast', {'message': 'Waiting for GPS time...', 'duration': 0})
+    logger.info("Waiting for GPS time before running time-dependent startup logic...")
+
+    if not gps_ready_event.wait(timeout=60):
+        logger.warning("GPS fix not acquired within 60 seconds — proceeding with limited functionality")
+        socketio.emit('show_toast', {'message': 'No GPS time available', 'duration': 8000})
+    else:
+        logger.info("GPS time ready — executing startup rules and phase check")
+        socketio.emit('show_toast', {'message': 'GPS time acquired', 'duration': 3000})
+
+    # Now safe to evaluate all startup rules (including screen power based on reed state)
+    rules_engine.evaluate_on_startup()
+
+    # Force correct initial phase — no 'force' arg needed since we waited for time
+    phase_manager.phase_check()
+
+    logger.info("Time-dependent initialization complete")
+
+# Start the waiter in background
+threading.Thread(target=wait_for_gps_and_initialize, daemon=True).start()
 
 @app.route('/phases')
+
 def show_phases():
+
     try:
+
         gps_data = get_last_gps_data()
+
         sunrise_str = gps_data.get('sunrise', '---')
+
         sunset_str = gps_data.get('sunset', '---')
+
         location = gps_data.get('location', '')
+
         date_str = gps_data.get('date', '')
+
         computed_dt = get_computed_dt()
+
         has_fix = get_has_gps_fix()
+
         current_phase = phase_manager.current_phase or 'Unknown'
+
         evening_offset_str = config_manager.get('evening_offset', '-30 mins')
+
         morning_offset_str = config_manager.get('sunrise_offset', '+30 mins')
+
         night_time_str = config_manager.get('night_time', '8:00 PM')
+
         sunrise_offset_str = gps_data.get('sunrise_offset', '---')
+
         sunset_offset_str = gps_data.get('sunset_offset', '---')
+
         title = "Sunrise and Sunset Times"
+
         if location and date_str:
+
             title += f" ({location}, {date_str})"
+
         html = f"""
+
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Sun Phases</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+
     <script>
+
         var socket = io();
+
         socket.on('update_gps', function(data) {{
+
             document.getElementById('title').innerText = 'Sunrise and Sunset Times' + (data.location && data.date ? ' (' + data.location + ', ' + data.date + ')' : '');
+
             document.getElementById('sunrise').innerText = data.sunrise || '---';
+
             document.getElementById('sunset').innerText = data.sunset || '---';
+
             document.getElementById('sunrise_offset').innerText = data.sunrise_offset || '---';
+
             document.getElementById('sunset_offset').innerText = data.sunset_offset || '---';
+
             document.getElementById('morning_offset_str').innerText = data.morning_offset_str || '+30 mins';
+
             document.getElementById('evening_offset_str').innerText = data.evening_offset_str || '-30 mins';
+
             document.getElementById('night_time').innerText = data.night_time || '8:00 PM';
+
         }});
+
         socket.on('update_phase', function(data) {{
+
             document.getElementById('current_phase').innerText = data.phase || 'Unknown';
+
         }});
+
         socket.on('update_settings', function(config) {{
+
             document.getElementById('morning_offset_str').innerText = config.sunrise_offset || '+30 mins';
+
             document.getElementById('evening_offset_str').innerText = config.evening_offset || '-30 mins';
+
             document.getElementById('night_time').innerText = config.night_time || '8:00 PM';
+
         }});
+
     </script>
+
 </head>
+
 <body>
+
     <h1 id="title">{title}</h1>
+
     <p><strong>Sunrise:</strong> <span id="sunrise">{sunrise_str}</span></p>
+
     <p><strong>Sunrise with offset (<span id="morning_offset_str">{morning_offset_str}</span>):</strong> <span id="sunrise_offset">{sunrise_offset_str}</span></p>
+
     <p><strong>Sunset:</strong> <span id="sunset">{sunset_str}</span></p>
+
     <p><strong>Sunset with offset (<span id="evening_offset_str">{evening_offset_str}</span>):</strong> <span id="sunset_offset">{sunset_offset_str}</span></p>
+
     <p><strong>Night start time:</strong> <span id="night_time">{night_time_str}</span></p>
+
     <p><strong>Current Phase:</strong> <span id="current_phase">{current_phase}</span></p>
+
 </body>
+
 </html>
+
         """
+
         return html
+
     except Exception as e:
+
         logger.error(f"Error generating phases page: {e}")
+
         return f"Error generating phases page: {str(e)}", 500
 
+
+
 @app.route('/reeds')
+
 def show_reeds():
+
     try:
+
         html = """
+
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Reed Switch States</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+
     <script>
+
         var socket = io();
+
         socket.on('update_reed_state', function(data) {
+
             var element = document.getElementById('reed-' + data.reed_id);
+
             if (element) {
+
                 var displayName = data.reed_id.replace(/_/g, ' ').split(' ').map(function(word) {
+
                     return word.charAt(0).toUpperCase() + word.slice(1);
+
                 }).join(' ');
+
                 element.innerText = displayName + ': ' + data.state;
+
             }
+
         });
+
     </script>
+
 </head>
+
 <body>
+
     <h1>Reed Switch States</h1>
+
     <ul>
+
 """
+
         for reed_id in sorted(reeds_config.keys()):
+
             button = reeds_controller.reeds.get(reed_id)
+
             if button:
+
                 state = "Closed" if button.is_pressed else "Open"
+
             else:
+
                 state = "Unknown"
+
             display_name = reed_id.replace('_', ' ').title()
+
             html += f"<li id=\"reed-{reed_id}\">{display_name}: {state}</li>\n"
+
         html += """
+
     </ul>
+
 </body>
+
 </html>
+
 """
+
         return html
+
     except Exception as e:
+
         logger.error(f"Error generating reeds page: {e}")
+
         return f"Error generating reeds page: {str(e)}", 500
 
+
+
 @socketio.on('shutdown_system')
+
 def handle_shutdown_system():
+
     logger.info("Received 'shutdown_system' request from client – initiating shutdown sequence")
+
+
+
     successful = []
+
     failed = []
+
+
+
     for screen_name, conf in screens_config.items():
+
         ip = conf.get('ip')
-        username = conf.get('username', 'pi')
+
+        username = conf.get('username', 'pi')  # uses per-screen username, falls back to 'pi'
+
         if not ip:
+
             logger.warning(f"Screen '{screen_name}' has no IP defined – skipping")
+
             continue
+
+
+
         cmd = f"ssh -o ConnectTimeout=5 {username}@{ip} 'sudo shutdown -h now'"
+
         logger.info(f"Shutting down {screen_name} → {username}@{ip}")
+
+
+
         result = os.system(cmd)
+
+
+
         if result == 0:
+
             logger.info(f"Shutdown command sent successfully to {screen_name} ({username}@{ip})")
+
             successful.append(screen_name)
+
         else:
+
+            # os.system returns the exit code << 8, so we shift it back for readability
+
             exit_code = result >> 8
+
             logger.error(f"Failed to send shutdown to {screen_name} ({username}@{ip}) – exit code {exit_code}")
+
             failed.append(screen_name)
+
+
+
+    # Summary toast to all connected clients
+
     if successful and not failed:
+
         socketio.emit('show_toast', {
+
             'message': f"Shutting down: {', '.join(successful)}. Good night!",
+
             'duration': 8000
+
         })
+
     elif successful and failed:
+
         socketio.emit('show_toast', {
+
             'message': f"Partial shutdown: {', '.join(successful)} OK, {', '.join(failed)} failed",
+
             'duration': 10000,
+
             'type': 'warning'
+
         })
+
     elif failed:
+
         socketio.emit('show_toast', {
+
             'message': f"Shutdown failed for: {', '.join(failed)}",
+
             'duration': 10000,
+
             'type': 'error'
+
         })
+
+
+
+    # Finally shut down control-pi itself
+
     logger.info("Shutting down control-pi (local) in 3 seconds...")
+
     socketio.emit('show_toast', {'message': 'Control-Pi shutting down...', 'duration': 5000})
+
     time_module.sleep(3)
+
     os.system("sudo shutdown -h now")
 
 def suppression_cleanup():
