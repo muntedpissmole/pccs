@@ -13,6 +13,7 @@ import statistics
 import flask
 
 suppress_reed_panel_rules_until = None
+suppress_startup_rule_toasts = False
 
 if not os.path.exists('logs'):
     os.makedirs('logs')
@@ -386,24 +387,37 @@ def handle_request_sync():
     sync_client(is_screen, screen_name)
 
 def set_screen_power(screen_name, powered_on):
-    """Turn screen HDMI power on or off — only for enabled screens"""
     if screen_name not in screens_config:
         logger.warning(f"Unknown screen: {screen_name}")
         return
+
     conf = screens_config[screen_name]
     if not conf.get('enabled', True):
         logger.debug(f"Skipping HDMI control for disabled screen: {screen_name}")
         return
+
+    current_state = current_screen_levels.get(screen_name, 'off')
+    target_state = 'on' if powered_on else 'off'
+
+    if current_state == target_state:
+        logger.debug(f"{screen_name}: HDMI already {target_state.upper()} — skipping redundant command")
+        if screen_name in screen_sids:
+            socketio.emit('update_screen_power', {'powered': powered_on}, to=screen_sids[screen_name])
+        return
+
     ip = conf['ip']
     username = conf.get('username', 'pi')
     state = 'on' if powered_on else 'off'
     cmd = f"ssh {username}@{ip} \"sudo sh -c 'echo {state} > /sys/class/drm/card0-HDMI-A-1/status'\""
     result = os.system(cmd)
+
     if result == 0:
         logger.info(f"{screen_name}: HDMI display turned {state.upper()}")
     else:
         logger.error(f"{screen_name}: Failed to turn HDMI {state.upper()} (code: {result >> 8})")
-    current_screen_levels[screen_name] = 'on' if powered_on else 'off'
+
+    current_screen_levels[screen_name] = target_state
+
     if screen_name in screen_sids:
         socketio.emit('update_screen_power', {'powered': powered_on}, to=screen_sids[screen_name])
 
@@ -782,6 +796,7 @@ reeds_controller.set_rules_engine(rules_engine)
 phase_manager.set_rules_engine(rules_engine)
 
 def wait_for_gps_and_initialize():
+    global suppress_startup_rule_toasts
     socketio.emit('show_toast', {'message': 'Waiting for GPS time...', 'duration': 0})
     logger.info("Waiting for GPS time before running time-dependent startup logic...")
 
@@ -790,14 +805,15 @@ def wait_for_gps_and_initialize():
         socketio.emit('show_toast', {'message': 'No GPS time available', 'duration': 8000})
     else:
         logger.info("GPS time ready — executing startup rules and phase check")
-        socketio.emit('show_toast', {'message': 'GPS time acquired', 'duration': 3000})
+
+    suppress_startup_rule_toasts = True
 
     rules_engine.evaluate_on_startup()
     phase_manager.phase_check()
 
-    logger.info("Time-dependent initialization complete")
+    suppress_startup_rule_toasts = False
 
-threading.Thread(target=wait_for_gps_and_initialize, daemon=True).start()
+    logger.info("Time-dependent initialization complete")
 
 @app.route('/phases')
 def show_phases():

@@ -161,7 +161,11 @@ class RulesEngine:
                     context = {'reed_id': reed_id, 'new_state': state}
                     if 'conditions' in rule and self.evaluate_condition(rule['conditions'], context):
                         if rule.get('show_toast', False) and self.on_rule_fired:
-                            self.on_rule_fired(rule)
+                            # Suppress toast during startup evaluation if flag is set
+                            if getattr(self, 'suppress_startup_toasts', False):
+                                logger.debug(f"Suppressed startup toast for rule: {rule.get('id')}")
+                            else:
+                                self.on_rule_fired(rule)
                         self.execute_actions(rule.get('actions', []))
                         if rule.get('once_per_day', False):
                             self.last_execution[rule_id] = current_dt
@@ -173,7 +177,11 @@ class RulesEngine:
 
             if satisfied:
                 if rule.get('show_toast', False) and self.on_rule_fired:
-                    self.on_rule_fired(rule)
+                    # Suppress toast during startup evaluation if flag is set
+                    if getattr(self, 'suppress_startup_toasts', False):
+                        logger.debug(f"Suppressed startup toast for rule: {rule.get('id')}")
+                    else:
+                        self.on_rule_fired(rule)
                 self.execute_actions(rule.get('actions', []))
                 if rule.get('once_per_day', False):
                     self.last_execution[rule_id] = current_dt

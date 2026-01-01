@@ -1,4 +1,4 @@
-# modules.gps.py
+# modules/gps.py
 import serial
 import pynmea2
 import threading
@@ -84,7 +84,7 @@ class GPSController:
     def _update_thread(self):
         while True:
             self.update()
-            time_module.sleep(1)  # Poll every 1 second to reduce CPU usage
+            time_module.sleep(1)
             current_time = time_module.time()
             changed = (
                 self.fix != self.previous_fix or
@@ -101,7 +101,6 @@ class GPSController:
                     lat = self.lat
                     lon = self.lon
                     sats = self.sats
-                    # Check if we need to update geolocation (hourly or significant position change)
                     position_changed = (
                         self.previous_lat is None or self.previous_lon is None or
                         abs(lat - self.previous_lat) > self.geo_threshold or
@@ -121,7 +120,6 @@ class GPSController:
                             self.cached_town = town
                             logger.debug(f"Geolocation: {town}")
 
-                            # Get state for timezone mapping (Australia-specific)
                             state = location_res.raw['address'].get('state')
                             country = location_res.raw['address'].get('country')
                             if country == 'Australia' and state:
@@ -141,7 +139,6 @@ class GPSController:
                                 else:
                                     raise ValueError(f"No timezone mapping for state: {state}")
                             else:
-                                # Fallback to TimezoneFinder for non-Australia or missing state
                                 tz_str = self.tf.timezone_at(lng=lon, lat=lat)
                                 if tz_str is None:
                                     raise ValueError("No timezone found")
@@ -157,6 +154,7 @@ class GPSController:
                     else:
                         town = self.cached_town
                         tz_str = self.cached_tz_str
+
                     using_gps_time = self.utc_time is not None and self.date is not None
                     now = dt_module.datetime.utcnow()
                     utc_dt = dt_module.datetime.combine(self.date, self.utc_time) if using_gps_time else now
@@ -168,7 +166,7 @@ class GPSController:
                     if hour == 0:
                         hour = 12
                     time_str = f"{hour}:{local_dt.minute:02d} {local_dt.strftime('%p')}"
-                    # Sunrise/sunset
+
                     if position_changed or (current_time - self.last_geo_time > 3600) or self.date != self.previous_date:
                         try:
                             loc = LocationInfo(name="Custom", region="Custom", timezone=tz_str, latitude=lat, longitude=lon)
@@ -193,6 +191,7 @@ class GPSController:
                     else:
                         sunrise_str = self.cached_sunrise_str
                         sunset_str = self.cached_sunset_str
+
                     satellites_str = f"{sats} Satellites"
                     weather_data = self.weather.get_weather_data(lat, lon) if self.weather else None
                 else:
@@ -207,18 +206,19 @@ class GPSController:
                     sunset_str = '---'
                     satellites_str = '---'
                     weather_data = None
-                if geo_failed != self.previous_geo_failed:
-                    if geo_failed:
-                        self.on_event('show_toast', {'message': 'Geolocation failed', 'type': 'warning'})
-                    self.previous_geo_failed = geo_failed
-                if tz_failed != self.previous_tz_failed:
-                    if tz_failed:
-                        self.on_event('show_toast', {'message': 'Timezone lookup failed', 'type': 'warning'})
-                    self.previous_tz_failed = tz_failed
-                if sun_failed != self.previous_sun_failed:
-                    if sun_failed:
-                        self.on_event('show_toast', {'message': 'Sunrise/sunset calculation failed', 'type': 'warning'})
-                    self.previous_sun_failed = sun_failed
+
+                # Only emit warning toasts for failures — no success toasts here
+                if geo_failed != self.previous_geo_failed and geo_failed:
+                    self.on_event('show_toast', {'message': 'Geolocation failed', 'type': 'warning'})
+                if tz_failed != self.previous_tz_failed and tz_failed:
+                    self.on_event('show_toast', {'message': 'Timezone lookup failed', 'type': 'warning'})
+                if sun_failed != self.previous_sun_failed and sun_failed:
+                    self.on_event('show_toast', {'message': 'Sunrise/sunset calculation failed', 'type': 'warning'})
+
+                self.previous_geo_failed = geo_failed
+                self.previous_tz_failed = tz_failed
+                self.previous_sun_failed = sun_failed
+
                 data = {
                     'date': date_str,
                     'time': time_str,
@@ -233,15 +233,19 @@ class GPSController:
                 }
                 if gps_datetime_str:
                     data['gps_datetime_str'] = gps_datetime_str
+
                 self.on_broadcast(data)
                 self.last_emit = current_time
+
+                # Only log fix changes — no toast from GPS module (app.py handles "GPS time acquired")
                 if self.fix != self.previous_fix:
                     if self.fix:
-                        self.on_event('show_toast', {'message': 'GPS fix acquired', 'type': 'message'})
                         logger.info("GPS fix acquired")
                     else:
-                        self.on_event('show_toast', {'message': 'GPS fix lost', 'type': 'warning'})
                         logger.warning("GPS fix lost")
+                        self.on_event('show_toast', {'message': 'GPS fix lost', 'type': 'warning'})
+
+                # Update previous values
                 self.previous_fix = self.fix
                 self.previous_sats = self.sats
                 self.previous_lat = self.lat
