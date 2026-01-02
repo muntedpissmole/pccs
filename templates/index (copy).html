@@ -4,99 +4,73 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Pissmole Camping Control System</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body data-theme="dark" {% if force_mobile %}class="force-mobile"{% endif %}>
+<body data-theme="dark">
     <div id="app">
         <div class="top-section">
             <div class="env">
-                <!-- Wrapper for the first 4 data widgets -->
-                <div class="data-widgets-grid">
-                    <div class="card">
-                        <div class="header">
-                            <i class="fas fa-calendar-day"></i>
-                            <span class="descriptor">Date</span>
-                        </div>
-                        <div class="value" id="date-value">Thursday, 02 Jan 2026</div>
-                        <div class="header">
-                            <i class="fas fa-clock"></i>
-                            <span class="descriptor">Time</span>
-                        </div>
-                        <div class="value" id="time-value">14:37</div>
+                <div class="card">
+                    <div class="header">
+                        <i class="fas fa-calendar-day"></i>
+                        <span class="descriptor">Date</span>
                     </div>
-                    <div class="card">
-                        <div class="header">
-                            <i class="fas fa-sun"></i>
-                            <span class="descriptor">Sunrise</span>
-                        </div>
-                        <div class="value" id="sunrise-value">06:42</div>
-                        <div class="header">
-                            <i class="fas fa-moon"></i>
-                            <span class="descriptor">Sunset</span>
-                        </div>
-                        <div class="value" id="sunset-value">17:51</div>
+                    <div class="value" id="date-value">---</div>
+                    <div class="header">
+                        <i class="fas fa-clock"></i>
+                        <span class="descriptor">Time</span>
                     </div>
-                    <div class="card">
-                        <div class="header">
-                            <i class="fas fa-solar-panel"></i>
-                            <span class="descriptor">Solar</span>
-                        </div>
-                        <div class="value" id="solar-value">+420 W</div>
-                        <div class="header">
-                            <i class="fas fa-adjust"></i>
-                            <span class="descriptor">Phase</span>
-                        </div>
-                        <div class="value" id="phase-value">Waxing Crescent</div>
-                    </div>
-                    <div class="card">
-                        <div class="header">
-                            <i class="fas fa-battery-full"></i>
-                            <span class="descriptor">Battery</span>
-                        </div>
-                        <div class="value" id="battery-value">78%</div>
-                        <div class="header">
-                            <i class="fas fa-water"></i>
-                            <span class="descriptor">Water Tank</span>
-                        </div>
-                        <div class="value" id="water-value">62%</div>
-                    </div>
+                    <div class="value" id="time-value">---</div>
                 </div>
-
-                <!-- 5th card: GPS/Location -->
+                <div class="card">
+                    <div class="header">
+                        <i class="fas fa-sun"></i>
+                        <span class="descriptor">Sunrise</span>
+                    </div>
+                    <div class="value" id="sunrise-value">---</div>
+                    <div class="header">
+                        <i class="fas fa-moon"></i>
+                        <span class="descriptor">Sunset</span>
+                    </div>
+                    <div class="value" id="sunset-value">---</div>
+                </div>
+                <div class="card">
+                    <div class="header">
+                        <i class="fas fa-solar-panel"></i>
+                        <span class="descriptor">Solar</span>
+                    </div>
+                    <div class="value" id="solar-value">---</div>
+                    <div class="header">
+                        <i class="fas fa-adjust"></i>
+                        <span class="descriptor">Phase</span>
+                    </div>
+                    <div class="value" id="phase-value">---</div>
+                </div>
+                <div class="card">
+                    <div class="header">
+                        <i class="fas fa-battery-full"></i>
+                        <span class="descriptor">Battery</span>
+                    </div>
+                    <div class="value" id="battery-value">---</div>
+                    <div class="header">
+                        <i class="fas fa-water"></i>
+                        <span class="descriptor">Water Tank</span>
+                    </div>
+                    <div class="value" id="water-value">---</div>
+                </div>
                 <div class="card">
                     <div class="header">
                         <i class="fas fa-satellite"></i>
                         <span class="descriptor">GPS</span>
                     </div>
-                    <div class="value" id="satellites-value">12 satellites</div>
+                    <div class="value" id="satellites-value">---</div>
                     <div class="header">
                         <i class="fas fa-map-marker-alt"></i>
                         <span class="descriptor">Location</span>
                     </div>
-                    <div class="value" id="location-value">-33.8688° S<br>151.2093° E</div>
-                </div>
-
-                <!-- Mobile-only weather card – placed correctly in the grid (bottom-right on mobile) -->
-                <div class="weather-card card weather-card-mobile">
-                    <div class="header">
-                        <i class="fas fa-cloud-sun" id="weather-icon-mobile"></i>
-                        <span class="descriptor"><span id="condition-mobile">Partly Cloudy</span></span>
-                    </div>
-                    <div class="value" id="current-temp-mobile">24°C</div>
-                    <div class="header">
-                        <i class="fas fa-arrow-down"></i>
-                        <span class="descriptor">Min</span>
-                        <i class="fas fa-arrow-up"></i>
-                        <span class="descriptor">Max</span>
-                    </div>
-                    <div class="value" id="min-max-mobile">18 / 27</div>
-                    <div class="header">
-                        <i class="fas fa-tint"></i>
-                        <span class="descriptor">Humidity</span>
-                    </div>
-                    <div class="value" id="humidity-mobile">68 %</div>
+                    <div class="value" id="location-value">---</div>
                 </div>
             </div>
         </div>
@@ -108,13 +82,13 @@
                         <div class="page">
                             <div class="control color-toggle">
                                 <label><i class="fas fa-sink"></i>Kitchen: <span class="color-label">White</span></label>
-                                <span class="percentage">45%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="45" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -134,26 +108,26 @@
                             </div>
                             <div class="control">
                                 <label><i class="fas fa-box"></i>Storage Panel</label>
-                                <span class="percentage">60%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="60" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
                             </div>
                             <div class="control">
                                 <label><i class="fas fa-inbox"></i>Rear Drawer</label>
-                                <span class="percentage">30%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="30" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -162,26 +136,26 @@
                         <div class="page">
                             <div class="control">
                                 <label><i class="fas fa-wand-magic-sparkles"></i>Accent</label>
-                                <span class="percentage">15%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="15" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
                             </div>
                             <div class="control color-toggle">
                                 <label><i class="fas fa-store"></i>Awning: <span class="color-label">White</span></label>
-                                <span class="percentage">80%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="80" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -201,13 +175,13 @@
                             </div>
                             <div class="control">
                                 <label><i class="fas fa-toilet"></i>Ensuite</label>
-                                <span class="percentage">50%</span>
+                                <span class="percentage">0%</span>
                                 <div class="slider-wrapper">
-                                    <input type="range" min="0" max="100" value="50" orient="vertical">
+                                    <input type="range" min="0" max="100" value="0" orient="vertical">
                                 </div>
                                 <div class="on-off-toggle">
                                     <label class="toggle">
-                                        <input type="checkbox" checked>
+                                        <input type="checkbox">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -217,14 +191,14 @@
                             <div class="control">
                                 <label><i class="fas fa-faucet"></i> Water</label>
                                 <label class="toggle">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                             <div class="control">
                                 <label><i class="fas fa-plug"></i> Fridge and Oven</label>
                                 <label class="toggle">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox">
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -238,7 +212,7 @@
                             <div class="control">
                                 <label><i class="fas fa-bolt"></i> Lighting Circuits</label>
                                 <label class="toggle">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox">
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -254,29 +228,28 @@
                     </div>
                     <i class="fas fa-cog icon settings" onclick="openSettings();"></i>
                 </div>
-                <div class="toast-area"></div>
+                <div class="toast-area">
+                </div>
             </section>
-
             <div class="right-column">
-                <!-- Desktop-only weather card -->
-                <div class="weather-card card weather-card-desktop">
+                <div class="weather-card card">
                     <div class="header">
-                        <i class="fas fa-cloud-sun" id="weather-icon"></i>
-                        <span class="descriptor"><span id="condition">Partly Cloudy</span></span>
+                        <i class="fas fa-cloud" id="weather-icon"></i>
+                        <span class="descriptor"><span id="condition">---</span></span>
                     </div>
-                    <div class="value" id="current-temp">24°C</div>
+                    <div class="value" id="current-temp">---°C</div>
                     <div class="header">
                         <i class="fas fa-arrow-down"></i>
                         <span class="descriptor">Min</span>
                         <i class="fas fa-arrow-up"></i>
                         <span class="descriptor">Max</span>
                     </div>
-                    <div class="value" id="min-max">18 / 27</div>
+                    <div class="value" id="min-max">--- / ---</div>
                     <div class="header">
                         <i class="fas fa-tint"></i>
                         <span class="descriptor">Humidity</span>
                     </div>
-                    <div class="value" id="humidity">68 %</div>
+                    <div class="value" id="humidity">--- %</div>
                 </div>
                 <div class="scenes-card card">
                     <button class="scene-btn" data-scene-id="evening"><i class="fas fa-cloud-sun"></i> Evening</button>
@@ -288,7 +261,6 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div id="settings-modal">
         <div class="modal-content">
             <div class="modal-body">
@@ -399,7 +371,6 @@
         </div>
     </div>
 
-    <!-- Shutdown Confirmation Modal -->
     <div id="shutdown-confirm-modal">
         <div class="modal-content">
             <div class="modal-body">
