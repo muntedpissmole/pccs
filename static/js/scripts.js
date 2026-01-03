@@ -251,18 +251,6 @@ sceneBtns.forEach(btn => {
     });
 });
 
-// Handle brightness buttons
-const brightnessBtns = document.querySelectorAll('.brightness-btn');
-brightnessBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        brightnessBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const level = btn.id.replace('brightness-', '');
-        console.log('Emitting set_brightness_level', { level: level });
-        socket.emit('set_brightness_level', { level: level });
-    });
-});
-
 // Settings modal functions
 function openSettings() {
     document.getElementById('settings-modal').style.display = 'flex';
@@ -308,11 +296,6 @@ document.getElementById('auto-theme-toggle').addEventListener('change', (e) => {
     socket.emit('set_setting', { key: 'auto_theme', value: e.target.checked });
 });
 
-document.getElementById('auto-brightness-toggle').addEventListener('change', (e) => {
-    console.log('Emitting set_setting', { key: 'auto_brightness', value: e.target.checked });
-    socket.emit('set_setting', { key: 'auto_brightness', value: e.target.checked });
-});
-
 document.querySelector('.evening-offset').addEventListener('change', (e) => {
     console.log('Emitting set_setting', { key: 'evening_offset', value: e.target.value });
     socket.emit('set_setting', { key: 'evening_offset', value: e.target.value });
@@ -329,6 +312,72 @@ document.querySelector('.night-time').addEventListener('change', (e) => {
     console.log('Emitting set_setting', { key: 'night_time', value: e.target.value });
     socket.emit('set_setting', { key: 'night_time', value: e.target.value });
 });
+
+// Fullscreen toggle button
+const fullscreenBtn = document.getElementById('fullscreen-toggle-btn');
+
+let isKitchenScreen = false;
+
+// Listen for client_type from server to know if we're on the kitchen touchscreen
+socket.on('client_type', (data) => {
+    if (data.is_screen && data.screen_name === 'kitchen') {
+        isKitchenScreen = true;
+
+        // Auto-enter fullscreen as soon as we confirm it's the kitchen screen
+        // Use a small delay to ensure DOM is fully ready
+        setTimeout(() => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn("Auto fullscreen failed (possibly blocked):", err);
+                    // Optional: show a subtle toast if you want
+                    // showToast('Tap fullscreen button for best experience', 'message', false, [], 5000);
+                });
+            }
+        }, 500);
+    }
+});
+
+// Manual fullscreen toggle button (works on all devices)
+if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error("Fullscreen request failed:", err);
+                showToast('Fullscreen not available or blocked', 'warning');
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    });
+
+    // Update button icon/text based on fullscreen state
+    function updateFullscreenButton() {
+        if (document.fullscreenElement) {
+            fullscreenBtn.classList.add('active');
+            fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+        } else {
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Enter Fullscreen';
+        }
+    }
+
+    // Initial check
+    updateFullscreenButton();
+
+    // Listen for changes (e.g., user presses ESC)
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+}
+
+// Refresh UI button
+const refreshBtn = document.getElementById('refresh-ui-btn');
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+        showToast('Refreshing interface...', 'message');
+        setTimeout(() => {
+            location.reload();
+        }, 800); // Small delay to show toast
+    });
+}
 
 // Weather elements
 const weatherIcon = document.getElementById('weather-icon');
@@ -393,15 +442,11 @@ socket.on('update_states', (states) => {
     });
 });
 
-// Remove ramp_start since handled by state
-// socket.on('ramp_start', ...); remove
-
 socket.on('brightness_ramp_start', (data) => {
     console.log('Received brightness_ramp_start', data);
     const { light_id, target_brightness, ramp_duration } = data;
     const control = lightControls.find(c => parseInt(c.dataset.lightId) === light_id);
     if (!control) return;
-    // lockControl(control); removed, handled by state
 
     const slider = control.querySelector('input[type="range"]');
     const percentage = control.querySelector('.percentage');
@@ -429,7 +474,6 @@ socket.on('brightness_ramp_start', (data) => {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            // unlockControl(control); removed
             control.classList.remove('ramping');
         }
     }
@@ -495,7 +539,6 @@ socket.on('scene_ramp_start', (data) => {
 
         requestAnimationFrame(animate);
     });
-    // No need for setTimeout unlock, handled by server
 });
 
 socket.on('set_active_scene', (data) => {
@@ -603,20 +646,9 @@ socket.on('update_settings', (settings) => {
         document.body.dataset.theme = settings.dark_mode ? 'dark' : 'light';
     }
 
-    // Brightness
-    if ('brightness' in settings) {
-        const brightness = settings.brightness;
-        brightnessBtns.forEach(b => b.classList.toggle('active', b.id === `brightness-${brightness}`));
-    }
-
     // Auto theme
     if ('auto_theme' in settings) {
         document.getElementById('auto-theme-toggle').checked = settings.auto_theme;
-    }
-
-    // Auto brightness
-    if ('auto_brightness' in settings) {
-        document.getElementById('auto-brightness-toggle').checked = settings.auto_brightness;
     }
 
     // Evening offset
@@ -642,19 +674,6 @@ socket.on('update_settings', (settings) => {
     updateResultantTimes();
 });
 
-socket.on('set_brightness_controls_enabled', (data) => {
-    console.log('Received set_brightness_controls_enabled', data);
-    const btns = document.querySelectorAll('.brightness-btn');
-    btns.forEach(btn => {
-        btn.disabled = !data.enabled;
-        if (!data.enabled) {
-            btn.classList.add('disabled');
-        } else {
-            btn.classList.remove('disabled');
-        }
-    });
-});
-
 socket.on('update_phase', (data) => {
     console.log('Received update_phase', data);
     document.getElementById('phase-value').textContent = data.phase ? data.phase.charAt(0).toUpperCase() + data.phase.slice(1) : '---';
@@ -668,16 +687,6 @@ socket.on('update_sensors', (data) => {
 socket.on('update_reed_state', (data) => {
     console.log('Received update_reed_state', data);
     // Handle if needed in main page, but it's for /reeds
-});
-
-socket.on('update_brightness_level', (data) => {
-    console.log('Received update_brightness_level', data);
-    const level = data.level;
-    brightnessBtns.forEach(b => b.classList.remove('active'));
-    if (level !== 'off') {
-        const btn = document.querySelector(`#brightness-${level}`);
-        if (btn) btn.classList.add('active');
-    }
 });
 
 let isFirstConnect = true;
@@ -815,3 +824,40 @@ function updateResultantTimes() {
     document.getElementById('evening-resultant').style.display = 'inline';
     document.getElementById('morning-resultant').style.display = 'inline';
 }
+
+// Sonos Player Overlay
+const musicBtn = document.getElementById('music-btn');
+const sonosOverlay = document.getElementById('sonos-overlay');
+const sonosIframe = document.getElementById('sonos-iframe');
+const sonosBackBtn = document.getElementById('sonos-back-btn');
+
+const SONOS_URL = 'https://play.sonos.com';
+
+function openSonos() {
+    sonosIframe.src = SONOS_URL;
+    sonosOverlay.style.display = 'block';
+    // Optional: hide main app content for cleaner look
+    document.getElementById('app').style.opacity = '0';
+}
+
+function closeSonos() {
+    sonosOverlay.style.display = 'none';
+    sonosIframe.src = ''; // Stop loading/music
+    document.getElementById('app').style.opacity = '1';
+}
+
+// Event Listeners
+if (musicBtn) {
+    musicBtn.addEventListener('click', openSonos);
+}
+
+if (sonosBackBtn) {
+    sonosBackBtn.addEventListener('click', closeSonos);
+}
+
+// Optional: Allow ESC key to close Sonos (but not exit fullscreen)
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sonosOverlay.style.display === 'block') {
+        closeSonos();
+    }
+});

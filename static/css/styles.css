@@ -554,7 +554,7 @@ input:checked + .slider:before {
     padding: 6px;
 }
 
-.icon.refresh {
+.icon.music {
     margin-left: 10px;
 }
 
@@ -878,7 +878,109 @@ h2 {
     box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
 }
 
+.confirm-message {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 40px; /* Gives breathing room around the text */
+    text-align: center;
+}
+
+.confirm-message p {
+    margin: 0;
+    font-size: 16px; /* Slightly larger than current 12px for better readability */
+    line-height: 1.5;
+}
+
 #weather-icon,
 #weather-icon-mobile {
-    font-size: 32px;
+    font-size: 20px;
+}
+
+.fullscreen-btn {
+    background: var(--control-bg);
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-color);
+    transition: box-shadow 0.2s, background 0.3s, color 0.3s;
+    width: 100%;
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.fullscreen-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    box-shadow: none;
+}
+
+.fullscreen-btn i {
+    font-size: 18px;
+}
+
+.fullscreen-btn:active {
+    box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+}
+
+.refresh-btn {
+    background: var(--control-bg);
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-color);
+    transition: box-shadow 0.2s, background 0.3s, color 0.3s;
+    width: 100%;
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.refresh-btn:hover {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.refresh-btn:active {
+    box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+}
+
+.refresh-btn i {
+    font-size: 18px;
+}
+
+#sonos-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none; /* Important: allows clicks to pass through when hidden */
+}
+
+#sonos-overlay.active {
+    opacity: 1;
+    pointer-events: auto; /* Re-enable interaction when shown */
+}
+
+#sonos-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
 }

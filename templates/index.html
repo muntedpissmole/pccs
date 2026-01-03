@@ -19,48 +19,48 @@
                             <i class="fas fa-calendar-day"></i>
                             <span class="descriptor">Date</span>
                         </div>
-                        <div class="value" id="date-value">Thursday, 02 Jan 2026</div>
+                        <div class="value" id="date-value">---</div>
                         <div class="header">
                             <i class="fas fa-clock"></i>
                             <span class="descriptor">Time</span>
                         </div>
-                        <div class="value" id="time-value">14:37</div>
+                        <div class="value" id="time-value">---</div>
                     </div>
                     <div class="card">
                         <div class="header">
                             <i class="fas fa-sun"></i>
                             <span class="descriptor">Sunrise</span>
                         </div>
-                        <div class="value" id="sunrise-value">06:42</div>
+                        <div class="value" id="sunrise-value">---</div>
                         <div class="header">
                             <i class="fas fa-moon"></i>
                             <span class="descriptor">Sunset</span>
                         </div>
-                        <div class="value" id="sunset-value">17:51</div>
+                        <div class="value" id="sunset-value">---</div>
                     </div>
                     <div class="card">
                         <div class="header">
                             <i class="fas fa-solar-panel"></i>
                             <span class="descriptor">Solar</span>
                         </div>
-                        <div class="value" id="solar-value">+420 W</div>
+                        <div class="value" id="solar-value">---</div>
                         <div class="header">
                             <i class="fas fa-adjust"></i>
                             <span class="descriptor">Phase</span>
                         </div>
-                        <div class="value" id="phase-value">Waxing Crescent</div>
+                        <div class="value" id="phase-value">---</div>
                     </div>
                     <div class="card">
                         <div class="header">
                             <i class="fas fa-battery-full"></i>
                             <span class="descriptor">Battery</span>
                         </div>
-                        <div class="value" id="battery-value">78%</div>
+                        <div class="value" id="battery-value">--%</div>
                         <div class="header">
                             <i class="fas fa-water"></i>
                             <span class="descriptor">Water Tank</span>
                         </div>
-                        <div class="value" id="water-value">62%</div>
+                        <div class="value" id="water-value">--%</div>
                     </div>
                 </div>
 
@@ -246,9 +246,9 @@
                     </div>
                 </div>
                 <div class="pagination">
-                    <i class="fas fa-sync-alt icon refresh" onclick="location.reload();"></i>
-                    <div class="dots-wrapper">
-                        <span class="dot active"></span>
+					<i class="fas fa-music icon music" onclick="window.location.href = 'https://play.sonos.com';"></i>
+					<div class="dots-wrapper">
+	                    <span class="dot active"></span>
                         <span class="dot"></span>
                         <span class="dot"></span>
                     </div>
@@ -264,19 +264,19 @@
                         <i class="fas fa-cloud-sun" id="weather-icon"></i>
                         <span class="descriptor"><span id="condition">Partly Cloudy</span></span>
                     </div>
-                    <div class="value" id="current-temp">24°C</div>
+                    <div class="value" id="current-temp">---°C</div>
                     <div class="header">
                         <i class="fas fa-arrow-down"></i>
                         <span class="descriptor">Min</span>
                         <i class="fas fa-arrow-up"></i>
                         <span class="descriptor">Max</span>
                     </div>
-                    <div class="value" id="min-max">18 / 27</div>
+                    <div class="value" id="min-max">--- / ---</div>
                     <div class="header">
                         <i class="fas fa-tint"></i>
                         <span class="descriptor">Humidity</span>
                     </div>
-                    <div class="value" id="humidity">68 %</div>
+                    <div class="value" id="humidity">--- %</div>
                 </div>
                 <div class="scenes-card card">
                     <button class="scene-btn" data-scene-id="evening"><i class="fas fa-cloud-sun"></i> Evening</button>
@@ -288,126 +288,125 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
-    <div id="settings-modal">
-        <div class="modal-content">
-            <div class="modal-body">
-                <div class="settings-row row1">
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Dark Mode</label>
-                            <p class="description">Switch between dark mode and light mode.</p>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="theme-toggle" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Brightness</label>
-                            <p class="description">Set the brightness of the touchscreen.</p>
-                        </div>
-                        <div class="brightness-buttons">
-                            <button class="brightness-btn" id="brightness-low">Low</button>
-                            <button class="brightness-btn active" id="brightness-medium">Medium</button>
-                            <button class="brightness-btn" id="brightness-high">High</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="settings-row row2">
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Auto Theme Switch</label>
-                            <p class="description">Activate dark mode in the evening and light mode in the morning.</p>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="auto-theme-toggle">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Auto Brightness</label>
-                            <p class="description">Set the touchscreen brightness to low in the evening and medium in the morning.</p>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="auto-brightness-toggle">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="settings-row row3">
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Evening Offset<span id="evening-resultant" class="resultant-time" style="display:none;"></span></label>
-                            <p class="description">How long before sunset evening scenes and automation activate.</p>
-                        </div>
-                        <div class="select-wrapper">
-                            <select class="evening-offset">
-                                <option>-60 mins</option>
-                                <option>-45 mins</option>
-                                <option selected>-30 mins</option>
-                                <option>-15 mins</option>
-                                <option>0 mins</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Morning Offset<span id="morning-resultant" class="resultant-time" style="display:none;"></span></label>
-                            <p class="description">How long after sunrise morning scenes and automation activate.</p>
-                        </div>
-                        <div class="select-wrapper">
-                            <select class="sunrise-offset">
-                                <option>0 mins</option>
-                                <option>+15 mins</option>
-                                <option selected>+30 mins</option>
-                                <option>+45 mins</option>
-                                <option>+60 mins</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="settings-row row4">
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Night Time</label>
-                            <p class="description">The time that evening transitions to night and any night scenes and automation activate.</p>
-                        </div>
-                        <div class="select-wrapper">
-                            <select class="night-time">
-                                <option>7:00 PM</option>
-                                <option>7:30 PM</option>
-                                <option selected>8:00 PM</option>
-                                <option>8:30 PM</option>
-                                <option>9:00 PM</option>
-                                <option>9:30 PM</option>
-                                <option>10:00 PM</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="setting-card">
-                        <div class="setting-header">
-                            <label>Shutdown System</label>
-                            <p class="description">Turn off the control system and touchscreens.</p>
-                        </div>
-                        <button class="shutdown-btn">Shutdown</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+	<!-- Settings Modal -->
+	<div id="settings-modal">
+		<div class="modal-content">
+			<div class="modal-body">
+				<div class="settings-row row1">
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Dark Mode</label>
+							<p class="description">Switch between dark mode and light mode.</p>
+						</div>
+						<label class="toggle">
+							<input type="checkbox" id="theme-toggle" checked>
+							<span class="slider"></span>
+						</label>
+					</div>
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Fullscreen Mode</label>
+							<p class="description">Toggle fullscreen view of the control interface.</p>
+						</div>
+						<button class="fullscreen-btn" id="fullscreen-toggle-btn">
+							<i class="fas fa-expand"></i> Enter Fullscreen
+						</button>
+					</div>
+				</div>
+				<div class="settings-row row2">
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Auto Theme Switch</label>
+							<p class="description">Activate dark mode in the evening and light mode in the morning.</p>
+						</div>
+						<label class="toggle">
+							<input type="checkbox" id="auto-theme-toggle">
+							<span class="slider"></span>
+						</label>
+					</div>
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Refresh Interface</label>
+							<p class="description">Reload the user interface to apply updates or recover from glitches.</p>
+						</div>
+						<button class="refresh-btn" id="refresh-ui-btn">
+							<i class="fas fa-sync-alt"></i> Refresh UI
+						</button>
+					</div>
+				</div>
+				<div class="settings-row row3">
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Evening Offset<span id="evening-resultant" class="resultant-time" style="display:none;"></span></label>
+							<p class="description">How long before sunset evening scenes and automation activate.</p>
+						</div>
+						<div class="select-wrapper">
+							<select class="evening-offset">
+								<option>-60 mins</option>
+								<option>-45 mins</option>
+								<option selected>-30 mins</option>
+								<option>-15 mins</option>
+								<option>0 mins</option>
+							</select>
+						</div>
+					</div>
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Morning Offset<span id="morning-resultant" class="resultant-time" style="display:none;"></span></label>
+							<p class="description">How long after sunrise morning scenes and automation activate.</p>
+						</div>
+						<div class="select-wrapper">
+							<select class="sunrise-offset">
+								<option>0 mins</option>
+								<option>+15 mins</option>
+								<option selected>+30 mins</option>
+								<option>+45 mins</option>
+								<option>+60 mins</option>
+							</select>
+						</div>
+					</div>
+				</div>
+				<div class="settings-row row4">
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Night Time</label>
+							<p class="description">The time that evening transitions to night and any night scenes and automation activate.</p>
+						</div>
+						<div class="select-wrapper">
+							<select class="night-time">
+								<option>7:00 PM</option>
+								<option>7:30 PM</option>
+								<option selected>8:00 PM</option>
+								<option>8:30 PM</option>
+								<option>9:00 PM</option>
+								<option>9:30 PM</option>
+								<option>10:00 PM</option>
+							</select>
+						</div>
+					</div>
+					<div class="setting-card">
+						<div class="setting-header">
+							<label>Shutdown System</label>
+							<p class="description">Turn off the control system and touchscreens.</p>
+						</div>
+						<button class="shutdown-btn">Shutdown</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
 
     <!-- Shutdown Confirmation Modal -->
     <div id="shutdown-confirm-modal">
         <div class="modal-content">
             <div class="modal-body">
                 <h2>Confirm Shutdown</h2>
-                <p>Are you sure you want to shut down the system? This will turn off kitchen-pi, tent-pi, and control-pi.</p>
+                <div class="confirm-message">
+					<p>Are you sure you want to shut down the system?</p>
+                </div>
                 <div class="confirm-buttons">
-                    <button class="confirm-btn no">No</button>
                     <button class="confirm-btn yes">Yes</button>
+                    <button class="confirm-btn no">No</button>
                 </div>
             </div>
         </div>

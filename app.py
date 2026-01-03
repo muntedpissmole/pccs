@@ -366,6 +366,10 @@ def sync_client(is_screen, screen_name=None):
     if is_screen and screen_name:
         powered = current_screen_levels.get(screen_name, 'off') == 'on'
         emit('update_screen_power', {'powered': powered})
+    if is_screen and screen_name:
+        emit('client_type', {'is_screen': True, 'screen_name': screen_name})
+    else:
+        emit('client_type', {'is_screen': False, 'screen_name': None})
 
 @socketio.on('connect')
 def handle_connect():
