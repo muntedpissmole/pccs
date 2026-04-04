@@ -4,7 +4,7 @@
     "auto_brightness": true,
     "evening_offset": "-45 mins",
     "morning_offset": "+30 mins",
-    "night_time": "9:00 PM",
+    "night_time": "8:30 PM",
     "brightness": "medium",
     "sunrise_offset": "+30 mins",
     "toast_display_time_ms": 10000,

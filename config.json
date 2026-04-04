@@ -90,12 +90,14 @@
   "reeds": {
     "kitchen_panel": {
       "pin": 23,
+      "bounce_time": 1.5,
       "day": {},
       "evening": {"channel": 1, "brightness": 40, "color": "white"},
       "night": {"channel": 1, "brightness": 10, "color": "red"}
     },
     "storage_panel": {
       "pin": 24,
+      "bounce_time": 1.5,
       "day": {},
       "evening": {"channel": 3, "brightness": 40},
       "night": {"channel": 3, "brightness": 5}
@@ -114,6 +116,7 @@
     },
     "rooftop_tent": {
       "pin": 26,
+      "bounce_time": 2.5,
       "day": {},
       "evening": {"channel": 7, "brightness": 30},
       "night": {"channel": 7, "brightness": 5},

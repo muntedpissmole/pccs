@@ -61,7 +61,8 @@
     "evaluate_on_startup": false,
     "description": "A panel opened, applying evening lighting scene.",
     "show_toast": true,
-    "enabled": true
+    "enabled": true,
+    "cooldown_seconds": 600
   },
   {
     "id": "night_start_with_open_panel",
@@ -125,7 +126,8 @@
     "evaluate_on_startup": false,
     "description": "A panel opened, applying night lighting scene.",
     "show_toast": true,
-    "enabled": true
+    "enabled": true,
+    "cooldown_seconds": 600
   },
   {
     "id": "kitchen_panel_open_wake_screen",

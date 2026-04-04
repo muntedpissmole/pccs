@@ -103,10 +103,19 @@ class RulesEngine:
             if rule.get('trigger') != trigger_type:
                 continue
 
+            # Handle once_per_day
             if rule.get('once_per_day', False):
                 last = self.last_execution.get(rule_id)
                 if last and last.date() == current_dt.date():
                     logger.debug(f"Skipping rule {rule_id} (already executed today)")
+                    continue
+
+            # NEW: Cooldown support - prevents repeated triggers while a reed stays Open
+            # (critical for rooftop tent when lights are on and electrical noise is present)
+            if 'cooldown_seconds' in rule:
+                last = self.last_execution.get(rule_id)
+                if last and (current_dt - last).total_seconds() < rule['cooldown_seconds']:
+                    logger.debug(f"Rule {rule_id} skipped — still in cooldown ({rule['cooldown_seconds']}s)")
                     continue
 
             if 'conditions' in rule and not self.evaluate_condition(rule['conditions'], context):
@@ -117,9 +126,10 @@ class RulesEngine:
 
             self.execute_actions(rule.get('actions', []))
 
-            if rule.get('once_per_day', False):
+            # Update last_execution timestamp for both once_per_day and cooldown rules
+            if rule.get('once_per_day', False) or 'cooldown_seconds' in rule:
                 self.last_execution[rule_id] = current_dt
-                logger.debug(f"Updated last execution for {rule_id}")
+                logger.debug(f"Updated last execution for rule {rule_id}")
 
     def evaluate_on_startup(self):
         current_phase = self.phase_manager.current_phase
@@ -167,7 +177,7 @@ class RulesEngine:
                             else:
                                 self.on_rule_fired(rule)
                         self.execute_actions(rule.get('actions', []))
-                        if rule.get('once_per_day', False):
+                        if rule.get('once_per_day', False) or 'cooldown_seconds' in rule:
                             self.last_execution[rule_id] = current_dt
                 continue  # No further processing needed for this trigger type on startup
 
@@ -183,6 +193,6 @@ class RulesEngine:
                     else:
                         self.on_rule_fired(rule)
                 self.execute_actions(rule.get('actions', []))
-                if rule.get('once_per_day', False):
+                if rule.get('once_per_day', False) or 'cooldown_seconds' in rule:
                     self.last_execution[rule_id] = current_dt
                     logger.debug(f"Updated last execution for {rule_id} after startup evaluation")

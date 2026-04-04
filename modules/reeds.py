@@ -23,8 +23,10 @@ class ReedsController:
             if pin is None:
                 logger.warning(f"Skipping reed {reed_id} with no pin")
                 continue
+            # Use per-reed bounce_time from config, or default to 1.5s (much more stable for tent environment)
+            bounce_time = reed_data.get('bounce_time', 1.5)
             try:
-                button = Button(pin, pull_up=True, bounce_time=0.3)
+                button = Button(pin, pull_up=True, bounce_time=bounce_time)
                 self.reeds[reed_id] = button
             except Exception as e:
                 logger.error(f"Failed to initialize reed {reed_id} on pin {pin}: {str(e)}", exc_info=True)
