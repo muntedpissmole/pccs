@@ -7,12 +7,13 @@ import threading
 logger = logging.getLogger(__name__)
 
 class ReedsController:
-    def __init__(self, config, on_trigger, get_current_phase, on_state_change=None, on_lock=None):
+    def __init__(self, config, on_trigger, get_current_phase, on_state_change=None, on_lock=None, watchdog=None):
         self.config = config
         self.on_trigger = on_trigger
         self.get_current_phase = get_current_phase
         self.on_state_change = on_state_change
         self.on_lock = on_lock or (lambda light_id, locked: None)
+        self.watchdog = watchdog                    # Watchdog instance passed from main app
         self.rules_engine = None
         self.reeds = {}
         self.states = {}
@@ -23,7 +24,7 @@ class ReedsController:
             if pin is None:
                 logger.warning(f"Skipping reed {reed_id} with no pin")
                 continue
-            # Use per-reed bounce_time from config, or default to 1.5s (much more stable for tent environment)
+            # Per-reed bounce_time (default 1.5s, higher for tent)
             bounce_time = reed_data.get('bounce_time', 1.5)
             try:
                 button = Button(pin, pull_up=True, bounce_time=bounce_time)
@@ -38,7 +39,7 @@ class ReedsController:
             else:
                 self.handle_open(reed_id)
 
-        # Now initialise software state tracking so change detection works correctly
+        # Initialise software state tracking
         for reed_id, button in self.reeds.items():
             state = "Closed" if button.is_pressed else "Open"
             self.states[reed_id] = state
@@ -127,15 +128,21 @@ class ReedsController:
 
     def _poll_thread(self):
         while self.running:
-            for reed_id, button in self.reeds.items():
-                current = "Closed" if button.is_pressed else "Open"
-                if current != self.states.get(reed_id):
-                    if current == 'Open':
-                        self.handle_open(reed_id)
-                    else:
-                        self.handle_close(reed_id)
-                    self.states[reed_id] = current
-            time.sleep(0.5)
+            try:
+                if self.watchdog:
+                    self.watchdog.feed("reeds_polling")
+                for reed_id, button in self.reeds.items():
+                    current = "Closed" if button.is_pressed else "Open"
+                    if current != self.states.get(reed_id):
+                        if current == 'Open':
+                            self.handle_open(reed_id)
+                        else:
+                            self.handle_close(reed_id)
+                        self.states[reed_id] = current
+                time.sleep(1.0)   # Increased from 0.5s for stability
+            except Exception as e:
+                logger.error(f"Error in reeds polling thread: {e}", exc_info=True)
+                time.sleep(5)
 
     def stop_polling(self):
         self.running = False

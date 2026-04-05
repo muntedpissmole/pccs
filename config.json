@@ -133,5 +133,13 @@
       "username": "pi",
       "enabled": false
     }
+  },
+  "watchdog": {
+    "enabled": true,
+    "check_interval_seconds": 15,
+    "thread_timeout_seconds": 180,
+    "max_restarts": 3,
+    "reboot_on_failure": false,
+    "reboot_delay_seconds": 5
   }
 }

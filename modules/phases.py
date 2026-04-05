@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class PhaseManager:
-    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, current_screen_levels, screen_sids):
+    def __init__(self, config_manager, handle_apply_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, current_screen_levels, screen_sids, watchdog=None):
         self.config_manager = config_manager
         self.handle_apply_scene = handle_apply_scene
         self.get_last_gps_data = get_last_gps_data
@@ -16,10 +16,11 @@ class PhaseManager:
         self.get_has_gps_fix = get_has_gps_fix
         self.socketio = socketio
         self.screens_config = screens_config
-        self.current_screen_levels = current_screen_levels    # Still useful for tracking on/off state
+        self.current_screen_levels = current_screen_levels
         self.screen_sids = screen_sids
+        self.watchdog = watchdog                    # Watchdog instance passed from main app
         self.current_phase = None
-        self.phase_to_scene = {}  # Empty — phase → scene mapping is handled by rules engine
+        self.phase_to_scene = {}
         self.reeds_controller = None
         self.rules_engine = None
         self.prev_dt = None
@@ -170,6 +171,12 @@ class PhaseManager:
 
     def _phase_loop(self):
         while True:
-            self.phase_check()
-            self.check_all_off_time()
-            time_module.sleep(10)  # Check every 10 seconds
+            try:
+                if self.watchdog:
+                    self.watchdog.feed("phase_loop")
+                self.phase_check()
+                self.check_all_off_time()
+                time_module.sleep(15)   # Increased for stability
+            except Exception as e:
+                logger.error(f"Error in phase_loop: {e}", exc_info=True)
+                time_module.sleep(10)

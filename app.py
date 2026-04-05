@@ -3,7 +3,6 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import threading
 import time as time_module
-import math
 from datetime import datetime, timedelta
 import logging
 import os
@@ -11,6 +10,10 @@ from logging.handlers import RotatingFileHandler
 import queue
 import statistics
 import flask
+
+# ====================== WATCHDOG ======================
+from modules.watchdog import WatchdogManager, restart_handlers
+# =====================================================
 
 suppress_reed_panel_rules_until = None
 suppress_startup_rule_toasts = False
@@ -22,13 +25,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        RotatingFileHandler('logs/app.log', maxBytes=100000, backupCount=5)
+        RotatingFileHandler('logs/app.log', maxBytes=5*1024*1024, backupCount=14)
     ]
 )
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, 
+                    ping_timeout=10, 
+                    ping_interval=5,
+                    logger=True, 
+                    engineio_logger=True)
+
 from modules.arduino import ArduinoController
 from modules.gps import GPSController
 from modules.weather import WeatherController
@@ -324,8 +332,6 @@ def find_matching_scene():
 def update_active_scene():
     matching_scene = find_matching_scene()
     socketio.emit('set_active_scene', {'scene_id': matching_scene})
-
-from flask import render_template, request
 
 @app.route('/')
 def home():
@@ -638,10 +644,76 @@ def handle_set_setting(data):
 def handle_set_brightness_level(data):
     logger.debug(f"Ignoring deprecated 'set_brightness_level': {data}")
 
+# ====================== BACKGROUND LOOPS WITH WATCHDOG ======================
+
 def time_update_loop():
     while True:
-        time_module.sleep(1)
-        broadcast_gps({})
+        try:
+            watchdog.feed("time_update_loop")
+            time_module.sleep(5)
+            broadcast_gps({})
+        except Exception as e:
+            logger.error(f"Error in time_update_loop: {e}", exc_info=True)
+            time_module.sleep(10)
+
+def power_update_loop():
+    global last_battery_voltage, last_water_pct, last_solar_current
+    alpha = 0.3
+    while True:
+        try:
+            watchdog.feed("power_update_loop")
+            time_module.sleep(2)
+            vcc_mv, voltage_raw, water_raw, solar_raw = arduino.get_all_analogs_and_vcc()
+            battery_voltage = last_battery_voltage
+            water_pct = last_water_pct
+            solar_current = last_solar_current
+            if vcc_mv is not None and 4000 <= vcc_mv <= 6000:
+                vref = vcc_mv / 1000.0
+            else:
+                vref = 5.0
+                if vcc_mv is not None:
+                    logger.warning(f"Invalid VCC reading: {vcc_mv}")
+            if voltage_raw is not None:
+                v_a0 = voltage_raw * vref / 1023.0
+                new_battery_voltage = round(v_a0 * 5.199, 1)
+                logger.info(f"Raw A0: {voltage_raw:.2f}, VCC: {vcc_mv}mV, vref: {vref:.2f}V, v_a0: {v_a0:.2f}V, Battery: {new_battery_voltage:.1f}V")
+                battery_voltage = new_battery_voltage
+                last_battery_voltage = battery_voltage
+            else:
+                logger.warning("Failed to read battery analog")
+            if water_raw is not None:
+                v_a1 = water_raw * vref / 1023.0
+                if abs(vref - v_a1) > 0.01:
+                    sensor_r = 100 * v_a1 / (vref - v_a1)
+                    pct = (240 - sensor_r) / (240 - 33) * 100
+                    new_water_pct = max(0, min(100, round(pct)))
+                    water_pct = alpha * new_water_pct + (1 - alpha) * last_water_pct if last_water_pct is not None else new_water_pct
+                    water_pct = round(water_pct)
+                    last_water_pct = water_pct
+                else:
+                    water_pct = 0
+            else:
+                logger.warning("Failed to read water analog")
+            if solar_raw is not None:
+                v_a2 = solar_raw * vref / 1023.0
+                ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5326, 'sensitivity': 0.0125})
+                zero_offset = ct_solar['zero_offset']
+                sensitivity = ct_solar['sensitivity']
+                new_solar_current = (v_a2 - zero_offset) / sensitivity
+                new_solar_current = max(0, new_solar_current)
+                solar_current = alpha * new_solar_current + (1 - alpha) * last_solar_current if last_solar_current is not None else new_solar_current
+                solar_current = round(solar_current, 1)
+                last_solar_current = solar_current
+            else:
+                logger.warning("Failed to read solar analog")
+            logger.debug(f"Raw values: VCC={vcc_mv if vcc_mv is not None else 'None'}, A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
+            battery_pct = voltage_to_soc(battery_voltage) if battery_voltage is not None else None
+            power_data = {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase}
+            logger.debug(f"Broadcasting 'update_power' with data: {power_data}")
+            socketio.emit('update_power', power_data)
+        except Exception as e:
+            logger.error(f"Error in power_update_loop: {e}", exc_info=True)
+            time_module.sleep(10)
 
 def voltage_to_soc(voltage):
     soc_table = [
@@ -671,75 +743,6 @@ def voltage_to_soc(voltage):
             return round(s1 + (s2 - s1) * (voltage - v1) / (v2 - v1))
     return 100
 
-last_battery_voltage = None
-last_water_pct = None
-last_solar_current = None
-
-def get_averaged_analog(pin, num_samples=15):
-    samples = []
-    for _ in range(num_samples):
-        val = arduino.get_analog(pin)
-        if val is not None:
-            samples.append(val)
-        time_module.sleep(0.01)
-    if not samples:
-        return None
-    return statistics.median(samples)
-
-def power_update_loop():
-    global last_battery_voltage, last_water_pct, last_solar_current
-    alpha = 0.3
-    while True:
-        time_module.sleep(1)
-        vcc_mv, voltage_raw, water_raw, solar_raw = arduino.get_all_analogs_and_vcc()
-        battery_voltage = last_battery_voltage
-        water_pct = last_water_pct
-        solar_current = last_solar_current
-        if vcc_mv is not None and 4000 <= vcc_mv <= 6000:
-            vref = vcc_mv / 1000.0
-        else:
-            vref = 5.0
-            if vcc_mv is not None:
-                logger.warning(f"Invalid VCC reading: {vcc_mv}")
-        if voltage_raw is not None:
-            v_a0 = voltage_raw * vref / 1023.0
-            new_battery_voltage = round(v_a0 * 5.199, 1)
-            logger.info(f"Raw A0: {voltage_raw:.2f}, VCC: {vcc_mv}mV, vref: {vref:.2f}V, v_a0: {v_a0:.2f}V, Battery: {new_battery_voltage:.1f}V")
-            battery_voltage = new_battery_voltage
-            last_battery_voltage = battery_voltage
-        else:
-            logger.warning("Failed to read battery analog")
-        if water_raw is not None:
-            v_a1 = water_raw * vref / 1023.0
-            if abs(vref - v_a1) > 0.01:
-                sensor_r = 100 * v_a1 / (vref - v_a1)
-                pct = (240 - sensor_r) / (240 - 33) * 100
-                new_water_pct = max(0, min(100, round(pct)))
-                water_pct = alpha * new_water_pct + (1 - alpha) * last_water_pct if last_water_pct is not None else new_water_pct
-                water_pct = round(water_pct)
-                last_water_pct = water_pct
-            else:
-                water_pct = 0
-        else:
-            logger.warning("Failed to read water analog")
-        if solar_raw is not None:
-            v_a2 = solar_raw * vref / 1023.0
-            ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5326, 'sensitivity': 0.0125})
-            zero_offset = ct_solar['zero_offset']
-            sensitivity = ct_solar['sensitivity']
-            new_solar_current = (v_a2 - zero_offset) / sensitivity
-            new_solar_current = max(0, new_solar_current)
-            solar_current = alpha * new_solar_current + (1 - alpha) * last_solar_current if last_solar_current is not None else new_solar_current
-            solar_current = round(solar_current, 1)
-            last_solar_current = solar_current
-        else:
-            logger.warning("Failed to read solar analog")
-        logger.debug(f"Raw values: VCC={vcc_mv if vcc_mv is not None else 'None'}, A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
-        battery_pct = voltage_to_soc(battery_voltage) if battery_voltage is not None else None
-        power_data = {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase}
-        logger.debug(f"Broadcasting 'update_power' with data: {power_data}")
-        socketio.emit('update_power', power_data)
-
 system_toast_display_time_sec = static_config.get('system_toast_display_time', 5)
 system_toast_display_time_ms = system_toast_display_time_sec * 1000
 config_manager.set('system_toast_display_time_ms', system_toast_display_time_ms)
@@ -750,7 +753,27 @@ config_manager.set('rules_toast_display_time_ms', rules_toast_display_time_ms)
 def handle_phase_scene(scene_id):
     apply_scene(scene_id, triggered_by_phase_change=True)
 
-phase_manager = PhaseManager(config_manager, handle_phase_scene, get_last_gps_data, get_computed_dt, get_has_gps_fix, socketio, screens_config, current_screen_levels, screen_sids)
+# ====================== WATCHDOG SETUP ======================
+watchdog = WatchdogManager(config_manager=config_manager, socketio=socketio)
+watchdog.start()
+
+restart_handlers['time_update_loop'] = lambda: None
+restart_handlers['power_update_loop'] = lambda: None
+restart_handlers['phase_loop'] = lambda: None
+restart_handlers['reeds_polling'] = lambda: None
+
+phase_manager = PhaseManager(
+    config_manager, 
+    handle_phase_scene, 
+    get_last_gps_data, 
+    get_computed_dt, 
+    get_has_gps_fix, 
+    socketio, 
+    screens_config, 
+    current_screen_levels, 
+    screen_sids,
+    watchdog=watchdog
+)
 
 def apply_reed_settings(settings):
     channel_str = str(settings['channel'])
@@ -787,7 +810,8 @@ reeds_controller = ReedsController(
     apply_reed_settings,
     lambda: phase_manager.current_phase,
     None,
-    on_lock=set_light_reed_locked
+    on_lock=set_light_reed_locked,
+    watchdog=watchdog
 )
 
 phase_manager.set_reeds_controller(reeds_controller)
@@ -799,6 +823,7 @@ action_handlers = {
 }
 
 rules_engine = RulesEngine('rules.json', phase_manager, reeds_controller, get_computed_dt, action_handlers, on_rule_fired=lambda rule: socketio.emit('show_toast', {'message': rule.get('description', 'Rule fired'), 'duration': config_manager.get('rules_toast_display_time_ms')}))
+
 reeds_controller.set_rules_engine(rules_engine)
 phase_manager.set_rules_engine(rules_engine)
 
@@ -999,9 +1024,14 @@ if __name__ == '__main__':
     logger.info("Starting application")
     arduino.start()
     gps.start()
+    
+    # Start background loops
     threading.Thread(target=time_update_loop, daemon=True).start()
     threading.Thread(target=power_update_loop, daemon=True).start()
+    
     phase_manager.start()
     socketio.run(app, debug=True, use_reloader=False, host='0.0.0.0', allow_unsafe_werkzeug=True)
+    
     reeds_controller.stop_polling()
+    watchdog.stop()
     logger.info("Application shutdown")
