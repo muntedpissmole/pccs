@@ -658,59 +658,100 @@ def time_update_loop():
 
 def power_update_loop():
     global last_battery_voltage, last_water_pct, last_solar_current
+    
+    last_battery_voltage = None
+    last_water_pct = None
+    last_solar_current = None
+    
     alpha = 0.3
+
     while True:
         try:
             watchdog.feed("power_update_loop")
             time_module.sleep(2)
+
             vcc_mv, voltage_raw, water_raw, solar_raw = arduino.get_all_analogs_and_vcc()
+
+            # Use the last known values as starting point (or None on first run)
             battery_voltage = last_battery_voltage
             water_pct = last_water_pct
             solar_current = last_solar_current
+
             if vcc_mv is not None and 4000 <= vcc_mv <= 6000:
                 vref = vcc_mv / 1000.0
             else:
                 vref = 5.0
                 if vcc_mv is not None:
                     logger.warning(f"Invalid VCC reading: {vcc_mv}")
+
+            # === Battery Voltage ===
             if voltage_raw is not None:
                 v_a0 = voltage_raw * vref / 1023.0
                 new_battery_voltage = round(v_a0 * 5.199, 1)
-                logger.info(f"Raw A0: {voltage_raw:.2f}, VCC: {vcc_mv}mV, vref: {vref:.2f}V, v_a0: {v_a0:.2f}V, Battery: {new_battery_voltage:.1f}V")
+                logger.info(f"Raw A0: {voltage_raw:.2f}, VCC: {vcc_mv}mV, vref: {vref:.2f}V, "
+                           f"v_a0: {v_a0:.2f}V, Battery: {new_battery_voltage:.1f}V")
+                
                 battery_voltage = new_battery_voltage
                 last_battery_voltage = battery_voltage
             else:
                 logger.warning("Failed to read battery analog")
+
+            # === Water Level ===
             if water_raw is not None:
                 v_a1 = water_raw * vref / 1023.0
                 if abs(vref - v_a1) > 0.01:
                     sensor_r = 100 * v_a1 / (vref - v_a1)
                     pct = (240 - sensor_r) / (240 - 33) * 100
                     new_water_pct = max(0, min(100, round(pct)))
-                    water_pct = alpha * new_water_pct + (1 - alpha) * last_water_pct if last_water_pct is not None else new_water_pct
+                    
+                    # Smoothing only if we have a previous value
+                    if last_water_pct is not None:
+                        water_pct = alpha * new_water_pct + (1 - alpha) * last_water_pct
+                    else:
+                        water_pct = new_water_pct
+                        
                     water_pct = round(water_pct)
                     last_water_pct = water_pct
                 else:
                     water_pct = 0
+                    last_water_pct = 0
             else:
                 logger.warning("Failed to read water analog")
+
+            # === Solar Current ===
             if solar_raw is not None:
                 v_a2 = solar_raw * vref / 1023.0
                 ct_solar = static_config.get('ct_solar', {'zero_offset': 2.5326, 'sensitivity': 0.0125})
                 zero_offset = ct_solar['zero_offset']
-                sensitivity = ct_solar['sensitivity']
+                sensitivity = ct_solar.get('sensitivity', 0.0125)
+                
                 new_solar_current = (v_a2 - zero_offset) / sensitivity
                 new_solar_current = max(0, new_solar_current)
-                solar_current = alpha * new_solar_current + (1 - alpha) * last_solar_current if last_solar_current is not None else new_solar_current
+                
+                if last_solar_current is not None:
+                    solar_current = alpha * new_solar_current + (1 - alpha) * last_solar_current
+                else:
+                    solar_current = new_solar_current
+                    
                 solar_current = round(solar_current, 1)
                 last_solar_current = solar_current
             else:
                 logger.warning("Failed to read solar analog")
-            logger.debug(f"Raw values: VCC={vcc_mv if vcc_mv is not None else 'None'}, A0={f'{voltage_raw:.2f}' if voltage_raw is not None else 'None'}, A1={f'{water_raw:.2f}' if water_raw is not None else 'None'}, A2={f'{solar_raw:.2f}' if solar_raw is not None else 'None'}, vref={vref:.2f}")
+
+            # === Calculate SOC and broadcast ===
             battery_pct = voltage_to_soc(battery_voltage) if battery_voltage is not None else None
-            power_data = {'battery': battery_voltage, 'battery_pct': battery_pct, 'water': water_pct, 'solar': solar_current, 'phase': phase_manager.current_phase}
+            
+            power_data = {
+                'battery': battery_voltage,
+                'battery_pct': battery_pct,
+                'water': water_pct,
+                'solar': solar_current,
+                'phase': phase_manager.current_phase
+            }
+
             logger.debug(f"Broadcasting 'update_power' with data: {power_data}")
             socketio.emit('update_power', power_data)
+
         except Exception as e:
             logger.error(f"Error in power_update_loop: {e}", exc_info=True)
             time_module.sleep(10)
