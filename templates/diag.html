@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCCS Diagnostics</title>
+  <script src="/static/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+<style>
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Light.woff2') format('woff2'); font-weight: 300; font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Medium.woff2') format('woff2'); font-weight: 500; font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap;
+	}
+
+	body { 
+	  font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+	  background: radial-gradient(circle at 50% 30%, #1a1f2e 0%, #0f1219 100%);
+	}
+
+    .neumorph, .diag-card {
+      background: #1f2937;
+      border-radius: 32px;
+      box-shadow: 12px 12px 24px rgba(0,0,0,0.75),
+                  -12px -12px 24px rgba(255,255,255,0.08),
+                  inset 4px 4px 8px rgba(255,255,255,0.12),
+                  inset -4px -4px 8px rgba(0,0,0,0.6);
+    }
+
+    .diag-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 24px;
+      background: #1f2937;
+      border-radius: 24px;
+      box-shadow: 8px 8px 16px rgba(0,0,0,0.7), -8px -8px 16px rgba(255,255,255,0.08);
+    }
+
+    .diag-label {
+      min-width: 180px;
+      flex: 1 1 180px;
+      font-weight: 600;
+      color: #bae6fd;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Sky Blue Accent - matches your main UI */
+    .accent-sky {
+      color: #38bdf8;
+    }
+
+    /* === UNIFIED STATUS BOXES === */
+    .status {
+      font-weight: 700;
+      padding: 11px 20px;
+      border-radius: 9999px;
+      min-width: 160px;
+      text-align: center;
+      font-size: 1rem;
+      box-shadow: inset 6px 6px 12px rgba(0,0,0,0.6),
+                  inset -6px -6px 12px rgba(255,255,255,0.1);
+      transition: all 0.3s;
+      flex-shrink: 0;
+      border: 2px solid rgba(56, 189, 248, 0.3);
+      background: #1e2937;
+      color: #e0f2fe;
+    }
+
+    .closed { 
+      background: #38bdf8; 
+      color: #0f172a; 
+      border-color: #7dd3fc; 
+    }
+    .open { 
+      background: #64748b; 
+      color: #f1f5f9; 
+      border-color: #94a3b8; 
+    }
+    
+    .forced { 
+      background: #fbbf24 !important; 
+      color: #1e2937 !important; 
+      border-color: #fcd34d !important; 
+      animation: pulse 2s infinite; 
+    }
+
+    /* Improved Phase Colors - more cohesive with sky blue */
+    .phase-day    { background: #38bdf8; color: #0f172a; border-color: #7dd3fc; }
+    .phase-evening{ background: #fb923c; color: #1e2937; border-color: #fdba74; }
+    .phase-night  { background: #6366f1; color: #e0e7ff; border-color: #818cf8; }
+    .sun-time     { background: #1e2937; color: #e0f2fe; border-color: #38bdf8; }
+
+    @keyframes pulse { 
+      0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6); } 
+      70% { box-shadow: 0 0 0 14px rgba(251, 191, 36, 0); } 
+      100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); } 
+    }
+
+    /* === PHASE FORCE BUTTONS - Better harmony === */
+    .diag-btn {
+      padding: 11px 20px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.25s;
+      box-shadow: 6px 6px 12px rgba(0,0,0,0.6),
+                  -6px -6px 12px rgba(255,255,255,0.08),
+                  inset 2px 2px 4px rgba(255,255,255,0.1);
+      cursor: pointer;
+      white-space: nowrap;
+      background: #334155;
+      color: #e0f2fe;
+      border: 2px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .diag-btn:hover { 
+      transform: translateY(-1px); 
+      box-shadow: 8px 8px 16px rgba(0,0,0,0.6),
+                  -8px -8px 16px rgba(255,255,255,0.1);
+      background: #475569;
+    }
+
+    /* Phase Force Buttons - cohesive sky theme */
+    .diag-btn.bg-sky-600    { background: #0284c8; border-color: #38bdf8; }   /* Day */
+    .diag-btn.bg-orange-600 { background: #ea580c; border-color: #fb923c; }   /* Evening */
+    .diag-btn.bg-indigo-700 { background: #4f46e5; border-color: #818cf8; }   /* Night */
+    .diag-btn.bg-red-600    { background: #b91c1c; }
+    .diag-btn.bg-slate-600  { background: #475569; border-color: #64748b; }
+
+    .diag-row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    /* Mobile stacking */
+    @media (max-width: 640px) {
+      .diag-row {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 16px 20px;
+      }
+      .diag-label {
+        min-width: auto;
+        flex: none;
+        justify-content: flex-start;
+      }
+      .status {
+        min-width: auto;
+        align-self: flex-start;
+      }
+      .diag-row-actions {
+        margin-left: 0;
+        justify-content: flex-start;
+        width: 100%;
+      }
+      .diag-btn {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <div class="flex-1 p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
+    
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-4xl font-bold tracking-tight flex items-center gap-4">
+          <i class="fa-solid fa-screwdriver-wrench accent-sky"></i>
+          Diagnostics
+        </h1>
+        <p class="text-sky-300 mt-1">Reed Switches • GPS • Phases</p>
+      </div>
+      <div id="lastupdate" class="px-5 py-2 bg-zinc-900 rounded-3xl text-zinc-400">—</div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+
+      <!-- REEDS -->
+      <div class="diag-card neumorph p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <i class="fa-solid fa-door-open text-3xl accent-sky"></i>
+          <h2 class="text-2xl font-semibold">Reed Switches</h2>
+        </div>
+        <div id="reeds-container" class="space-y-4"></div>
+
+        <button onclick="clearAllForces()" 
+                class="mt-6 w-full py-4 bg-amber-500 hover:bg-amber-600 text-zinc-900 font-bold rounded-3xl text-lg transition cursor-pointer">
+          CLEAR ALL FORCES
+        </button>
+      </div>
+
+      <!-- GPS + PHASE -->
+      <div class="space-y-6">
+
+        <div class="diag-card neumorph p-8">
+          <div class="flex items-center gap-3 mb-6">
+            <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+            <h2 class="text-2xl font-semibold">GPS Status</h2>
+          </div>
+          <div class="space-y-4">
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-crosshairs accent-sky"></i> Fix Quality</span>
+              <span id="fix" class="status">0</span>
+              <div class="diag-row-actions">
+                <button onclick="setGPSSim(true)" class="diag-btn bg-red-600 hover:bg-red-700">Force No Fix</button>
+                <button onclick="setGPSSim(false)" class="diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
+              </div>
+            </div>
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-satellite accent-sky"></i> Satellites</span>
+              <span id="sats" class="status">—</span>
+            </div>
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-location-dot accent-sky"></i> Position</span>
+              <span id="pos" class="status">—</span>
+            </div>
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-city accent-sky"></i> Suburb</span>
+              <span id="suburb" class="status">—</span>
+            </div>
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-clock accent-sky"></i> Local Time</span>
+              <span id="time" class="status">—</span>
+            </div>
+            <div class="diag-row">
+              <span class="diag-label"><i class="fa-solid fa-tachometer-alt accent-sky"></i> Speed</span>
+              <span id="speed" class="status">—</span>
+            </div>
+          </div>
+        </div>
+
+		<div class="diag-card neumorph p-8">
+		  <div class="flex items-center gap-3 mb-6">
+			<i class="fa-solid fa-sun text-3xl accent-sky"></i>
+			<h2 class="text-2xl font-semibold">Sun & Phase</h2>
+		  </div>
+
+		  <div class="space-y-4">
+			<!-- Individual scene transition rows (like sunrise/sunset) -->
+			<div class="diag-row">
+			  <span class="diag-label">
+				<i class="fa-solid fa-sun accent-sky"></i> 
+				Day Starts
+			  </span>
+			  <span id="day_start" class="status sun-time">—</span>
+			</div>
+
+			<div class="diag-row">
+			  <span class="diag-label">
+				<i class="fa-solid fa-cloud-sun accent-sky"></i> 
+				Evening Starts
+			  </span>
+			  <span id="evening_start" class="status sun-time">—</span>
+			</div>
+
+			<div class="diag-row">
+			  <span class="diag-label">
+				<i class="fa-solid fa-moon accent-sky"></i> 
+				Night Starts
+			  </span>
+			  <span id="night_start" class="status sun-time">—</span>
+			</div>
+
+			<!-- Sunrise / Sunset -->
+			<div class="diag-row">
+			  <span class="diag-label"><i class="fa-solid fa-sun accent-sky"></i> Sunrise</span>
+			  <span id="sunrise" class="status sun-time">—</span>
+			</div>
+
+			<div class="diag-row">
+			  <span class="diag-label"><i class="fa-solid fa-moon accent-sky"></i> Sunset</span>
+			  <span id="sunset" class="status sun-time">—</span>
+			</div>
+
+			<div class="diag-row">
+			  <span class="diag-label"><i class="fa-solid fa-circle-half-stroke accent-sky"></i> Current Phase</span>
+			  <span id="current-phase" class="status phase-day">—</span>
+			</div>
+		  </div>
+
+		  <div class="flex gap-3 mt-8">
+			<button onclick="forcePhase('day')" class="flex-1 diag-btn bg-sky-600 hover:bg-sky-700">Force DAY</button>
+			<button onclick="forcePhase('evening')" class="flex-1 diag-btn bg-orange-600 hover:bg-orange-700">Force EVENING</button>
+			<button onclick="forcePhase('night')" class="flex-1 diag-btn bg-indigo-700 hover:bg-indigo-800">Force NIGHT</button>
+			<button onclick="clearPhaseForce()" class="flex-1 diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
+		  </div>
+		</div>
+      </div>
+    </div>
+
+    <div class="diag-card neumorph p-8">
+      <h3 class="text-xl font-semibold mb-4 flex items-center gap-3">
+        <i class="fa-solid fa-code accent-sky"></i> Raw Payload
+      </h3>
+      <pre id="raw" class="bg-zinc-950 p-6 rounded-3xl text-sm overflow-auto font-mono">Waiting for data...</pre>
+    </div>
+  </div>
+
+<script src="/static/socket.io.min.js"></script>
+<script>
+    const socket = io();
+    let lastReedPayload = {};
+    let lastGPSPayload = {};
+    let lastKnownPhase = "DAY";
+    let phaseIsForced = false;
+
+    const REED_ORDER = ["kitchen_panel", "kitchen_bench", "storage_panel", "rear_drawer", "rooftop_tent"];
+    const reedRows = new Map();
+
+    function createOrUpdateReedRow(name, isClosed, isForced, forcedState) {
+      let row = reedRows.get(name);
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'diag-row';
+        row.dataset.name = name;
+        reedRows.set(name, row);
+
+        row.innerHTML = `
+          <span class="diag-label">
+            <i class="fa-solid fa-door-closed accent-sky"></i> 
+            ${name.replace(/_/g, ' ')}
+          </span>
+          <span class="status"></span>
+          <div class="diag-row-actions">
+            <button class="diag-btn bg-sky-600 hover:bg-sky-700" data-action="force-close">Force CLOSED</button>
+            <button class="diag-btn bg-indigo-600 hover:bg-indigo-700" data-action="force-open">Force OPEN</button>
+            <button class="diag-btn bg-slate-600 hover:bg-slate-700" data-action="clear">Clear</button>
+          </div>
+        `;
+
+        row.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            socket.emit('force_reed', { name, closed: action === 'clear' ? null : action === 'force-close' });
+          });
+        });
+
+        document.getElementById('reeds-container').appendChild(row);
+      }
+
+      const statusEl = row.querySelector('.status');
+      let statusText = isClosed ? 'CLOSED' : 'OPEN';
+      let statusClass = isClosed ? 'closed' : 'open';
+      if (isForced) {
+        statusText = `FORCED ${forcedState ? 'CLOSED' : 'OPEN'}`;
+        statusClass = 'forced';
+      }
+      statusEl.textContent = statusText;
+      statusEl.className = `status ${statusClass}`;
+    }
+
+    function updateReeds(payload) {
+      lastReedPayload = payload;
+      const states = payload.states || payload;
+      const forced = payload.forced || {};
+      REED_ORDER.forEach(name => {
+        if (name in states) createOrUpdateReedRow(name, !!states[name], name in forced, forced[name]);
+      });
+    }
+
+	function updateGPS(data) {
+		lastGPSPayload = { ...lastGPSPayload, ...data };
+
+		const fixEl = document.getElementById('fix');
+		const fixVal = data.fix_quality ?? 0;
+		fixEl.textContent = data.force_no_fix ? '0 (FORCED)' : fixVal;
+		fixEl.className = data.force_no_fix ? 'status forced' : (fixVal >= 2 ? 'status phase-day' : 'status phase-night');
+
+		document.getElementById('sats').textContent = data.satellites ?? '—';
+		document.getElementById('pos').textContent = data.latitude ? `${data.latitude.toFixed(5)}°, ${data.longitude.toFixed(5)}°` : '—';
+		document.getElementById('suburb').textContent = data.suburb || '—';
+		document.getElementById('time').textContent = data.local_time || '—';
+		document.getElementById('speed').textContent = data.speed_kmh ? data.speed_kmh.toFixed(1) + ' km/h' : '—';
+
+		if (data.sunrise !== undefined) document.getElementById('sunrise').textContent = data.sunrise || '—';
+		if (data.sunset !== undefined) document.getElementById('sunset').textContent = data.sunset || '—';
+		if (data.day_start !== undefined) document.getElementById('day_start').textContent = data.day_start || '—';
+		if (data.evening_start !== undefined) document.getElementById('evening_start').textContent = data.evening_start || '—';
+		if (data.night_start !== undefined) document.getElementById('night_start').textContent = data.night_start || '—';
+
+		if (data.phase && data.phase.toUpperCase() !== 'UNKNOWN') {
+			lastKnownPhase = data.phase.toUpperCase();
+		}
+		if (data.forced !== undefined) {
+			phaseIsForced = !!data.forced;
+		}
+
+		const phaseEl = document.getElementById('current-phase');
+		if (phaseIsForced) {
+			phaseEl.textContent = `FORCED ${lastKnownPhase}`;
+			phaseEl.className = 'status forced';
+		} else {
+			phaseEl.textContent = lastKnownPhase;
+			phaseEl.className = lastKnownPhase === 'DAY' ? 'status phase-day' :
+							   lastKnownPhase === 'EVENING' ? 'status phase-evening' : 'status phase-night';
+		}
+	}
+
+    window.clearAllForces = () => { if (confirm("Clear ALL forced reed states?")) socket.emit('force_reed', { name: 'all', closed: null }); };
+    window.setGPSSim = (enabled) => socket.emit('set_gps_simulation', { no_fix: enabled });
+    window.forcePhase = (phase) => socket.emit('force_phase', { phase });
+    window.clearPhaseForce = () => { 
+      socket.emit('force_phase', { phase: null });
+      phaseIsForced = false;
+    };
+
+    socket.on('reed_update', updateReeds);
+    socket.on('gps_update', updateGPS);
+	socket.on('phase_update', (payload) => updateGPS(payload));
+
+    setInterval(() => {
+      fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
+      fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
+      
+      const combined = { reeds: lastReedPayload, gps: lastGPSPayload };
+      document.getElementById('raw').textContent = JSON.stringify(combined, null, 2);
+      document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString();
+    }, 2000);
+
+    window.onload = () => {
+      fetch('/reed_json').then(r => r.json()).then(updateReeds);
+      fetch('/gps_json').then(r => r.json()).then(updateGPS);
+    };
+</script>
+</body>
+</html>

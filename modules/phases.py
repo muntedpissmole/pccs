@@ -21,6 +21,7 @@ class PhaseManager:
         self.forced_phase = None
         self.force_timer = None
         self._last_broadcast_phase = None
+        self._cached_phase_times = {}
 
         self.running = False
         self.thread = None
@@ -52,6 +53,10 @@ class PhaseManager:
         if self.running:
             return
         self.running = True
+
+        # Pre-calculate times immediately so we never send empty data
+        self._calculate_and_cache_times()
+
         self.thread = threading.Thread(target=self._phase_loop, daemon=True, name="PhaseLoop")
         self.thread.start()
 
@@ -123,7 +128,6 @@ class PhaseManager:
                 sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
                 sunset = self.fallback_sun.get_local_sunset_time(now, tz)
 
-            # Force sunrise/sunset to today (suntime sometimes returns previous day)
             sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
             sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
 
@@ -164,6 +168,76 @@ class PhaseManager:
                 continue
         raise ValueError(f"Could not parse sun time: {time_str}")
 
+    def _calculate_and_cache_times(self):
+        """Calculate and cache phase times with full debugging."""
+        start_time = time.time()
+        logger.debug("🌗 [CACHE] Starting phase times calculation")
+
+        try:
+            tz = self.fallback_tz
+            now = datetime.datetime.now(tz)
+
+            sunrise = None
+            sunset = None
+            source = "unknown"
+
+            # Try GPS
+            if self._has_valid_gps():
+                try:
+                    state = self.gps.get_state()
+                    logger.debug(f"🌗 [CACHE] GPS state keys: {list(state.keys())} | sunrise={state.get('sunrise')} | sunset={state.get('sunset')}")
+
+                    tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
+                    now = datetime.datetime.now(tz)
+
+                    sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
+                    sunset = self._parse_sun_time(state.get("sunset"), tz, now)
+                    source = "GPS"
+                    logger.debug("🌗 [CACHE] Successfully parsed GPS sun times")
+                except Exception as gps_err:
+                    logger.warning(f"🌗 [CACHE] GPS parse failed: {gps_err}")
+
+            # Fallback
+            if sunrise is None or sunset is None:
+                try:
+                    sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
+                    sunset = self.fallback_sun.get_local_sunset_time(now, tz)
+                    source = "FALLBACK"
+                    logger.debug("🌗 [CACHE] Used suntime fallback")
+                except Exception as fb_err:
+                    logger.error(f"🌗 [CACHE] Fallback also failed: {fb_err}")
+
+            if sunrise is None or sunset is None:
+                raise ValueError("No valid sun times available")
+
+            sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
+            sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
+
+            day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
+            evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
+            night_start_today = now.replace(hour=self.night_start_hour, minute=0, second=0, microsecond=0)
+            effective_night_start = max(evening_start, night_start_today)
+
+            self._cached_phase_times = {
+                "day_start": day_start.strftime("%I:%M %p"),
+                "evening_start": evening_start.strftime("%I:%M %p"),
+                "night_start": effective_night_start.strftime("%I:%M %p"),
+                "day_offset_min": self.day_offset_minutes,
+                "evening_offset_min": self.evening_offset_minutes,
+                "night_fixed_hour": self.night_start_hour,
+            }
+
+            duration = (time.time() - start_time) * 1000
+            logger.debug(f"🌗 [CACHE] SUCCESS ({source}) in {duration:.1f}ms → {self._cached_phase_times}")
+
+        except Exception as e:
+            logger.error(f"🌗 [CACHE] FAILED → setting em-dashes. Error: {e}", exc_info=True)
+            self._cached_phase_times = {
+                "day_start": "—",
+                "evening_start": "—",
+                "night_start": "—",
+            }
+
     # ====================== PUBLIC API ======================
     def get_phase(self) -> str:
         if self.forced_phase is not None:
@@ -175,15 +249,6 @@ class PhaseManager:
 
     def get_phase_ramp_time(self):
         return self.phase_ramp_time_ms
-
-    def force_phase(self, phase: str):
-        if self.force_timer:
-            self.force_timer.cancel()
-            self.force_timer = None
-
-        self.forced_phase = str(phase).strip().title()
-        logger.info(f"🔧 Phase manually forced → {self.forced_phase}")
-        self._update_phase()
 
     def force_phase(self, phase: str):
         if self.force_timer:
@@ -210,53 +275,22 @@ class PhaseManager:
         self._update_phase()
 
     def get_phase_times(self) -> dict:
-        """Return human-readable phase transition times."""
-        if self.forced_phase:
-            return {}
-
-        try:
-            tz = self.fallback_tz
-            now = datetime.datetime.now(tz)
-
-            if self._has_valid_gps():
-                state = self.gps.get_state()
-                tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
-                now = datetime.datetime.now(tz)
-                sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
-                sunset = self._parse_sun_time(state.get("sunset"), tz, now)
-            else:
-                sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
-                sunset = self.fallback_sun.get_local_sunset_time(now, tz)
-
-            sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
-            sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
-
-            day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
-            evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
-            night_start_today = now.replace(hour=self.night_start_hour, minute=0, second=0, microsecond=0)
-            effective_night_start = max(evening_start, night_start_today)
-
-            return {
-                "day_start": day_start.strftime("%I:%M %p"),
-                "evening_start": evening_start.strftime("%I:%M %p"),
-                "night_start": effective_night_start.strftime("%I:%M %p"),
-                "day_offset_min": self.day_offset_minutes,
-                "evening_offset_min": self.evening_offset_minutes,
-                "night_fixed_hour": self.night_start_hour,
-            }
-        except Exception as e:
-            logger.error(f"Failed to calculate phase times: {e}")
-            return {}
+        """Always return valid phase transition times."""
+        if not self._cached_phase_times or len(self._cached_phase_times) < 3:
+            self._calculate_and_cache_times()
+        return self._cached_phase_times.copy()
 
     def _broadcast_phase_update(self):
-        """Broadcast phase change and trigger reed re-evaluation."""
         try:
+            times = self.get_phase_times()
+            logger.debug(f"🌗 [BROADCAST] Sending phase_update with times: {times}")
+
             payload = {
                 'phase': self.get_phase(),
                 'forced': self.is_forced(),
                 'using_fallback': self._using_fallback,
                 'waiting_for_gps': self.current_phase is None,
-                **self.get_phase_times()
+                **times
             }
             self.socketio.emit('phase_update', payload)
 

@@ -560,6 +560,10 @@ def gps_diagnostics():
 @app.route('/reeds')
 def reed_diagnostics():
     return render_template('reeds.html')
+    
+@app.route('/diag')
+def diagnostics():
+    return render_template('diag.html')
 
 @app.route('/gps_json')
 def gps_json():
