@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reed Switch Diagnostics</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f9f9f9; 
+        }
+        h1, h2 { color: #333; }
+        .row { 
+            margin: 8px 0; 
+            padding: 12px; 
+            background: white; 
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .label { 
+            display: inline-block; 
+            width: 160px; 
+            font-weight: bold; 
+        }
+        .status { 
+            font-weight: bold; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            min-width: 160px; 
+            text-align: center;
+            transition: all 0.3s;
+            font-size: 1.05em;
+        }
+
+        .closed { 
+            background: #bfdbfe; 
+            color: #1e3a8a; 
+            border: 2px solid #60a5fa;
+        }
+        .open { 
+            background: #e9d5ff; 
+            color: #581c87; 
+            border: 2px solid #c084fc;
+        }
+        
+        .forced {
+            background: #fef3c7 !important;
+            color: #b45309 !important;
+            border: 2px solid #f59e0b;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70%  { box-shadow: 0 0 0 12px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        button {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+
+        .force-close { background: #3b82f6; color: white; }
+        .force-close:hover { background: #2563eb; }
+
+        .force-open { background: #8b5cf6; color: white; }
+        .force-open:hover { background: #7c3aed; }
+
+        .force-clear { background: #6b7280; color: white; }
+        .force-clear:hover { background: #4b5563; }
+
+        .clear-all { 
+            background: #f59e0b; 
+            color: #1f2937; 
+            font-weight: bold; 
+            margin: 15px 0; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Reed Switch Diagnostics</h1>
+    <p><em>Force states for testing — persist until manually cleared</em></p>
+
+    <div id="reeds-container"></div>
+
+    <button class="clear-all" onclick="clearAllForces()">Clear All Forces</button>
+
+    <h2>Raw Data + Force Status</h2>
+    <pre id="raw">Waiting for data...</pre>
+
+    <p><strong>Last Update:</strong> <span id="lastupdate">—</span></p>
+
+<script src="/static/socket.io.min.js"></script>
+<script>
+    const socket = io();
+    let lastPayload = {};
+
+    const REED_ORDER = [
+        "kitchen_panel",
+        "kitchen_bench",
+        "storage_panel",
+        "rear_drawer",
+        "rooftop_tent"
+    ];
+
+    function createReedRow(name, isClosed, isForced, forcedState) {
+        const div = document.createElement('div');
+        div.className = 'row';
+
+        let statusText = isClosed ? 'CLOSED' : 'OPEN';
+        let statusClass = isClosed ? 'closed' : 'open';
+
+        if (isForced) {
+            statusText = `FORCED ${forcedState ? 'CLOSED' : 'OPEN'}`;
+            statusClass = 'forced';
+        }
+
+        div.innerHTML = `
+            <span class="label">${name}</span>
+            <span id="status-${name}" class="status ${statusClass}">
+                ${statusText}
+            </span>
+            <button class="force-close" data-name="${name}" data-action="force">Force CLOSED</button>
+            <button class="force-open"  data-name="${name}" data-action="force">Force OPEN</button>
+            <button class="force-clear" data-name="${name}" data-action="clear">Clear</button>
+        `;
+
+        // Proper event listeners (fixes intermittent first-click issue)
+        div.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', handleReedButtonClick);
+        });
+
+        return div;
+    }
+
+    function handleReedButtonClick(e) {
+        const btn = e.currentTarget;
+        const name = btn.dataset.name;
+        const action = btn.dataset.action;
+
+        if (!name) return;
+
+        if (action === 'force') {
+            const closed = btn.classList.contains('force-close');
+            socket.emit('force_reed', { name: name, closed: closed });
+        } else if (action === 'clear') {
+            socket.emit('force_reed', { name: name, closed: null });
+        }
+    }
+
+    function updateUI(payload) {
+        if (!payload) return;
+        lastPayload = payload;
+
+        const container = document.getElementById('reeds-container');
+        const states = payload.states || payload;
+        const forced = payload.forced || {};
+
+        container.innerHTML = '';
+
+        REED_ORDER.forEach(name => {
+            if (name in states) {
+                const isClosed = states[name] === true;
+                const isForced = name in forced;
+                const forcedState = forced[name];
+
+                container.appendChild(
+                    createReedRow(name, isClosed, isForced, forcedState)
+                );
+            }
+        });
+
+        document.getElementById('raw').textContent = JSON.stringify(payload, null, 2);
+        document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString();
+    }
+
+    window.clearAllForces = function() {
+        if (confirm("Clear ALL forced reed states?")) {
+            socket.emit('force_reed', { name: 'all', closed: null });
+        }
+    };
+
+    socket.on('reed_update', updateUI);
+
+    setInterval(() => {
+        fetch('/reed_json')
+            .then(r => r.json())
+            .then(updateUI)
+            .catch(() => {});
+    }, 1200);
+
+    window.onload = () => {
+        fetch('/reed_json')
+            .then(r => r.json())
+            .then(updateUI);
+    };
+</script>
+</body>
+</html>

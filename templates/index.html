@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Pissmole Camper Control System</title>
+  <script src="/static/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+  <style>
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Light.woff2') format('woff2');
+	  font-weight: 300;
+	  font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Regular.woff2') format('woff2');
+	  font-weight: 400;
+	  font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Medium.woff2') format('woff2');
+	  font-weight: 500;
+	  font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Bold.woff2') format('woff2');
+	  font-weight: 700;
+	  font-display: swap;
+	}
+	@font-face {
+	  font-family: 'Satoshi';
+	  src: url('/static/fonts/Satoshi-Black.woff2') format('woff2');
+	  font-weight: 900;
+	  font-display: swap;
+	}
+
+	body { 
+	  font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+	  background: radial-gradient(circle at 50% 30%, #1a1f2e 0%, #0f1219 100%);
+	}
+
+    .neumorph, .tile {
+      background: #1f2937;
+      border-radius: 32px;
+      box-shadow: 
+        12px 12px 24px rgba(0, 0, 0, 0.75),
+        -12px -12px 24px rgba(255, 255, 255, 0.08),
+        inset 4px 4px 8px rgba(255, 255, 255, 0.12),
+        inset -4px -4px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    .tile-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+      color: #bae6fd;
+      font-weight: 500;
+    }
+
+    .tile-value {
+      font-size: 1rem;
+      line-height: 1.1;
+      color: #e0f2fe;
+    }
+
+    .accent-sky {
+      color: #0ea5e9;
+    }
+	
+	/* ==================== SCENE BUTTONS ==================== */
+	.scene-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		padding: 20px 16px;
+		font-size: 14px;
+		font-weight: 600;
+		background: #1f2937;
+		border-radius: 32px;
+		cursor: pointer;
+		position: relative;
+		overflow: hidden;
+		
+		box-shadow: 
+		  8px 8px 16px rgba(0, 0, 0, 0.7), 
+		  -8px -8px 16px rgba(255, 255, 255, 0.08);
+
+		transition: 
+		  background 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+		  color 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+		  box-shadow 1.9s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.scene-btn:hover {
+		box-shadow: 
+		  6px 6px 12px rgba(0, 0, 0, 0.65), 
+		  -6px -6px 12px rgba(255, 255, 255, 0.12);
+	}
+
+	.scene-btn.active {
+		background: #0ea5e9;
+		color: #0f172a;
+		
+		box-shadow: 
+		  8px 8px 16px rgba(0, 0, 0, 0.4), 
+		  -8px -8px 16px rgba(255, 255, 255, 0.15),
+		  inset 4px 4px 12px rgba(0, 0, 0, 0.3);
+		
+		transition-duration: 0.25s;
+	}
+
+	.scene-btn i {
+		font-size: 32px;
+		color: #bae6fd;
+		transition: color 2.8s cubic-bezier(0.45, 0.05, 0.15, 1);
+	}
+
+	.scene-btn.active i {
+		color: #0f172a;
+		transition: color 0.3s ease;
+	}
+
+	/* ==================== SLIDER CARD ==================== */
+	.slider-card {
+      position: relative;
+      padding: 20px;
+    }
+
+	.slider-card-header {
+	  display: flex;
+	  align-items: center;
+	  justify-content: space-between;
+	}
+
+	.slider-card-left {
+	  display: flex;
+	  align-items: center;
+	  gap: 12px;
+	}
+
+	.slider-card-title {
+	  display: flex;
+	  align-items: center;
+	  gap: 12px;
+	}
+
+	.slider-card-title i {
+	  font-size: 1.75rem;
+	  color: #0ea5e9;
+	}
+
+	.slider-card-title p {
+	  font-size: 1rem;
+	  color: #bae6fd;
+	  margin: 0;
+	}
+
+	.slider-card-right {
+	  display: flex;
+	  align-items: center;
+	  gap: 16px;
+	}
+
+	.value-display {
+	  font-size: 1rem;
+	  color: #bae6fd;
+	  min-width: 52px;
+	  text-align: right;
+	}
+
+    /* ==================== SLIDER ==================== */
+    .slider-wrapper {
+      position: relative;
+      width: 100%;
+      height: 78px;
+      margin: 0 auto;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+	
+	.slider-wrapper.dragging .slider-thumb {
+	  transition: none !important;
+	  box-shadow: 0 0 0 8px rgba(14, 165, 233, 0.35),
+                  12px 12px 24px rgba(0,0,0,0.75),
+                  -12px -12px 24px rgba(255,255,255,0.12);
+	}
+
+    .slider-inner {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 50%;
+      height: 22px;
+      transform: translateY(-50%);
+    }
+
+    .slider-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 22px;
+      background: #1f2937;
+      border-radius: 9999px;
+      box-shadow: inset 6px 6px 12px rgba(0,0,0,0.8), inset -6px -6px 12px rgba(255,255,255,0.1);
+    }
+
+    .slider-fill {
+      position: absolute;
+      left: 0;
+      height: 22px;
+      background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc);
+      border-radius: 9999px;
+      box-shadow: inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 20px rgba(14, 165, 233, 0.7);
+    }
+	
+	.slider-fill.bug-mode {
+      background: linear-gradient(90deg, #e11d48, #f43f5e, #fb7185) !important;
+      box-shadow: inset 3px 3px 6px rgba(255,255,255,0.4), 0 0 20px rgba(225, 29, 72, 0.7);
+    }
+
+    .slider-thumb {
+      position: absolute;
+      top: 50%;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(145deg, #2a3749, #1f2937);
+      border-radius: 9999px;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      color: #0ea5e9;
+      z-index: 30;
+      transition: all 0.2s ease;
+      will-change: left;
+      border: 3px solid #0ea5e9;
+      box-shadow: 0 0 0 5px rgba(14, 165, 233, 0.18),
+                  12px 12px 24px rgba(0,0,0,0.75),
+                  -12px -12px 24px rgba(255,255,255,0.12),
+                  inset 6px 6px 12px rgba(255,255,255,0.3),
+                  inset -6px -6px 12px rgba(0,0,0,0.6);
+    }
+
+    /* ==================== TOGGLES ==================== */
+    .toggle-pill {
+      position: relative;
+      width: 88px;
+      height: 48px;
+      background: #1f2937;
+      border-radius: 9999px;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: inset 6px 6px 12px rgba(0,0,0,0.75), inset -6px -6px 12px rgba(255,255,255,0.08);
+      transition: background 0.4s ease;
+    }
+
+    .toggle-pill.on {
+      background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+    }
+
+    .toggle-pill .toggle-knob {
+      position: absolute;
+      top: 50%;
+      left: 5px;
+      width: 38px;
+      height: 38px;
+      background: #f1f5f9;
+      border-radius: 9999px;
+      transform: translateY(-50%);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 3px 3px 8px rgba(0,0,0,0.3), -2px -2px 6px rgba(255,255,255,0.9);
+      border: 2px solid #e2e8f0;
+    }
+
+    .toggle-pill.on .toggle-knob {
+      transform: translate(42px, -50%);
+      background: #ffffff;
+      border-color: #bae6fd;
+    }
+
+    /* Colour Toggle - Kitchen & Awning */
+    .toggle-pill.colour-toggle { background: #1f2937; }
+
+    .toggle-pill.colour-toggle.white-off {
+      background: linear-gradient(90deg, #e2e8f0, #f1f5f9) !important;
+      box-shadow: inset 6px 6px 12px rgba(0,0,0,0.4), inset -6px -6px 12px rgba(255,255,255,0.9);
+    }
+
+    .toggle-pill.colour-toggle.white-off .toggle-knob {
+      background: #334155;
+      border-color: #64748b;
+    }
+
+    .toggle-pill.colour-toggle.bug-mode {
+      background: linear-gradient(90deg, #e11d48, #f43f5e) !important;
+    }
+
+    .toggle-pill.colour-toggle.bug-mode .toggle-knob {
+      background: #ffffff;
+      border-color: #fda4af;
+    }
+
+    .relay-toggle {
+      position: relative;
+	  width: 88px;
+      height: 48px;
+      background: #1f2937;
+      border-radius: 9999px;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: inset 6px 6px 12px rgba(0,0,0,0.75), inset -6px -6px 12px rgba(255,255,255,0.08);
+	  flex-shrink: 0;
+    }
+
+    .relay-toggle.on {
+      background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+    }
+
+    .relay-toggle .relay-knob {
+      position: absolute;
+      top: 50%;
+      left: 5px;
+      width: 38px;
+      height: 38px;
+      background: #f1f5f9;
+      border-radius: 9999px;
+      transform: translateY(-50%);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 24px;
+      box-shadow: 3px 3px 8px rgba(0,0,0,0.3), -2px -2px 6px rgba(255,255,255,0.9);
+      border: 2px solid #e2e8f0;
+    }
+
+    .relay-toggle.on .relay-knob {
+      transform: translate(42px, -50%);
+      background: #ffffff;
+      color: #bae6fd;
+    }
+	
+	#offline-overlay {
+	  transition: all 0.4s ease;
+	}
+
+	#offline-banner {
+	  animation: offlinePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	@keyframes offlinePop {
+	  from {
+		transform: translateY(50px);
+		opacity: 0;
+	  }
+	  to {
+		transform: translateY(0);
+		opacity: 1;
+	  }
+	}
+
+	/* ==================== ROOFTOP TENT SAFETY DISABLED STATE ==================== */
+	.slider-card.rooftop-disabled .slider-wrapper,
+	.slider-card.rooftop-disabled .toggle-pill {
+	  opacity: 0.35;
+	  pointer-events: none;
+	  cursor: not-allowed;
+	}
+
+	.slider-card.rooftop-disabled .slider-thumb {
+	  opacity: 0.4;
+	  border-color: #64748b;
+	  color: #64748b;
+	  box-shadow: none;
+	}
+
+	.slider-card.rooftop-disabled .slider-fill {
+	  background: linear-gradient(90deg, #475569, #334155) !important;
+	  box-shadow: none;
+	}
+
+	.slider-card.rooftop-disabled .toggle-pill {
+	  background: #1f2937;
+	}
+
+	.slider-card.rooftop-disabled .toggle-knob {
+	  background: #475569;
+	  border-color: #64748b;
+	}
+	
+	.slider-card.rooftop-disabled .slider-card-title::after {
+	  content: "🔒";
+	  font-size: 1rem;
+	  margin-left: 8px;
+	  opacity: 0.6;
+	}
+  </style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <div class="flex-1 p-4 md:p-4 xl:p-4 space-y-4">
+  
+	<!-- OFFLINE OVERLAY -->
+	<div id="offline-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
+	  <div id="offline-banner" 
+		   class="text-white text-center py-6 px-10 rounded-3xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
+		   style="background: #f43f5e; 
+				  width: 90%; 
+				  max-width: 1024px;
+				  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
+		
+		<i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
+		
+		<div class="flex-1 text-left">
+		  System Offline
+		  <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
+		</div>
+		
+		<div class="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0"></div>
+	  </div>
+	</div>
+
+    <!-- STATUS TILES -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Date</p>
+            <p class="tile-value" id="tile-date">—</p>
+          </div>
+          <i class="fa-solid fa-calendar-days text-3xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Time</p>
+              <p class="tile-value" id="tile-time">—</p>
+            </div>
+            <i class="fa-solid fa-clock text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Water</p>
+            <p class="tile-value" id="water-level">—</p>
+          </div>
+          <i class="fa-solid fa-droplet text-3xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Solar</p>
+              <p class="tile-value" id="solar-input">—</p>
+            </div>
+            <i class="fa-solid fa-sun text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Battery</p>
+            <p class="tile-value" id="battery-voltage">—</p>
+            <p class="tile-label mt-4">Charge</p>
+            <p class="tile-value" id="battery-charge">—</p>
+          </div>
+          <i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
+        </div>
+      </div>
+
+		<div class="tile neumorph p-5">
+		  <div class="flex justify-between items-start">
+			<div>
+			  <p class="tile-label">Sunrise</p>
+			  <p class="tile-value" id="sunrise">—</p>
+			  <p class="tile-label mt-4">Sunset</p>
+			  <p class="tile-value" id="sunset">—</p>
+			</div>
+			<i class="fa-solid fa-sun text-3xl accent-sky"></i>
+		  </div>
+		</div>
+
+		<div class="tile neumorph p-5">
+		  <div class="flex justify-between items-start">
+			<div>
+			  <p class="tile-label">Current Temp</p>
+			  <p class="tile-value" id="outside-temp">—°C</p>
+			</div>
+			<i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+		  </div>
+		  
+		  <div class="mt-6">
+			<div class="flex justify-between items-start">
+			  <div>
+				<p class="tile-label">Min/Max</p>
+				<div class="flex items-center gap-3">
+				  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+				</div>
+			  </div>
+			  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+			</div>
+		  </div>
+		</div>
+
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Satellites</p>
+            <p class="tile-value" id="satellites">— / —</p>
+            <p class="tile-label mt-4">Location</p>
+            <p class="tile-value" id="location">---</p>
+          </div>
+          <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+        </div>
+      </div>
+    </div>
+	
+	<!-- LIGHTING SCENES -->
+	<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+	  <button onclick="setScene('bedtime')" class="scene-btn">
+		<i class="fa-solid fa-bed"></i>
+		<span>Bedtime</span>
+	  </button>
+	  <button onclick="setScene('ensuite')" class="scene-btn">
+		<i class="fa-solid fa-bath"></i>
+		<span>Bathroom</span>
+	  </button>
+	  <button onclick="setScene('all_off')" class="scene-btn">
+		<i class="fa-solid fa-power-off"></i>
+		<span>All Off</span>
+	  </button>
+	</div>
+
+	<!-- ALL LIGHTING CONTROLS -->
+	<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+
+	  <!-- Kitchen -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-utensils"></i>
+			  <p>Kitchen</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-kitchen_panel">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="kitchen_panel" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Kitchen Bench -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-mug-hot"></i>
+			  <p>Kitchen Bench</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-kitchen_bench">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="kitchen_bench" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Storage Panel -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-boxes-stacked"></i>
+			  <p>Storage Panel</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-storage_panel">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="storage_panel" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Rear Drawer -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-archive"></i>
+			  <p>Rear Drawer</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-rear_drawer">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="rear_drawer" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Accent -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-lightbulb"></i>
+			  <p>Accent</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-accent">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="accent" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Awning -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-umbrella"></i>
+			  <p>Awning</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-awning">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="awning" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Rooftop Tent -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-tent"></i>
+			  <p>Rooftop Tent</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-rooftop_tent">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="rooftop_tent" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Ensuite -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-bath"></i>
+			  <p>Ensuite</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div class="value-display" id="val-ensuite">0%</div>
+			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
+			  <div class="toggle-knob"></div>
+			</div>
+		  </div>
+		</div>
+		<div class="slider-wrapper" data-name="ensuite" data-value="0">
+		  <div class="slider-inner">
+			<div class="slider-track"></div>
+			<div class="slider-fill" style="width: 0%"></div>
+			<div class="slider-thumb" style="left: 0%"></div>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Floodlights -->
+	  <div class="slider-card neumorph">
+		<div class="slider-card-header">
+		  <div class="slider-card-left">
+			<div class="slider-card-title">
+			  <i class="fa-solid fa-lightbulb"></i>
+			  <p>Floodlights</p>
+			</div>
+		  </div>
+		  <div class="slider-card-right">
+			<div onclick="toggleFloodlights(this)" id="flood-toggle" class="relay-toggle off" data-state="off">
+			  <div class="relay-knob"></div>
+			</div>
+		  </div>
+		</div>
+	  </div>
+
+	</div>
+  </div>
+
+<script src="/static/socket.io.min.js"></script>
+<script>
+    const socket = io();
+
+    let currentState = {};
+    let currentModes = { kitchen_panel: 'white', awning: 'white' };
+	let currentReeds = {};
+
+    const currentlyDragging = new Set();
+    const userJustSet = new Set();
+    const JUST_SET_DURATION = 2800;
+	
+	// ==================== OFFLINE HANDLER ====================
+	let offlineTimeout = null;
+
+	function showOfflineBanner() {
+		if (offlineTimeout) clearTimeout(offlineTimeout);
+		
+		offlineTimeout = setTimeout(() => {
+			const overlay = document.getElementById('offline-overlay');
+			if (overlay) {
+				overlay.classList.remove('hidden');
+				overlay.style.pointerEvents = 'auto';
+			}
+			const mainContent = document.querySelector('.flex-1');
+			if (mainContent) mainContent.style.pointerEvents = 'none';
+		}, 800);
+	}
+
+	function hideOfflineBanner() {
+		if (offlineTimeout) {
+			clearTimeout(offlineTimeout);
+			offlineTimeout = null;
+		}
+		const overlay = document.getElementById('offline-overlay');
+		if (overlay) overlay.classList.add('hidden');
+		
+		const mainContent = document.querySelector('.flex-1');
+		if (mainContent) mainContent.style.pointerEvents = 'auto';
+	}
+
+	// ==================== SOCKET.IO CONNECTION HANDLING ====================
+	socket.on('connect', () => {
+	  console.log('✅ Backend connected');
+	  hideOfflineBanner();
+	  updateRooftopTentControls();
+	});
+
+	socket.on('disconnect', () => {
+	  console.warn('❌ Backend disconnected');
+	  showOfflineBanner();
+	});
+
+	socket.on('connect_error', (err) => {
+	  console.warn('⚠️ Connection error:', err.message);
+	  showOfflineBanner();
+	});
+
+	socket.on('reconnect_attempt', (attempt) => {
+	  console.log(`🔄 Reconnect attempt ${attempt}...`);
+	});
+
+	// ==================== GPS & CLOCK ====================
+
+	let lastWeatherUpdate = 0;
+	const WEATHER_INTERVAL_MS = 3600 * 1000; // 1 hour
+	let lastSuburb = "";
+
+	function updateGPS(data) {
+		if (!data) return;
+
+		// Satellites
+		const satEl = document.getElementById('satellites');
+		if (satEl) {
+			satEl.textContent = `${data.satellites || 0} / ${data.fix_quality || 0}`;
+		}
+
+		// Determine if we have a real GPS fix
+		const hasFix = !!(data.suburb && data.suburb.trim() !== "") || 
+					   !!(data.latitude && data.longitude && Math.abs(data.latitude) > 0.0001);
+
+		// Location
+		const locationEl = document.getElementById('location');
+		if (locationEl) {
+			if (data.suburb && data.suburb.trim() !== "") {
+				let display = data.suburb.trim();
+				if (/^\d+\.\d+,\s*\d+\.\d+$/.test(display)) {
+					display += " (rural)";
+				}
+				locationEl.textContent = display;
+				locationEl.style.color = "#e0f2fe";
+			} else {
+				locationEl.textContent = "No GPS Fix";
+				locationEl.style.color = "#e0f2fe";
+			}
+			if (!hasFix) locationEl.textContent += " *";
+		}
+
+		// Date & Time
+		if (data.date) {
+			const dateObj = new Date(data.date);
+			if (!isNaN(dateObj.getTime())) {
+				const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
+				const day = dateObj.getDate();
+				const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+				const dateEl = document.getElementById('tile-date');
+				if (dateEl) {
+					dateEl.textContent = `${dayName} ${day} ${month}`;
+					if (!hasFix) dateEl.textContent += " *";
+				}
+			}
+		}
+
+		if (data.local_time) {
+			const dateObj = new Date(`1970-01-01 ${data.local_time}`);
+			if (!isNaN(dateObj.getTime())) {
+				let hours = dateObj.getHours();
+				const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+				const ampm = hours >= 12 ? 'PM' : 'AM';
+				hours = hours % 12 || 12;
+				const timeEl = document.getElementById('tile-time');
+				if (timeEl) {
+					timeEl.textContent = `${hours}:${minutes} ${ampm}`;
+					if (!hasFix) timeEl.textContent += " *";
+				}
+			}
+		}
+
+		// Weather update
+		const now = Date.now();
+		const currentSuburb = (data.suburb || "").trim();
+		const hasValidPosition = !!(data.latitude && data.longitude);
+
+		const suburbChanged = currentSuburb && currentSuburb !== lastSuburb;
+		const timeForUpdate = (now - lastWeatherUpdate) > WEATHER_INTERVAL_MS;
+
+		if (hasValidPosition && (suburbChanged || timeForUpdate)) {
+			fetchWeatherForecast(data.latitude, data.longitude);
+			lastWeatherUpdate = now;
+			if (suburbChanged) lastSuburb = currentSuburb;
+		}
+
+		updateSunTimes(data);
+	}
+
+	function updateSunTimes(data) {
+		const sunriseEl = document.getElementById('sunrise');
+		const sunsetEl = document.getElementById('sunset');
+
+		if (data.sunrise) {
+			sunriseEl.textContent = stripLeadingZero(data.sunrise) + (data.using_fallback ? " *" : "");
+		}
+		if (data.sunset) {
+			sunsetEl.textContent = stripLeadingZero(data.sunset) + (data.using_fallback ? " *" : "");
+		}
+	}
+	
+	function stripLeadingZero(timeStr) {
+		if (!timeStr) return "";
+		return timeStr.replace(/^0(\d):/, '$1:');   // turns "06:45" into "6:45"
+	}
+
+	// Fallback clock
+	function updateClock() {
+		const now = new Date();
+		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
+		const day = now.getDate();
+		const month = now.toLocaleDateString('en-AU', { month: 'short' });
+
+		const dateEl = document.getElementById('tile-date');
+		const timeEl = document.getElementById('tile-time');
+
+		if (dateEl) dateEl.textContent = `${dayName} ${day} ${month} *`;
+		if (timeEl) {
+			let hours = now.getHours();
+			let minutes = now.getMinutes().toString().padStart(2, '0');
+			const ampm = hours >= 12 ? 'PM' : 'AM';
+			hours = hours % 12 || 12;
+			timeEl.textContent = `${hours}:${minutes} ${ampm} *`;
+		}
+	}
+
+    function updateSensors(data) {
+      if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
+      if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
+      if (data.battery_voltage !== undefined) {
+        const voltage = parseFloat(data.battery_voltage);
+        document.getElementById('battery-voltage').textContent = `${voltage.toFixed(1)}V`;
+      }
+      if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
+      if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
+    }
+
+	async function fetchWeatherForecast(lat, lon) {
+	  try {
+		const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
+		const res = await fetch(url, { cache: 'no-store' });
+		if (!res.ok) throw new Error('Weather fetch failed');
+
+		const data = await res.json();
+
+		if (data.daily) {
+		  const max = Math.round(data.daily.temperature_2m_max[0]);
+		  const min = Math.round(data.daily.temperature_2m_min[0]);
+		  document.getElementById('temp-range').textContent = `${min}° / ${max}°`;
+		}
+
+		const weatherIcon = document.getElementById('weather-icon');
+		if (data.current_weather && weatherIcon) {
+		  const code = data.current_weather.weathercode;
+		  const isDay = data.current_weather.is_day === 1;
+		  weatherIcon.className = `fa-solid ${getWeatherIcon(code, isDay)} text-2xl accent-sky`;
+		}
+
+	  } catch (e) {
+		console.warn('Weather fetch failed:', e);
+		document.getElementById('weather-icon').className = 'fa-solid fa-cloud text-2xl accent-sky';
+	  }
+	}
+	
+	function getWeatherIcon(code, isDay) {
+	  const icons = {
+		0: isDay ? 'fa-sun' : 'fa-moon',
+		1: isDay ? 'fa-sun' : 'fa-moon',
+		2: 'fa-cloud',
+		3: 'fa-cloud',
+		45: 'fa-smog',
+		48: 'fa-smog',
+		51: 'fa-cloud-rain',
+		53: 'fa-cloud-rain',
+		55: 'fa-cloud-rain',
+		61: 'fa-cloud-showers-heavy',
+		63: 'fa-cloud-showers-heavy',
+		65: 'fa-cloud-showers-heavy',
+		71: 'fa-snowflake',
+		73: 'fa-snowflake',
+		75: 'fa-snowflake',
+		80: 'fa-cloud-showers-heavy',
+		81: 'fa-cloud-showers-heavy',
+		82: 'fa-cloud-showers-heavy',
+		95: 'fa-bolt',
+		96: 'fa-bolt',
+		99: 'fa-bolt'
+	  };
+	  return icons[code] || 'fa-cloud';
+	}
+
+    // ==================== UI UPDATES ====================
+	function applyOptimisticUpdate(wrapper, percent) {
+	  const name = wrapper.dataset.name;
+	  const fill = wrapper.querySelector('.slider-fill');
+	  const thumb = wrapper.querySelector('.slider-thumb');
+	  const valueEl = document.getElementById(`val-${name}`);
+
+	  wrapper.dataset.value = percent;
+	  wrapper.dataset.lastBrightness = percent;
+
+	  fill.style.transition = 'width 0.1s linear';
+	  thumb.style.transition = 'none';
+
+	  fill.style.width = `${percent}%`;
+	  thumb.style.left = `${percent}%`;
+	  valueEl.textContent = `${percent}%`;
+
+	  updateToggleUI(name, percent);
+	}
+
+    function updateToggleUI(name, brightness) {
+      const card = document.querySelector(`.slider-wrapper[data-name="${name}"]`)?.closest('.slider-card');
+      if (!card) return;
+      const toggle = card.querySelector('.toggle-pill');
+      if (!toggle) return;
+
+      if (name === 'kitchen_panel' || name === 'awning') {
+        const isRed = currentModes[name] === 'red';
+        toggle.classList.add('colour-toggle');
+        toggle.classList.toggle('bug-mode', isRed);
+        toggle.classList.toggle('on', isRed);
+        toggle.classList.toggle('white-off', !isRed);
+        toggle.dataset.state = isRed ? 'red' : 'white';
+
+        const fill = card.querySelector('.slider-fill');
+        if (fill) fill.classList.toggle('bug-mode', isRed);
+      } else {
+        const isOn = brightness > 0;
+        toggle.classList.toggle('on', isOn);
+        toggle.dataset.state = isOn ? 'on' : 'off';
+      }
+    }
+
+	function updateUIFromState() {
+	  document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
+		const name = wrapper.dataset.name;
+
+		if (currentlyDragging.has(name) || userJustSet.has(name)) return;
+
+		const brightness = currentState[name] ?? 0;
+		wrapper.dataset.value = brightness;
+
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const valueEl = document.getElementById(`val-${name}`);
+
+		fill.style.transition = 'width 0.6s ease-out';
+		thumb.style.transition = 'left 0.6s ease-out';
+
+		fill.style.width = `${brightness}%`;
+		thumb.style.left = `${brightness}%`;
+		valueEl.textContent = `${brightness}%`;
+
+		updateToggleUI(name, brightness);
+	  });
+
+	  const floodToggle = document.getElementById('flood-toggle');
+	  if (floodToggle) {
+		const isOn = !!currentState.floodlights;
+		floodToggle.classList.toggle('on', isOn);
+		floodToggle.dataset.state = isOn ? 'on' : 'off';
+	  }
+	  
+	  updateRooftopTentControls();
+	}
+
+	// ==================== SCENES ====================
+	function setScene(scene) {
+	  console.log('🎬 Scene activated:', scene);
+
+	  document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+
+	  const activeBtn = Array.from(document.querySelectorAll('.scene-btn'))
+		.find(btn => btn.getAttribute('onclick').includes(`'${scene}'`));
+
+	  if (activeBtn) {
+		activeBtn.classList.add('active');
+		setTimeout(() => activeBtn.classList.remove('active'), 750);
+	  }
+
+	  socket.emit('set_scene', { scene: scene });
+	}
+
+    // ==================== TOGGLE & DRAG ====================
+	function toggleLight(toggleEl) {
+	  const card = toggleEl.closest('.slider-card');
+	  const wrapper = card.querySelector('.slider-wrapper');
+	  const name = wrapper.dataset.name;
+	  const currentBrightness = parseInt(wrapper.dataset.value) || 0;
+
+	  userJustSet.add(name);
+	  setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+
+	  if (name !== 'kitchen_panel' && name !== 'awning') {
+		const isOn = toggleEl.dataset.state === 'on';
+		const newBrightness = isOn ? 0 : (parseInt(wrapper.dataset.lastBrightness) || 100);
+
+		applyOptimisticUpdate(wrapper, newBrightness);
+		toggleEl.classList.toggle('on', !isOn);
+		toggleEl.dataset.state = isOn ? 'off' : 'on';
+
+		socket.emit('light_change', { name, brightness: newBrightness });
+		return;
+	  }
+
+	  const newMode = currentModes[name] === 'white' ? 'red' : 'white';
+	  currentModes[name] = newMode;
+
+	  applyOptimisticUpdate(wrapper, currentBrightness);
+	  updateToggleUI(name, currentBrightness);
+
+	  socket.emit('light_change', { name, brightness: currentBrightness, mode: newMode });
+	}
+
+	function makeDraggable(wrapper) {
+	  const inner = wrapper.querySelector('.slider-inner');
+	  const fill = wrapper.querySelector('.slider-fill');
+	  const thumb = wrapper.querySelector('.slider-thumb');
+	  const name = wrapper.dataset.name;
+	  const valueEl = document.getElementById(`val-${name}`);
+
+	  let lastSent = 0;
+
+	  function updatePosition(clientX) {
+		const rect = inner.getBoundingClientRect();
+		let percent = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+
+		wrapper.dataset.value = percent;
+		fill.style.width = `${percent}%`;
+		thumb.style.left = `${percent}%`;
+		valueEl.textContent = `${percent}%`;
+
+		updateToggleUI(name, percent);
+
+		const now = Date.now();
+		if (now - lastSent > 50) {
+		  lastSent = now;
+		  const payload = { name, brightness: percent };
+		  if ((name === 'kitchen_panel' || name === 'awning') && currentModes[name]) {
+			payload.mode = currentModes[name];
+		  }
+		  socket.emit('light_change', payload);
+		}
+	  }
+
+	  function startDrag() {
+		wrapper.classList.add('dragging');
+		currentlyDragging.add(name);
+		userJustSet.delete(name);
+
+		fill.style.transition = 'none';
+		thumb.style.transition = 'none';
+	  }
+
+	  function endDrag() {
+		wrapper.classList.remove('dragging');
+		currentlyDragging.delete(name);
+
+		const final = parseInt(wrapper.dataset.value) || 0;
+		applyOptimisticUpdate(wrapper, final);
+
+		userJustSet.add(name);
+		setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+	  }
+
+	  wrapper.addEventListener('mousedown', e => {
+		startDrag();
+		updatePosition(e.clientX);
+		const move = ev => updatePosition(ev.clientX);
+		const up = () => { 
+		  document.removeEventListener('mousemove', move); 
+		  endDrag(); 
+		};
+		document.addEventListener('mousemove', move);
+		document.addEventListener('mouseup', up, { once: true });
+	  });
+
+	  wrapper.addEventListener('touchstart', e => {
+		e.preventDefault();
+		startDrag();
+		updatePosition(e.touches[0].clientX);
+	  }, { passive: false });
+
+	  wrapper.addEventListener('touchmove', e => {
+		e.preventDefault();
+		updatePosition(e.touches[0].clientX);
+	  }, { passive: false });
+
+	  wrapper.addEventListener('touchend', endDrag, { passive: false });
+	}
+
+    function initSliders() {
+      document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+    }
+
+    function toggleFloodlights(toggle) {
+      const isOn = toggle.dataset.state === 'on';
+      socket.emit('flood_change', { on: !isOn });
+    }
+
+	// ==================== SOCKET LISTENERS ====================
+
+	socket.on('state_update', (newState) => {
+		currentState = newState;
+		if (newState.kitchen_panel_mode) currentModes.kitchen_panel = newState.kitchen_panel_mode;
+		if (newState.awning_mode) currentModes.awning = newState.awning_mode;
+		updateUIFromState();
+	});
+
+	socket.on('reed_update', (payload) => {
+		currentReeds = {};
+		const raw = payload.states || {};
+		const forced = payload.forced || {};
+		
+		Object.keys(raw).forEach(name => {
+			currentReeds[name] = (name in forced) ? forced[name] : raw[name];
+		});
+		
+		updateRooftopTentControls();
+	});
+
+    socket.on('sensor_update', updateSensors);
+    socket.on('gps_update', updateGPS);
+
+	// ==================== ROOFTOP TENT SAFETY ====================
+	function updateRooftopTentControls() {
+	  const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
+	  if (!tentCard) return;
+	  
+	  const isClosed = !!currentReeds.rooftop_tent;
+	  
+	  if (isClosed) {
+		tentCard.classList.add('rooftop-disabled');
+		
+		const wrapper = tentCard.querySelector('.slider-wrapper');
+		if (wrapper) {
+		  wrapper.dataset.value = "0";
+		  const fill = wrapper.querySelector('.slider-fill');
+		  const thumb = wrapper.querySelector('.slider-thumb');
+		  const valEl = document.getElementById('val-rooftop_tent');
+		  
+		  if (fill) fill.style.width = '0%';
+		  if (thumb) thumb.style.left = '0%';
+		  if (valEl) valEl.textContent = '0%';
+		}
+		
+		const toggle = tentCard.querySelector('.toggle-pill');
+		if (toggle) {
+		  toggle.classList.remove('on');
+		  toggle.dataset.state = 'off';
+		}
+	  } else {
+		tentCard.classList.remove('rooftop-disabled');
+	  }
+	}
+
+    // ==================== INIT ====================
+    window.onload = function() {
+        updateClock();
+        setInterval(updateClock, 10000);
+        initSliders();
+
+        setTimeout(() => {
+            if (Object.keys(currentState).length) updateUIFromState();
+            updateRooftopTentControls();
+        }, 800);
+
+        console.log("🚀 PCCS Frontend Ready");
+    };
+</script>
+</body>
+</html>
