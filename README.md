@@ -37,4 +37,8 @@ This project has been built with support for:
 
  A touchscreen such as a waveshare powered by another RPI or Rock Pi for more capability in handling the intensive graphics processing.
 
- ![The PCCS Desktop/Touchscreen UI](pccs.png)![The PCCS Mobile UI](pccs-mobile.png)
+## Desktop/Touchscreen UI
+ ![The PCCS Desktop/Touchscreen UI](pccs.png)
+
+ ## Mobile UI
+ ![The PCCS Mobile UI](pccs-mobile.png)
