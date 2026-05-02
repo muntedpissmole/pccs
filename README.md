@@ -9,12 +9,13 @@ The Pissmole Camping Control System (PCCS) is a Raspberry Pi-based control syste
 - Reed switch monitoring of panel doors that trigger linked lighting to levels based on time-of-day/phase
 - Ambient lighting such as accent and awning that turn on whenever a reed switch is active
 - Protection against turning on lights when panels are closed such as a rooftop tent where the LED strip may be pressed against flammable bedding when the tent is closed
+- Comprehensive logging that shows what light turned on, why (e.g. phase change) and what activated it (e.g. scene, reed, user interface)
 
 The PCCS also measures and displays environmental data including:
 - GPS derived data & time and sunset/sunrise times based on your coordinates
 - Water tank level
 - Solar generation
-- Battery voltage and SoC
+- Battery voltage and State of Charge
 - Current temperature and daily min/max weather forecasts for your location
 - GPS satellite and quality fix and sclosest suburb based on co-ordinates
 
