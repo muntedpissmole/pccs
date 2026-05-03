@@ -6,6 +6,7 @@
   <title>PCCS Diagnostics</title>
   <script src="/static/tailwind.min.js"></script>
   <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+  <link id="theme-stylesheet" rel="stylesheet" href="">
 <style>
 	@font-face {
 	  font-family: 'Satoshi';
@@ -181,16 +182,33 @@
 
   <div class="flex-1 p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
     
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-4xl font-bold tracking-tight flex items-center gap-4">
-          <i class="fa-solid fa-screwdriver-wrench accent-sky"></i>
-          Diagnostics
-        </h1>
-        <p class="text-sky-300 mt-1">Reed Switches • GPS • Phases</p>
-      </div>
-      <div id="lastupdate" class="px-5 py-2 bg-zinc-900 rounded-3xl text-zinc-400">—</div>
-    </div>
+	<div class="flex items-center justify-between">
+	  <div>
+		<h1 class="text-4xl font-bold tracking-tight flex items-center gap-4">
+		  <i class="fa-solid fa-screwdriver-wrench accent-sky"></i>
+		  Diagnostics
+		</h1>
+		<p class="text-sky-300 mt-1">Reed Switches • GPS • Phases</p>
+	  </div>
+	  
+	  <div class="flex items-center gap-3">
+		<label class="text-sm font-medium text-zinc-400 flex items-center gap-1">
+		  <i class="fa-solid fa-palette"></i>
+		  Theme
+		</label>
+		<select id="theme-selector" 
+				class="bg-zinc-900 text-white border border-zinc-700 rounded-3xl px-4 py-2 text-sm focus:outline-none focus:border-sky-500 cursor-pointer">
+		</select>
+
+		<button id="global-mode-toggle"
+				class="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-3xl px-4 py-2 text-sm transition-colors cursor-pointer active:scale-95">
+		  <i id="mode-icon" class="fa-solid fa-moon text-sky-400"></i>
+		  <span id="mode-label" class="text-zinc-300">Dark Mode</span>
+		</button>
+
+		<div id="lastupdate" class="px-5 py-2 bg-zinc-900 rounded-3xl text-zinc-400">—</div>
+	  </div>
+	</div>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
 
@@ -317,6 +335,12 @@
 
 <script src="/static/socket.io.min.js"></script>
 <script>
+	const themeChannel = new BroadcastChannel('pccs-theme-channel');
+
+	function broadcastTheme(themeName) {
+	  themeChannel.postMessage({ type: 'theme-change', theme: themeName });
+	}
+
     const socket = io();
     let lastReedPayload = {};
     let lastGPSPayload = {};
@@ -326,6 +350,103 @@
     const REED_ORDER = ["kitchen_panel", "kitchen_bench", "storage_panel", "rear_drawer", "rooftop_tent"];
     const reedRows = new Map();
 
+    // ==================== THEME SYSTEM ====================
+	async function loadThemes() {
+	  try {
+		const res = await fetch('/api/themes');
+		const data = await res.json();
+		
+		const select = document.getElementById('theme-selector');
+		select.innerHTML = '';
+		
+		data.themes.forEach(theme => {
+		  const option = document.createElement('option');
+		  option.value = theme.file;
+		  option.textContent = theme.name;
+		  select.appendChild(option);
+		});
+
+		const currentRes = await fetch('/api/current-theme');
+		const current = await currentRes.json();
+		select.value = current.theme || 'stealth';
+	  } catch (e) {
+		console.error('Failed to load themes', e);
+	  }
+	}
+
+	function applyThemeToPage(filename) {
+	  const link = document.getElementById('theme-stylesheet');
+	  if (!link) return;
+
+	  if (filename === 'base' || filename === 'neumorphism') {
+		link.href = '';
+	  } else {
+		link.href = `/static/css/themes/${filename}.css?v=${Date.now()}`;
+	  }
+	  localStorage.setItem('pccs-active-theme', filename);
+	}
+
+	function applyTheme(filename) {
+	  applyThemeToPage(filename);
+	  socket.emit('set_global_theme', { theme: filename });
+	}
+
+	document.getElementById('theme-selector').addEventListener('change', (e) => {
+	  applyTheme(e.target.value);
+	});
+
+	socket.on('global_theme_update', (data) => {
+	  if (data?.theme) {
+		document.getElementById('theme-selector').value = data.theme;
+		applyThemeToPage(data.theme);
+	  }
+	});
+
+	// ==================== GLOBAL LIGHT/DARK ====================
+	function setGlobalDarkMode(isDark) {
+	  localStorage.setItem('pccs-dark-mode', isDark ? 'dark' : 'light');
+	  
+	  window.dispatchEvent(new Event('storage'));
+
+	  const icon = document.getElementById('mode-icon');
+	  const label = document.getElementById('mode-label');
+	  
+	  if (icon) {
+		icon.className = isDark 
+		  ? 'fa-solid fa-moon text-sky-400' 
+		  : 'fa-solid fa-sun text-amber-400';
+	  }
+	  if (label) label.textContent = isDark ? 'Dark' : 'Light';
+	}
+
+	function loadGlobalDarkModeUI() {
+	  const saved = localStorage.getItem('pccs-dark-mode');
+	  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+	  const isDark = saved === null ? prefersDark : saved === 'dark';
+
+	  const icon = document.getElementById('mode-icon');
+	  const label = document.getElementById('mode-label');
+	  
+	  if (icon) icon.className = isDark ? 'fa-solid fa-moon text-sky-400' : 'fa-solid fa-sun text-amber-400';
+	  if (label) label.textContent = isDark ? 'Dark' : 'Light';
+	}
+
+	function initGlobalDarkModeToggle() {
+	  const toggle = document.getElementById('global-mode-toggle');
+	  if (!toggle) {
+		console.warn('Global mode toggle button not found');
+		return;
+	  }
+
+	  toggle.replaceChildren(...toggle.childNodes);
+
+	  toggle.addEventListener('click', () => {
+		const currentIsDark = localStorage.getItem('pccs-dark-mode') !== 'light';
+		setGlobalDarkMode(!currentIsDark);
+	  });
+	}
+
+    // ==================== REED FUNCTIONS ====================
     function createOrUpdateReedRow(name, isClosed, isForced, forcedState) {
       let row = reedRows.get(name);
       if (!row) {
@@ -377,43 +498,43 @@
       });
     }
 
-	function updateGPS(data) {
-		lastGPSPayload = { ...lastGPSPayload, ...data };
+    function updateGPS(data) {
+      lastGPSPayload = { ...lastGPSPayload, ...data };
 
-		const fixEl = document.getElementById('fix');
-		const fixVal = data.fix_quality ?? 0;
-		fixEl.textContent = data.force_no_fix ? '0 (FORCED)' : fixVal;
-		fixEl.className = data.force_no_fix ? 'status forced' : (fixVal >= 2 ? 'status phase-day' : 'status phase-night');
+      const fixEl = document.getElementById('fix');
+      const fixVal = data.fix_quality ?? 0;
+      fixEl.textContent = data.force_no_fix ? '0 (FORCED)' : fixVal;
+      fixEl.className = data.force_no_fix ? 'status forced' : (fixVal >= 2 ? 'status phase-day' : 'status phase-night');
 
-		document.getElementById('sats').textContent = data.satellites ?? '—';
-		document.getElementById('pos').textContent = data.latitude ? `${data.latitude.toFixed(5)}°, ${data.longitude.toFixed(5)}°` : '—';
-		document.getElementById('suburb').textContent = data.suburb || '—';
-		document.getElementById('time').textContent = data.local_time || '—';
-		document.getElementById('speed').textContent = data.speed_kmh ? data.speed_kmh.toFixed(1) + ' km/h' : '—';
+      document.getElementById('sats').textContent = data.satellites ?? '—';
+      document.getElementById('pos').textContent = data.latitude ? `${data.latitude.toFixed(5)}°, ${data.longitude.toFixed(5)}°` : '—';
+      document.getElementById('suburb').textContent = data.suburb || '—';
+      document.getElementById('time').textContent = data.local_time || '—';
+      document.getElementById('speed').textContent = data.speed_kmh ? data.speed_kmh.toFixed(1) + ' km/h' : '—';
 
-		if (data.sunrise !== undefined) document.getElementById('sunrise').textContent = data.sunrise || '—';
-		if (data.sunset !== undefined) document.getElementById('sunset').textContent = data.sunset || '—';
-		if (data.day_start !== undefined) document.getElementById('day_start').textContent = data.day_start || '—';
-		if (data.evening_start !== undefined) document.getElementById('evening_start').textContent = data.evening_start || '—';
-		if (data.night_start !== undefined) document.getElementById('night_start').textContent = data.night_start || '—';
+      if (data.sunrise !== undefined) document.getElementById('sunrise').textContent = data.sunrise || '—';
+      if (data.sunset !== undefined) document.getElementById('sunset').textContent = data.sunset || '—';
+      if (data.day_start !== undefined) document.getElementById('day_start').textContent = data.day_start || '—';
+      if (data.evening_start !== undefined) document.getElementById('evening_start').textContent = data.evening_start || '—';
+      if (data.night_start !== undefined) document.getElementById('night_start').textContent = data.night_start || '—';
 
-		if (data.phase && data.phase.toUpperCase() !== 'UNKNOWN') {
-			lastKnownPhase = data.phase.toUpperCase();
-		}
-		if (data.forced !== undefined) {
-			phaseIsForced = !!data.forced;
-		}
+      if (data.phase && data.phase.toUpperCase() !== 'UNKNOWN') {
+        lastKnownPhase = data.phase.toUpperCase();
+      }
+      if (data.forced !== undefined) {
+        phaseIsForced = !!data.forced;
+      }
 
-		const phaseEl = document.getElementById('current-phase');
-		if (phaseIsForced) {
-			phaseEl.textContent = `FORCED ${lastKnownPhase}`;
-			phaseEl.className = 'status forced';
-		} else {
-			phaseEl.textContent = lastKnownPhase;
-			phaseEl.className = lastKnownPhase === 'DAY' ? 'status phase-day' :
-							   lastKnownPhase === 'EVENING' ? 'status phase-evening' : 'status phase-night';
-		}
-	}
+      const phaseEl = document.getElementById('current-phase');
+      if (phaseIsForced) {
+        phaseEl.textContent = `FORCED ${lastKnownPhase}`;
+        phaseEl.className = 'status forced';
+      } else {
+        phaseEl.textContent = lastKnownPhase;
+        phaseEl.className = lastKnownPhase === 'DAY' ? 'status phase-day' :
+                           lastKnownPhase === 'EVENING' ? 'status phase-evening' : 'status phase-night';
+      }
+    }
 
     window.clearAllForces = () => { if (confirm("Clear ALL forced reed states?")) socket.emit('force_reed', { name: 'all', closed: null }); };
     window.setGPSSim = (enabled) => socket.emit('set_gps_simulation', { no_fix: enabled });
@@ -423,22 +544,32 @@
       phaseIsForced = false;
     };
 
+    // ==================== INIT ====================
     socket.on('reed_update', updateReeds);
     socket.on('gps_update', updateGPS);
-	socket.on('phase_update', (payload) => updateGPS(payload));
-
-    setInterval(() => {
-      fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
-      fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
-      
-      const combined = { reeds: lastReedPayload, gps: lastGPSPayload };
-      document.getElementById('raw').textContent = JSON.stringify(combined, null, 2);
-      document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString();
-    }, 2000);
+    socket.on('phase_update', (payload) => updateGPS(payload));
 
     window.onload = () => {
+      loadThemes();
+      loadGlobalDarkModeUI();
+      initGlobalDarkModeToggle();
+      
       fetch('/reed_json').then(r => r.json()).then(updateReeds);
       fetch('/gps_json').then(r => r.json()).then(updateGPS);
+
+      document.getElementById('theme-selector').addEventListener('change', (e) => {
+        applyTheme(e.target.value);
+      });
+
+      // Auto-refresh
+      setInterval(() => {
+        fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
+        fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
+        
+        const combined = { reeds: lastReedPayload, gps: lastGPSPayload };
+        document.getElementById('raw').textContent = JSON.stringify(combined, null, 2);
+        document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString();
+      }, 2000);
     };
 </script>
 </body>

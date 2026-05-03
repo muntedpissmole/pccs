@@ -1,0 +1,229 @@
+/* Deep Minimal / Stealth Tech */
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/static/fonts/Satoshi-Light.woff2') format('woff2'); font-weight: 300; font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/static/fonts/Satoshi-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/static/fonts/Satoshi-Medium.woff2') format('woff2'); font-weight: 500; font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/static/fonts/Satoshi-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/static/fonts/Satoshi-Black.woff2') format('woff2'); font-weight: 900; font-display: swap;
+}
+
+/* ====================== CSS Variables ====================== */
+html.dark,
+.dark {
+  --background: #050505;
+  --text-color: #e5e5e5;
+  
+  --card-bg: rgba(16, 16, 20, 0.88);
+  --card-bg-alt: rgba(22, 22, 27, 0.95);
+  --control-bg: #0a0a0a;
+  
+  --accent-color: #22d3ee;
+  --accent-glow: #67e8f9;
+  --slider-bg: #16161b;
+  --toast-bg: rgba(8, 8, 10, 0.96);
+  
+  --toggle-bg-off: #16161b;
+  --toggle-handle: #111113;
+  
+  --error-color: #f87171;
+  --error-color-light: #ef4444;
+  
+  --border-color: #27272a;
+  --subtle-border: rgba(39, 39, 42, 0.65);
+  --glow-subtle: rgba(103, 232, 249, 0.14);
+}
+
+html.light,
+.light {
+  --background: #f8fafc;
+  --text-color: #0f172a;
+  --card-bg: rgba(248, 250, 252, 0.94);
+  --card-bg-alt: rgba(241, 245, 249, 0.96);
+  --control-bg: #ffffff;
+  --accent-color: #06b6d4;
+  --accent-glow: #22d3ee;
+  --slider-bg: #e2e8f0;
+  --border-color: #e2e8f0;
+  --subtle-border: rgba(203, 213, 225, 0.75);
+  --glow-subtle: rgba(6, 182, 212, 0.18);
+}
+
+/* ====================== Base Styles ====================== */
+body { 
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+  background: var(--background);
+  color: var(--text-color);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 30% 20%, var(--glow-subtle) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, var(--glow-subtle) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.65;
+}
+
+/* ====================== Cards & Tiles ====================== */
+.card,
+.tile,
+.neumorph,
+.slider-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-radius: 18px;
+  border: 1px solid var(--subtle-border);
+  box-shadow: 
+    0 6px 24px -4px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 0 rgba(0,0,0,0.4);
+  transition: all 0.35s cubic-bezier(0.4, 0.0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::after,
+.tile::after,
+.neumorph::after,
+.slider-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: url('https://assets.codepen.io/1480814/noise.png') repeat;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: overlay;
+}
+
+.card:hover,
+.tile:hover,
+.neumorph:hover,
+.slider-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-color);
+  box-shadow: 
+    0 12px 40px -6px rgba(34, 211, 238, 0.25),
+    0 0 0 1px var(--accent-color) inset;
+}
+
+/* Stronger cards (top status row) */
+.status-card {
+  background: var(--card-bg-alt);
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.75);
+}
+
+/* ====================== Content Styles ====================== */
+.card .header,
+.tile-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent-color);
+}
+
+.card .value,
+.tile-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+[data-theme="light"] .tile-label,
+[data-theme="light"] .card .value { color: #164e63; }
+
+/* ====================== Scene Buttons ====================== */
+.scene-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--control-bg);
+  border-radius: 18px;
+  border: 1px solid var(--subtle-border);
+  cursor: pointer;
+  color: var(--text-color);
+  box-shadow: 0 6px 24px -4px rgba(0, 0, 0, 0.6);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scene-btn:hover {
+  border-color: var(--accent-color);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 32px -6px rgba(34, 211, 238, 0.3);
+}
+
+.scene-btn.active {
+  background: linear-gradient(145deg, var(--accent-color), var(--accent-glow));
+  color: #0a0a0a;
+  border-color: rgba(255,255,255,0.3);
+  box-shadow: 0 0 28px rgba(34, 211, 238, 0.55);
+}
+
+/* ====================== Sliders & Toggles ====================== */
+.slider-track {
+  background: var(--slider-bg);
+  border: 1px solid var(--subtle-border);
+}
+
+.slider-fill {
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-glow));
+  box-shadow: 0 0 28px rgba(34, 211, 238, 0.65);
+}
+
+.slider-thumb {
+  background: var(--control-bg);
+  border: 3.5px solid var(--accent-color);
+  box-shadow: 
+    0 6px 20px -2px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+/* Toggles */
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-glow));
+  box-shadow: 0 0 28px rgba(34, 211, 238, 0.6);
+}
+
+/* ====================== Disabled States ====================== */
+.slider-card.rooftop-disabled .slider-wrapper,
+.slider-card.rooftop-disabled .toggle-pill {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.slider-card.rooftop-disabled .slider-thumb {
+  border-color: #52525b;
+}
+
+.slider-card.rooftop-disabled .slider-fill {
+  background: #334155 !important;
+  box-shadow: none;
+}

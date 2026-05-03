@@ -1,0 +1,138 @@
+/* Brutalist Glass */
+
+html.dark,
+.dark {
+  --background: #0a0a0a;
+  --glass-bg: rgba(20, 20, 22, 0.85);
+  --glass-border: #444444;
+  --accent-color: #ff3b5c;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a3a3a3;
+  --control-bg: #1a1a1a;
+  --heavy-shadow: 6px 6px 0 #111111;
+}
+
+html.light,
+.light {
+  --background: #f4f4f5;
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-border: #525252;
+  --accent-color: #e11d48;
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --control-bg: #e5e5e5;
+  --heavy-shadow: 6px 6px 0 #d4d4d4;
+}
+
+/* ====================== Brutalist Glass Core ====================== */
+
+.neumorph,
+.tile,
+.slider-card {
+  background: var(--glass-bg);
+  border: 3px solid var(--glass-border);
+  border-radius: 4px; /* Brutalist loves sharp corners */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--heavy-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 1.5rem; /* Generous internal space */
+}
+
+.neumorph:hover,
+.tile:hover,
+.slider-card:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 10px 10px 0 var(--glass-border);
+}
+
+/* Accent & Text */
+.tile i.fa-solid,
+.slider-card-title i,
+.slider-thumb {
+  color: var(--accent-color) !important;
+}
+
+.tile-label,
+.value-display,
+.slider-card-title span.slider-label {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+[data-theme="light"] .tile-label,
+[data-theme="light"] .value-display {
+  color: var(--text-primary);
+}
+
+/* Scene Buttons */
+.scene-btn {
+  background: var(--glass-bg);
+  border: 3px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: var(--heavy-shadow);
+  transition: all 0.2s ease;
+  padding: 14px 28px;
+}
+
+.scene-btn:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 10px 10px 0 var(--glass-border);
+  background: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+/* Sliders */
+input[type="range"] {
+  background: var(--control-bg);
+  border: 3px solid var(--glass-border);
+  border-radius: 0;
+  height: 12px;
+}
+
+.slider-thumb {
+  background: var(--accent-color);
+  border: 3px solid var(--glass-border);
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+}
+
+/* Body */
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 20px,
+    rgba(255,255,255,0.03) 20px,
+    rgba(255,255,255,0.03) 40px
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+[data-theme="light"] body::before {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 20px,
+    rgba(0,0,0,0.03) 20px,
+    rgba(0,0,0,0.03) 40px
+  );
+}

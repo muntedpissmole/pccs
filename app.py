@@ -7,6 +7,7 @@ import os
 import logging
 import sys
 import math
+import json
 
 def log_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -19,12 +20,39 @@ sys.excepthook = log_exception
 # ====================== LOGGING SETUP ======================
 from modules.logger import setup_logging
 logger = setup_logging(logging.INFO)
+if hasattr(sys, '_pccs_already_started'):
+    logger.warning("⚠️ Module reloaded - skipping duplicate initialization")
+else:
+    sys._pccs_already_started = True
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 logging.getLogger("engineio").setLevel(logging.WARNING)
 logging.getLogger("socketio").setLevel(logging.WARNING)
 
 # ====================== USER CONFIG ======================
 UI_RAMP_TIME_MS = 1000      # Ramp time for manual slider / UI changes (ms)
+
+# ====================== GLOBAL THEME ======================
+THEME_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'active_theme.json')
+
+def load_active_theme():
+    try:
+        os.makedirs(os.path.dirname(THEME_CONFIG_PATH), exist_ok=True)
+        if os.path.exists(THEME_CONFIG_PATH):
+            with open(THEME_CONFIG_PATH, 'r') as f:
+                data = json.load(f)
+                return data.get('theme', 'stealth')
+    except Exception as e:
+        logger.error(f"Failed to load theme config: {e}")
+    return 'stealth'
+
+def save_active_theme(theme_name: str):
+    try:
+        os.makedirs(os.path.dirname(THEME_CONFIG_PATH), exist_ok=True)
+        with open(THEME_CONFIG_PATH, 'w') as f:
+            json.dump({'theme': theme_name}, f, indent=2)
+        logger.info(f"💾 Saved global theme: {theme_name}")
+    except Exception as e:
+        logger.error(f"Failed to save theme: {e}")
 
 # ====================== RAMP CONTROL ======================
 active_ramps: dict[str, threading.Timer] = {}
@@ -43,6 +71,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pccs-secret'
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+current_global_theme = load_active_theme()
+logger.info(f"🎨 Loaded theme: {current_global_theme}")
 
 # ====================== REAL-TIME LOG HANDLER ======================
 class SocketIOHandler(logging.Handler):
@@ -58,14 +88,17 @@ class SocketIOHandler(logging.Handler):
         except Exception:
             pass
 
+for handler in logger.handlers[:]:
+    if isinstance(handler, SocketIOHandler):
+        logger.removeHandler(handler)
+
 socket_handler = SocketIOHandler()
-socket_handler.setLevel(logging.DEBUG)  # Capture everything
+socket_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(message)s')
 socket_handler.setFormatter(formatter)
 
-if not any(isinstance(h, SocketIOHandler) for h in logger.handlers):
-    logger.addHandler(socket_handler)
-    logger.info("📡 SocketIO log handler attached")
+logger.addHandler(socket_handler)
+logger.debug("📡 SocketIO log handler attached")
 
 # ====================== STATE SYNC CONTROL ======================
 first_state_read_done = False   # Ensures we only do full Arduino read on first connection
@@ -552,14 +585,6 @@ def init_gps_module():
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/gps')
-def gps_diagnostics():
-    return render_template('gps.html', gps=gps.get_state() if gps else {})
-
-@app.route('/reeds')
-def reed_diagnostics():
-    return render_template('reeds.html')
     
 @app.route('/diag')
 def diagnostics():
@@ -586,9 +611,81 @@ def reed_json():
         'forced': reed_manager.get_forced_states()
     }
     
-@app.route('/log')
-def log_diagnostics():
-    return render_template('log.html')
+@app.route('/api/themes')
+def get_themes():
+    themes = []
+    seen = set()
+
+    themes_dir = os.path.join(app.static_folder, 'css/themes')
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.endswith('.css'):
+                _process_css_file(os.path.join(themes_dir, filename), themes, seen)
+
+    css_root = os.path.join(app.static_folder, 'css')
+    if os.path.exists(css_root):
+        for filename in os.listdir(css_root):
+            if filename.endswith('.css'):
+                _process_css_file(os.path.join(css_root, filename), themes, seen)
+
+    themes.sort(key=lambda x: (x['name'].lower() != 'base', x['name'].lower()))
+    return {'themes': themes}
+
+
+def _process_css_file(filepath: str, themes_list: list, seen: set):
+    filename = os.path.basename(filepath)
+    base_name = filename[:-4]
+
+    if base_name in seen:
+        return
+    seen.add(base_name)
+
+    display_name = base_name.replace('-', ' ').replace('_', ' ').title()
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            first_line = f.readline().strip()
+            
+            if first_line.startswith('/*') and first_line.endswith('*/'):
+                comment = first_line[2:-2].strip()
+                if comment:
+                    display_name = comment
+    except Exception:
+        pass
+
+    themes_list.append({
+        'file': base_name,
+        'name': display_name
+    }) 
+    
+@socketio.on('set_global_theme')
+def handle_set_global_theme(data):
+    global current_global_theme
+    theme = data.get('theme')
+    
+    if not theme:
+        return
+
+    if getattr(handle_set_global_theme, '_last_theme', None) == theme:
+        if time.time() - getattr(handle_set_global_theme, '_last_time', 0) < 1.0:
+            logger.debug(f"Duplicate theme event ignored: {theme}")
+            return
+    
+    handle_set_global_theme._last_theme = theme
+    handle_set_global_theme._last_time = time.time()
+
+    current_global_theme = theme
+    save_active_theme(theme)
+    
+    logger.info(f"🌐 Theme changed to: {theme}")
+    emit('global_theme_update', 
+                  {'theme': theme}, 
+                  broadcast=True, 
+                  include_self=True)
+    
+@app.route('/api/current-theme')
+def get_current_theme():
+    return {'theme': current_global_theme}
 
 
 # ====================== CLEANUP ======================
@@ -625,6 +722,7 @@ if __name__ == "__main__":
     sensor_manager = SensorManager(send_command, socketio)
     gpio_manager.init_devices(GPIO_DEVICES)
 
+    # Register reed triggers
     for reed_name in GPIO_DEVICES:
         if GPIO_DEVICES[reed_name]['type'] != 'input':
             continue
@@ -642,26 +740,21 @@ if __name__ == "__main__":
     sensor_manager.start()
     init_gps_module()
 
-    # ====================== PHASE MANAGER ======================
+    # Phase Manager
     if not hasattr(app, '_phase_manager_initialized'):
         phase_manager = PhaseManager(gps, socketio)
         phase_manager.reed_manager = reed_manager
         reed_manager.phase_manager = phase_manager
         phase_manager.start()
         app._phase_manager_initialized = True
-    else:
-        logger.warning("⚠️ PhaseManager already initialized (debug reload protection)")
 
     phase_manager.clear_force()
     logger.debug("🧹 All forced states cleared on startup")
-    
+
     if gps and getattr(gps, 'serial', None):
         gps.start_reader()
-        logger.debug("🛰️ GPS reader started")
-    else:
-        logger.warning("⚠️ GPS not fully ready when starting PhaseManager")
 
-    # Background sync thread
+    # Background sync
     threading.Thread(target=background_state_sync, daemon=True).start()
 
     logger.info("🎉🎉🎉 The Pissmole Camper Control System lives! 🎉🎉🎉")

@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Pissmole Camper Control System</title>
-  <script src="/static/tailwind.min.js"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/neumorphism.css') }}">
-  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+	<script src="/static/tailwind.min.js"></script>
+	  <link id="base-stylesheet" rel="stylesheet" href="/static/css/base.css">
+	  <link id="theme-override" rel="stylesheet" href="">
+	  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
 </head>
 <body class="bg-zinc-950 text-white min-h-screen">
 
@@ -73,27 +74,41 @@
         </div>
       </div>
 
-      <div class="tile neumorph p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Battery</p>
-            <p class="tile-value" id="battery-voltage">—</p>
-            <p class="tile-label mt-4">Charge</p>
-            <p class="tile-value" id="battery-charge">—</p>
-          </div>
-          <i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
-        </div>
-      </div>
+		<div class="tile neumorph p-5">
+		  <div class="flex justify-between items-start">
+			<div>
+			  <p class="tile-label">Battery</p>
+			  <p class="tile-value" id="battery-voltage">—</p>
+			</div>
+			<i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
+		  </div>
+		  <div class="mt-6">
+			<div class="flex justify-between items-start">
+			  <div>
+				<p class="tile-label">Charge</p>
+				<p class="tile-value" id="battery-charge">—</p>
+			  </div>
+			  <i class="fa-solid fa-bolt text-2xl accent-sky"></i>   <!-- or fa-plug / fa-charging-station -->
+			</div>
+		  </div>
+		</div>
 
 		<div class="tile neumorph p-5">
 		  <div class="flex justify-between items-start">
 			<div>
 			  <p class="tile-label">Sunrise</p>
 			  <p class="tile-value" id="sunrise">—</p>
-			  <p class="tile-label mt-4">Sunset</p>
-			  <p class="tile-value" id="sunset">—</p>
 			</div>
 			<i class="fa-solid fa-sun text-3xl accent-sky"></i>
+		  </div>
+		  <div class="mt-6">
+			<div class="flex justify-between items-start">
+			  <div>
+				<p class="tile-label">Sunset</p>
+				<p class="tile-value" id="sunset">—</p>
+			  </div>
+			  <i class="fa-solid fa-moon text-2xl accent-sky"></i>
+			</div>
 		  </div>
 		</div>
 
@@ -119,17 +134,24 @@
 		  </div>
 		</div>
 
-      <div class="tile neumorph p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Satellites</p>
-            <p class="tile-value" id="satellites">— / —</p>
-            <p class="tile-label mt-4">Location</p>
-            <p class="tile-value" id="location">---</p>
-          </div>
-          <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
-        </div>
-      </div>
+		<div class="tile neumorph p-5">
+		  <div class="flex justify-between items-start">
+			<div>
+			  <p class="tile-label">Satellites</p>
+			  <p class="tile-value" id="satellites">— / —</p>
+			</div>
+			<i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+		  </div>
+		  <div class="mt-6">
+			<div class="flex justify-between items-start">
+			  <div>
+				<p class="tile-label">Location</p>
+				<p class="tile-value" id="location">---</p>
+			  </div>
+			  <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+			</div>
+		  </div>
+		</div>
     </div>
 	
 	<!-- LIGHTING SCENES -->
@@ -157,7 +179,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-utensils"></i>
-			  <p>Kitchen</p>
+			  <span class="slider-label">Kitchen</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -182,7 +204,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-mug-hot"></i>
-			  <p>Kitchen Bench</p>
+			  <span class="slider-label">Kitchen Bench</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -207,7 +229,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-boxes-stacked"></i>
-			  <p>Storage Panel</p>
+			  <span class="slider-label">Storage Panel</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -232,7 +254,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-archive"></i>
-			  <p>Rear Drawer</p>
+			  <span class="slider-label">Rear Drawer</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -257,7 +279,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-lightbulb"></i>
-			  <p>Accent</p>
+			  <span class="slider-label">Accent</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -282,7 +304,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-umbrella"></i>
-			  <p>Awning</p>
+			  <span class="slider-label">Awning</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -307,7 +329,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-tent"></i>
-			  <p>Rooftop Tent</p>
+			  <span class="slider-label">Rooftop Tent</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -332,7 +354,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-bath"></i>
-			  <p>Ensuite</p>
+			  <span class="slider-label">Ensuite</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -357,7 +379,7 @@
 		  <div class="slider-card-left">
 			<div class="slider-card-title">
 			  <i class="fa-solid fa-lightbulb"></i>
-			  <p>Floodlights</p>
+			  <span class="slider-label">Floodlights</span>
 			</div>
 		  </div>
 		  <div class="slider-card-right">
@@ -369,10 +391,17 @@
 	  </div>
 
 	</div>
+
   </div>
 
 <script src="/static/socket.io.min.js"></script>
 <script>
+	const themeChannel = new BroadcastChannel('pccs-theme-channel');
+
+	function broadcastTheme(themeName) {
+	  themeChannel.postMessage({ type: 'theme-change', theme: themeName });
+	}
+
     const socket = io();
 
     let currentState = {};
@@ -461,10 +490,8 @@
 					display += " (rural)";
 				}
 				locationEl.textContent = display;
-				locationEl.style.color = "#e0f2fe";
 			} else {
 				locationEl.textContent = "No GPS Fix";
-				locationEl.style.color = "#e0f2fe";
 			}
 			if (!hasFix) locationEl.textContent += " *";
 		}
@@ -886,6 +913,8 @@
 
     // ==================== INIT ====================
     window.onload = function() {
+        loadCurrentTheme();
+
         updateClock();
         setInterval(updateClock, 10000);
         initSliders();
@@ -897,6 +926,83 @@
 
         console.log("🚀 PCCS Frontend Ready");
     };
+	
+	// ==================== THEME SYSTEM ====================
+
+	function applyTheme(themeName) {
+	  console.log('🎨 Applying theme:', themeName);
+	  
+	  const overrideLink = document.getElementById('theme-override');
+	  if (!overrideLink) {
+		console.warn('theme-override link not found');
+		return;
+	  }
+
+	  const timestamp = Date.now();
+	  if (themeName === 'base' || themeName === 'neumorphism') {
+		overrideLink.href = '';
+	  } else {
+		overrideLink.href = `/static/css/themes/${themeName}.css?v=${timestamp}`;
+	  }
+
+	  localStorage.setItem('pccs-active-theme', themeName);
+	}
+
+	async function loadCurrentTheme() {
+	  try {
+		const res = await fetch('/api/current-theme?' + Date.now()); // prevent cache
+		if (!res.ok) throw new Error('Failed');
+		const data = await res.json();
+		applyTheme(data.theme);
+	  } catch (e) {
+		console.warn('Could not fetch theme from server, using localStorage');
+		const saved = localStorage.getItem('pccs-active-theme') || 'stealth';
+		applyTheme(saved);
+	  }
+	}
+
+	socket.on('global_theme_update', (data) => {
+	  if (data && data.theme) {
+		applyTheme(data.theme);
+	  }
+	});
+
+	// ==================== LIGHT/DARK MODE ====================
+	function applyGlobalDarkMode() {
+	  const saved = localStorage.getItem('pccs-dark-mode');
+	  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+	  const isDark = saved === null ? prefersDark : saved === 'dark';
+
+	  const html = document.documentElement;
+
+	  if (isDark) {
+		html.setAttribute('data-theme', 'dark');
+		html.classList.remove('light');
+		html.classList.add('dark');
+	  } else {
+		html.setAttribute('data-theme', 'light');
+		html.classList.remove('dark');
+		html.classList.add('light');
+	  }
+
+	  console.log('🌗 Light/Dark mode applied:', isDark ? 'Dark' : 'Light');
+	}
+
+	// Listen for changes from Diagnostics page
+	window.addEventListener('storage', (e) => {
+	  if (e.key === 'pccs-active-theme' && e.newValue) {
+		applyTheme(e.newValue);
+	  }
+	  if (e.key === 'pccs-dark-mode') {
+		applyGlobalDarkMode();
+	  }
+	});
+
+	// Initial load
+	window.addEventListener('load', () => {
+	  applyGlobalDarkMode();        // ← This was missing
+	});
+	
 </script>
 </body>
 </html>
