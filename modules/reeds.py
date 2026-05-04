@@ -106,7 +106,6 @@ class ReedManager:
         config = self.phase_settings.get(reed_name, {})
 
         if reed_name in self.RGB_LIGHTS:
-            # RGB lights keep existing behaviour for now
             settings = config.get(phase, config.get("day", (0, "white")))
             if isinstance(settings, tuple):
                 return settings
@@ -114,14 +113,15 @@ class ReedManager:
                 mode = "red" if reed_name == "kitchen_panel" and phase == "night" else "white"
                 return (settings, mode)
         else:
-            # White lights (accent, etc.)
             if phase == "day" and "day" not in config:
-                return None  # No day setting = respect manual control
+                return None
 
-            brightness = config.get(phase, config.get("day", 0))
-            if isinstance(brightness, tuple):
-                brightness = brightness[0]
-            return brightness, "white"
+            setting = config.get(phase, config.get("day", 0))
+
+            if isinstance(setting, tuple):
+                return setting
+            else:
+                return (setting, "white")
             
     def _set_ambient_light(self, light_name: str, brightness: int, mode: str = "white", source: str = "ambient"):
         ramp_ms = self.reed_ramp_time_ms
@@ -142,51 +142,45 @@ class ReedManager:
     # ====================== AMBIENT LIGHTS (accent + awning) ======================
     def update_ambient_lights(self):
         if not hasattr(self, 'phase_manager') or self.phase_manager is None:
-            logger.debug("🌟 update_ambient_lights: phase_manager not ready - skipping")
             return
 
         phase = self.phase_manager.get_phase().lower()
-        any_open = any(not self.get_effective_state(name)
-                       for name in self.gpio.reed_states)
+        any_open = any(not self.get_effective_state(name) for name in self.gpio.reed_states)
 
         if self.current_ambient_phase != phase:
             self.ambient_locked = False
             self.current_ambient_phase = phase
-            logger.info(f"🌟 Ambient: phase changed to {phase} - lock reset")
 
-        logger.debug(f"🌟 Ambient update → phase={phase} | any_open={any_open} | locked={self.ambient_locked}")
-
-        # === LOCKOUT LOGIC ===
         if phase in ("evening", "night"):
             if not any_open:
-                if self.ambient_locked:
-                    logger.info("🌟 All reeds closed → ambient unlocked + off")
                 self.ambient_locked = False
                 brightness = 0
                 mode = "white"
+                apply_to = ["accent", "awning"]
             elif self.ambient_locked:
-                logger.debug("🌟 Ambient locked – skipping update (manual override preserved)")
+                logger.debug("🌟 Ambient locked – skipping")
                 return
             else:
-                settings = self.get_light_settings(phase, "accent")  # accent/awning use same settings
-                if settings is None:
-                    logger.debug("   → accent/awning skipped (no setting for this phase)")
-                    return
-                brightness, mode = settings
                 self.ambient_locked = True
-                logger.info(f"🌟 Evening/night + reeds open → applied presets and LOCKED ambient")
+                apply_to = ["accent", "awning"]
         else:
+            # day logic...
             if any_open:
-                settings = self.get_light_settings(phase, "accent")
-                if settings is None:
-                    logger.debug("   → accent/awning skipped (day phase, no day setting)")
-                    return
-                brightness, mode = settings
+                apply_to = ["accent", "awning"]
             else:
                 brightness = 0
                 mode = "white"
+                apply_to = ["accent", "awning"]
 
         for light_name in ("accent", "awning"):
+            if light_name not in apply_to:
+                continue
+
+            settings = self.get_light_settings(phase, light_name)
+            if settings is None:
+                continue
+
+            brightness, mode = settings
             self._set_ambient_light(light_name, brightness, mode, source="ambient")
 
     # ====================== PHASE CHANGE HANDLER ======================
