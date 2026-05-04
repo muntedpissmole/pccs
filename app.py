@@ -537,7 +537,10 @@ def handle_connect():
         logger.debug("📤 Sending cached state to new client")
     
     emit('state_update', state.copy())
-    emit('global_dark_mode_update', {'mode': current_global_dark_mode})
+    if phase_manager and phase_manager.current_phase is not None:
+        emit('global_dark_mode_update', {'mode': phase_manager.current_dark_mode})
+    else:
+        emit('global_dark_mode_update', {'mode': current_global_dark_mode})
     
     if gps:
         emit('gps_update', gps.get_state())
@@ -802,7 +805,7 @@ if __name__ == "__main__":
             app,
             host="0.0.0.0",
             port=5000,
-            debug=True,
+            debug=False,
             use_reloader=False,
             allow_unsafe_werkzeug=True
         )

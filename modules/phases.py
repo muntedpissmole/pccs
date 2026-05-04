@@ -60,6 +60,9 @@ class PhaseManager:
 
         self._update_phase(use_fallback=False)
 
+        # Force initial dark mode evaluation from real phase (removes race condition)
+        self._auto_update_dark_mode()
+
         self.thread = threading.Thread(target=self._phase_loop, daemon=True, name="PhaseLoop")
         self.thread.start()
 
@@ -152,21 +155,33 @@ class PhaseManager:
             return "Day"
 
     def _auto_update_dark_mode(self):
+        """Update global dark/light mode based on current phase."""
         if not self.socketio:
             return
 
         try:
             phase = self.get_phase().lower()
-            desired_mode = 'light' if phase == 'day' else 'dark'
+            if phase not in ("day", "evening", "night"):
+                logger.debug(f"🌗 Skipping dark mode auto-update - phase not ready ({phase})")
+                return
 
-            logger.info(f"🌗 Theme mode: {desired_mode} (phase = {phase})")
+            desired_mode = 'light' if phase == 'day' else 'dark'
 
             if desired_mode != self.current_dark_mode:
                 self.current_dark_mode = desired_mode
+                logger.info(f"🌗 Auto dark mode → {desired_mode} (phase = {phase})")
+
                 self.socketio.emit('set_global_dark_mode', {
                     'mode': desired_mode,
                     'auto': True
                 })
+
+                # Optional: persist to disk so UI reloads have the correct value
+                try:
+                    from app import save_active_dark_mode
+                    save_active_dark_mode(desired_mode)
+                except Exception:
+                    pass  # Not critical
 
         except Exception as e:
             logger.debug(f"Auto dark mode check failed: {e}")
@@ -250,7 +265,7 @@ class PhaseManager:
     # ====================== PUBLIC API ======================
     def get_phase(self) -> str:
         if self.forced_phase is not None:
-            return str(self.forced_phase).strip().title()
+            return str(self.forced_phase).strip().Title()
         return self.current_phase or "Day"
 
     def is_forced(self) -> bool:
