@@ -28,10 +28,12 @@ class PhaseManager:
 
         # Configuration
         self.phase_ramp_time_ms = 4000
-
         self.day_offset_minutes = 45
         self.evening_offset_minutes = 45
         self.night_start_hour = 21
+
+        # Auto Dark/Light Mode - tied to existing phase times
+        self.current_dark_mode = 'dark'
 
         # Timeouts
         self.GPS_STARTUP_TIMEOUT = 900   # 15 minutes
@@ -54,8 +56,9 @@ class PhaseManager:
             return
         self.running = True
 
-        # Pre-calculate times immediately so we never send empty data
         self._calculate_and_cache_times()
+
+        self._update_phase(use_fallback=False)
 
         self.thread = threading.Thread(target=self._phase_loop, daemon=True, name="PhaseLoop")
         self.thread.start()
@@ -110,6 +113,7 @@ class PhaseManager:
 
             self.current_phase = new_phase
             self._broadcast_phase_update()
+            self._auto_update_dark_mode()
 
     def _calculate_phase(self, use_fallback: bool) -> str:
         """Calculate current phase from sun times."""
@@ -147,6 +151,26 @@ class PhaseManager:
             logger.error(f"🌗 Phase calculation failed: {e}", exc_info=True)
             return "Day"
 
+    def _auto_update_dark_mode(self):
+        if not self.socketio:
+            return
+
+        try:
+            phase = self.get_phase().lower()
+            desired_mode = 'light' if phase == 'day' else 'dark'
+
+            logger.info(f"🌗 Theme mode: {desired_mode} (phase = {phase})")
+
+            if desired_mode != self.current_dark_mode:
+                self.current_dark_mode = desired_mode
+                self.socketio.emit('set_global_dark_mode', {
+                    'mode': desired_mode,
+                    'auto': True
+                })
+
+        except Exception as e:
+            logger.debug(f"Auto dark mode check failed: {e}")
+
     def _has_valid_gps(self) -> bool:
         """Check if we have usable GPS sun data."""
         state = self.gps.get_state()
@@ -169,7 +193,7 @@ class PhaseManager:
         raise ValueError(f"Could not parse sun time: {time_str}")
 
     def _calculate_and_cache_times(self):
-        """Calculate and cache phase times with full debugging."""
+        """Calculate and cache phase transition times."""
         start_time = time.time()
         logger.debug("🌗 [CACHE] Starting phase times calculation")
 
@@ -177,38 +201,23 @@ class PhaseManager:
             tz = self.fallback_tz
             now = datetime.datetime.now(tz)
 
-            sunrise = None
-            sunset = None
-            source = "unknown"
-
-            # Try GPS
             if self._has_valid_gps():
                 try:
                     state = self.gps.get_state()
-                    logger.debug(f"🌗 [CACHE] GPS state keys: {list(state.keys())} | sunrise={state.get('sunrise')} | sunset={state.get('sunset')}")
-
                     tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
                     now = datetime.datetime.now(tz)
 
                     sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
                     sunset = self._parse_sun_time(state.get("sunset"), tz, now)
                     source = "GPS"
-                    logger.debug("🌗 [CACHE] Successfully parsed GPS sun times")
-                except Exception as gps_err:
-                    logger.warning(f"🌗 [CACHE] GPS parse failed: {gps_err}")
-
-            # Fallback
-            if sunrise is None or sunset is None:
-                try:
+                except Exception:
                     sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
                     sunset = self.fallback_sun.get_local_sunset_time(now, tz)
                     source = "FALLBACK"
-                    logger.debug("🌗 [CACHE] Used suntime fallback")
-                except Exception as fb_err:
-                    logger.error(f"🌗 [CACHE] Fallback also failed: {fb_err}")
-
-            if sunrise is None or sunset is None:
-                raise ValueError("No valid sun times available")
+            else:
+                sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
+                sunset = self.fallback_sun.get_local_sunset_time(now, tz)
+                source = "FALLBACK"
 
             sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
             sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
@@ -228,7 +237,7 @@ class PhaseManager:
             }
 
             duration = (time.time() - start_time) * 1000
-            logger.debug(f"🌗 [CACHE] SUCCESS ({source}) in {duration:.1f}ms → {self._cached_phase_times}")
+            logger.debug(f"🌗 [CACHE] SUCCESS ({source}) in {duration:.1f}ms")
 
         except Exception as e:
             logger.error(f"🌗 [CACHE] FAILED → setting em-dashes. Error: {e}", exc_info=True)
@@ -256,7 +265,7 @@ class PhaseManager:
             self.force_timer = None
 
         self.forced_phase = str(phase).strip().title()
-        logger.info(f"🔧 Phase manually forced → {self.forced_phase}")
+        logger.info(f"🔧 Phase forced → {self.forced_phase}")
         self._update_phase()
 
     def clear_force(self):
@@ -294,7 +303,6 @@ class PhaseManager:
             }
             self.socketio.emit('phase_update', payload)
 
-            # Re-apply lights for any open reeds when phase changes
             if (self.reed_manager and 
                 self.current_phase is not None and 
                 self.current_phase != self._last_broadcast_phase):

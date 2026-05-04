@@ -335,13 +335,8 @@
 
 <script src="/static/socket.io.min.js"></script>
 <script>
-	const themeChannel = new BroadcastChannel('pccs-theme-channel');
-
-	function broadcastTheme(themeName) {
-	  themeChannel.postMessage({ type: 'theme-change', theme: themeName });
-	}
-
     const socket = io();
+    
     let lastReedPayload = {};
     let lastGPSPayload = {};
     let lastKnownPhase = "DAY";
@@ -350,101 +345,94 @@
     const REED_ORDER = ["kitchen_panel", "kitchen_bench", "storage_panel", "rear_drawer", "rooftop_tent"];
     const reedRows = new Map();
 
-    // ==================== THEME SYSTEM ====================
-	async function loadThemes() {
-	  try {
-		const res = await fetch('/api/themes');
-		const data = await res.json();
-		
-		const select = document.getElementById('theme-selector');
-		select.innerHTML = '';
-		
-		data.themes.forEach(theme => {
-		  const option = document.createElement('option');
-		  option.value = theme.file;
-		  option.textContent = theme.name;
-		  select.appendChild(option);
-		});
+    // ==================== THEME SYSTEM (unchanged - works fine) ====================
+    async function loadThemes() {
+      try {
+        const res = await fetch('/api/themes');
+        const data = await res.json();
+        
+        const select = document.getElementById('theme-selector');
+        select.innerHTML = '';
+        
+        data.themes.forEach(theme => {
+          const option = document.createElement('option');
+          option.value = theme.file;
+          option.textContent = theme.name;
+          select.appendChild(option);
+        });
 
-		const currentRes = await fetch('/api/current-theme');
-		const current = await currentRes.json();
-		select.value = current.theme || 'stealth';
-	  } catch (e) {
-		console.error('Failed to load themes', e);
-	  }
-	}
+        const currentRes = await fetch('/api/current-theme');
+        const current = await currentRes.json();
+        select.value = current.theme || 'stealth';
+      } catch (e) {
+        console.error('Failed to load themes', e);
+      }
+    }
 
-	function applyThemeToPage(filename) {
-	  const link = document.getElementById('theme-stylesheet');
-	  if (!link) return;
+    function applyThemeToPage(filename) {
+      const link = document.getElementById('theme-stylesheet');
+      if (!link) return;
 
-	  if (filename === 'base' || filename === 'neumorphism') {
-		link.href = '';
-	  } else {
-		link.href = `/static/css/themes/${filename}.css?v=${Date.now()}`;
-	  }
-	  localStorage.setItem('pccs-active-theme', filename);
-	}
+      if (filename === 'base' || filename === 'neumorphism') {
+        link.href = '';
+      } else {
+        link.href = `/static/css/themes/${filename}.css?v=${Date.now()}`;
+      }
+      localStorage.setItem('pccs-active-theme', filename);
+    }
 
-	function applyTheme(filename) {
-	  applyThemeToPage(filename);
-	  socket.emit('set_global_theme', { theme: filename });
-	}
+    function applyTheme(filename) {
+      applyThemeToPage(filename);
+      socket.emit('set_global_theme', { theme: filename });
+    }
 
-	document.getElementById('theme-selector').addEventListener('change', (e) => {
-	  applyTheme(e.target.value);
-	});
+    // ==================== GLOBAL DARK/LIGHT MODE ====================
+    function setGlobalDarkMode(isDark) {
+      const mode = isDark ? 'dark' : 'light';
+      socket.emit('set_global_dark_mode', { mode });
+      updateModeUI(isDark);
+      localStorage.setItem('pccs-dark-mode', mode);
+    }
 
-	socket.on('global_theme_update', (data) => {
-	  if (data?.theme) {
-		document.getElementById('theme-selector').value = data.theme;
-		applyThemeToPage(data.theme);
-	  }
-	});
+    function updateModeUI(isDark) {
+      const icon = document.getElementById('mode-icon');
+      const label = document.getElementById('mode-label');
+      
+      if (icon) {
+        icon.className = isDark 
+          ? 'fa-solid fa-moon text-sky-400' 
+          : 'fa-solid fa-sun text-amber-400';
+      }
+      if (label) label.textContent = isDark ? 'Dark' : 'Light';
+    }
 
-	// ==================== GLOBAL LIGHT/DARK ====================
-	function setGlobalDarkMode(isDark) {
-	  localStorage.setItem('pccs-dark-mode', isDark ? 'dark' : 'light');
-	  
-	  window.dispatchEvent(new Event('storage'));
+    async function loadCurrentDarkModeUI() {
+      try {
+        const res = await fetch('/api/current-dark-mode?' + Date.now());
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        updateModeUI(data.mode === 'dark');
+      } catch (e) {
+        console.warn('Could not fetch dark mode from server');
+        const saved = localStorage.getItem('pccs-dark-mode') || 'dark';
+        updateModeUI(saved === 'dark');
+      }
+    }
 
-	  const icon = document.getElementById('mode-icon');
-	  const label = document.getElementById('mode-label');
-	  
-	  if (icon) {
-		icon.className = isDark 
-		  ? 'fa-solid fa-moon text-sky-400' 
-		  : 'fa-solid fa-sun text-amber-400';
-	  }
-	  if (label) label.textContent = isDark ? 'Dark' : 'Light';
-	}
+    // Click handler for the toggle button
+    function initDarkModeToggle() {
+      const toggle = document.getElementById('global-mode-toggle');
+      if (!toggle) return;
 
-	function loadGlobalDarkModeUI() {
-	  const saved = localStorage.getItem('pccs-dark-mode');
-	  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-	  const isDark = saved === null ? prefersDark : saved === 'dark';
+      toggle.addEventListener('click', () => {
+        const currentIsDark = localStorage.getItem('pccs-dark-mode') !== 'light';
+        setGlobalDarkMode(!currentIsDark);
+      });
+    }
 
-	  const icon = document.getElementById('mode-icon');
-	  const label = document.getElementById('mode-label');
-	  
-	  if (icon) icon.className = isDark ? 'fa-solid fa-moon text-sky-400' : 'fa-solid fa-sun text-amber-400';
-	  if (label) label.textContent = isDark ? 'Dark' : 'Light';
-	}
-
-	function initGlobalDarkModeToggle() {
-	  const toggle = document.getElementById('global-mode-toggle');
-	  if (!toggle) {
-		console.warn('Global mode toggle button not found');
-		return;
-	  }
-
-	  toggle.replaceChildren(...toggle.childNodes);
-
-	  toggle.addEventListener('click', () => {
-		const currentIsDark = localStorage.getItem('pccs-dark-mode') !== 'light';
-		setGlobalDarkMode(!currentIsDark);
-	  });
-	}
+    socket.on('global_dark_mode_update', (data) => {
+      if (data?.mode) updateModeUI(data.mode === 'dark');
+    });
 
     // ==================== REED FUNCTIONS ====================
     function createOrUpdateReedRow(name, isClosed, isForced, forcedState) {
@@ -549,19 +537,19 @@
     socket.on('gps_update', updateGPS);
     socket.on('phase_update', (payload) => updateGPS(payload));
 
-    window.onload = () => {
+      window.onload = () => {
       loadThemes();
-      loadGlobalDarkModeUI();
-      initGlobalDarkModeToggle();
+      loadCurrentDarkModeUI();
+      initDarkModeToggle();
       
       fetch('/reed_json').then(r => r.json()).then(updateReeds);
       fetch('/gps_json').then(r => r.json()).then(updateGPS);
 
-      document.getElementById('theme-selector').addEventListener('change', (e) => {
+      const themeSelect = document.getElementById('theme-selector');
+      themeSelect.addEventListener('change', (e) => {
         applyTheme(e.target.value);
       });
 
-      // Auto-refresh
       setInterval(() => {
         fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
         fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});

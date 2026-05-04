@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Pissmole Camper Control System</title>
 	<script src="/static/tailwind.min.js"></script>
 	  <link id="base-stylesheet" rel="stylesheet" href="/static/css/base.css">
@@ -396,80 +396,143 @@
 
 <script src="/static/socket.io.min.js"></script>
 <script>
-	const themeChannel = new BroadcastChannel('pccs-theme-channel');
-
-	function broadcastTheme(themeName) {
-	  themeChannel.postMessage({ type: 'theme-change', theme: themeName });
-	}
-
     const socket = io();
 
     let currentState = {};
     let currentModes = { kitchen_panel: 'white', awning: 'white' };
-	let currentReeds = {};
+    let currentReeds = {};
 
     const currentlyDragging = new Set();
     const userJustSet = new Set();
     const JUST_SET_DURATION = 2800;
-	
-	// ==================== OFFLINE HANDLER ====================
-	let offlineTimeout = null;
 
-	function showOfflineBanner() {
-		if (offlineTimeout) clearTimeout(offlineTimeout);
-		
-		offlineTimeout = setTimeout(() => {
-			const overlay = document.getElementById('offline-overlay');
-			if (overlay) {
-				overlay.classList.remove('hidden');
-				overlay.style.pointerEvents = 'auto';
-			}
-			const mainContent = document.querySelector('.flex-1');
-			if (mainContent) mainContent.style.pointerEvents = 'none';
-		}, 800);
-	}
+    // ==================== OFFLINE HANDLER ====================
+    let offlineTimeout = null;
 
-	function hideOfflineBanner() {
-		if (offlineTimeout) {
-			clearTimeout(offlineTimeout);
-			offlineTimeout = null;
-		}
-		const overlay = document.getElementById('offline-overlay');
-		if (overlay) overlay.classList.add('hidden');
-		
-		const mainContent = document.querySelector('.flex-1');
-		if (mainContent) mainContent.style.pointerEvents = 'auto';
-	}
+    function showOfflineBanner() {
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        
+        offlineTimeout = setTimeout(() => {
+            const overlay = document.getElementById('offline-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.style.pointerEvents = 'auto';
+            }
+            const mainContent = document.querySelector('.flex-1');
+            if (mainContent) mainContent.style.pointerEvents = 'none';
+        }, 800);
+    }
 
-	// ==================== SOCKET.IO CONNECTION HANDLING ====================
-	socket.on('connect', () => {
-	  console.log('✅ Backend connected');
-	  hideOfflineBanner();
-	  updateRooftopTentControls();
-	});
+    function hideOfflineBanner() {
+        if (offlineTimeout) {
+            clearTimeout(offlineTimeout);
+            offlineTimeout = null;
+        }
+        const overlay = document.getElementById('offline-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        
+        const mainContent = document.querySelector('.flex-1');
+        if (mainContent) mainContent.style.pointerEvents = 'auto';
+    }
 
-	socket.on('disconnect', () => {
-	  console.warn('❌ Backend disconnected');
-	  showOfflineBanner();
-	});
+    // ==================== SOCKET.IO CONNECTION ====================
+    socket.on('connect', () => {
+        console.log('✅ Backend connected');
+        hideOfflineBanner();
+        updateRooftopTentControls();
+    });
 
-	socket.on('connect_error', (err) => {
-	  console.warn('⚠️ Connection error:', err.message);
-	  showOfflineBanner();
-	});
+    socket.on('disconnect', () => {
+        console.warn('❌ Backend disconnected');
+        showOfflineBanner();
+    });
 
-	socket.on('reconnect_attempt', (attempt) => {
-	  console.log(`🔄 Reconnect attempt ${attempt}...`);
-	});
+    socket.on('connect_error', () => showOfflineBanner());
+
+    // ==================== THEME SYSTEM ====================
+    function applyTheme(themeName) {
+        console.log('🎨 Applying theme:', themeName);
+        
+        const overrideLink = document.getElementById('theme-override');
+        if (!overrideLink) {
+            console.warn('theme-override link not found');
+            return;
+        }
+
+        const timestamp = Date.now();
+        if (themeName === 'base' || themeName === 'neumorphism') {
+            overrideLink.href = '';
+        } else {
+            overrideLink.href = `/static/css/themes/${themeName}.css?v=${timestamp}`;
+        }
+
+        localStorage.setItem('pccs-active-theme', themeName);
+    }
+
+    async function loadCurrentTheme() {
+        try {
+            const res = await fetch('/api/current-theme?' + Date.now());
+            if (!res.ok) throw new Error('Failed');
+            const data = await res.json();
+            applyTheme(data.theme);
+        } catch (e) {
+            console.warn('Could not fetch theme from server, using localStorage');
+            const saved = localStorage.getItem('pccs-active-theme') || 'stealth';
+            applyTheme(saved);
+        }
+    }
+
+    socket.on('global_theme_update', (data) => {
+        if (data?.theme) applyTheme(data.theme);
+    });
+
+    // ==================== GLOBAL DARK/LIGHT MODE (server-driven) ====================
+    function applyGlobalDarkMode(mode) {
+        console.log('🌗 Applying dark mode:', mode);
+        const html = document.documentElement;
+        
+        if (mode === 'dark') {
+            html.classList.remove('light');
+            html.classList.add('dark');
+            html.setAttribute('data-theme', 'dark');
+        } else {
+            html.classList.remove('dark');
+            html.classList.add('light');
+            html.setAttribute('data-theme', 'light');
+        }
+        localStorage.setItem('pccs-dark-mode', mode); // keep local cache for instant feel
+    }
+
+    async function loadCurrentDarkMode() {
+        try {
+            const res = await fetch('/api/current-dark-mode?' + Date.now());
+            if (!res.ok) throw new Error('Failed');
+            const data = await res.json();
+            applyGlobalDarkMode(data.mode);
+        } catch (e) {
+            console.warn('Could not fetch dark mode, using localStorage');
+            const saved = localStorage.getItem('pccs-dark-mode') || 'dark';
+            applyGlobalDarkMode(saved);
+        }
+    }
+
+    socket.on('global_dark_mode_update', (data) => {
+        if (data?.mode) applyGlobalDarkMode(data.mode);
+    });
 
 	// ==================== GPS & CLOCK ====================
+	let lastGPSUpdate = 0;
+	const GPS_TIMEOUT_MS = 60 * 1000; // 60 seconds before falling back to local time
 
 	let lastWeatherUpdate = 0;
-	const WEATHER_INTERVAL_MS = 3600 * 1000; // 1 hour
+	const WEATHER_INTERVAL_MS = 3600 * 1000;
 	let lastSuburb = "";
 
 	function updateGPS(data) {
 		if (!data) return;
+
+		const now = Date.now();
+		lastGPSUpdate = now;                    // Record fresh GPS data arrival
 
 		// Satellites
 		const satEl = document.getElementById('satellites');
@@ -477,26 +540,24 @@
 			satEl.textContent = `${data.satellites || 0} / ${data.fix_quality || 0}`;
 		}
 
-		// Determine if we have a real GPS fix
+		// Location
 		const hasFix = !!(data.suburb && data.suburb.trim() !== "") || 
 					   !!(data.latitude && data.longitude && Math.abs(data.latitude) > 0.0001);
 
-		// Location
 		const locationEl = document.getElementById('location');
 		if (locationEl) {
 			if (data.suburb && data.suburb.trim() !== "") {
 				let display = data.suburb.trim();
-				if (/^\d+\.\d+,\s*\d+\.\d+$/.test(display)) {
-					display += " (rural)";
-				}
+				if (/^\d+\.\d+,\s*\d+\.\d+$/.test(display)) display += " (rural)";
 				locationEl.textContent = display;
 			} else {
 				locationEl.textContent = "No GPS Fix";
 			}
+			// Only show * on location if no fix at all
 			if (!hasFix) locationEl.textContent += " *";
 		}
 
-		// Date & Time
+		// Date from GPS
 		if (data.date) {
 			const dateObj = new Date(data.date);
 			if (!isNaN(dateObj.getTime())) {
@@ -504,13 +565,11 @@
 				const day = dateObj.getDate();
 				const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
 				const dateEl = document.getElementById('tile-date');
-				if (dateEl) {
-					dateEl.textContent = `${dayName} ${day} ${month}`;
-					if (!hasFix) dateEl.textContent += " *";
-				}
+				if (dateEl) dateEl.textContent = `${dayName} ${day} ${month}`;
 			}
 		}
 
+		// Time from GPS
 		if (data.local_time) {
 			const dateObj = new Date(`1970-01-01 ${data.local_time}`);
 			if (!isNaN(dateObj.getTime())) {
@@ -519,25 +578,19 @@
 				const ampm = hours >= 12 ? 'PM' : 'AM';
 				hours = hours % 12 || 12;
 				const timeEl = document.getElementById('tile-time');
-				if (timeEl) {
-					timeEl.textContent = `${hours}:${minutes} ${ampm}`;
-					if (!hasFix) timeEl.textContent += " *";
-				}
+				if (timeEl) timeEl.textContent = `${hours}:${minutes} ${ampm}`;
 			}
 		}
 
-		// Weather update
-		const now = Date.now();
+		// Trigger weather update when needed
 		const currentSuburb = (data.suburb || "").trim();
 		const hasValidPosition = !!(data.latitude && data.longitude);
 
-		const suburbChanged = currentSuburb && currentSuburb !== lastSuburb;
-		const timeForUpdate = (now - lastWeatherUpdate) > WEATHER_INTERVAL_MS;
-
-		if (hasValidPosition && (suburbChanged || timeForUpdate)) {
+		if (hasValidPosition && ((currentSuburb && currentSuburb !== lastSuburb) || 
+			(now - lastWeatherUpdate) > WEATHER_INTERVAL_MS)) {
 			fetchWeatherForecast(data.latitude, data.longitude);
 			lastWeatherUpdate = now;
-			if (suburbChanged) lastSuburb = currentSuburb;
+			if (currentSuburb) lastSuburb = currentSuburb;
 		}
 
 		updateSunTimes(data);
@@ -547,373 +600,404 @@
 		const sunriseEl = document.getElementById('sunrise');
 		const sunsetEl = document.getElementById('sunset');
 
-		if (data.sunrise) {
-			sunriseEl.textContent = stripLeadingZero(data.sunrise) + (data.using_fallback ? " *" : "");
-		}
-		if (data.sunset) {
-			sunsetEl.textContent = stripLeadingZero(data.sunset) + (data.using_fallback ? " *" : "");
-		}
-	}
-	
-	function stripLeadingZero(timeStr) {
-		if (!timeStr) return "";
-		return timeStr.replace(/^0(\d):/, '$1:');   // turns "06:45" into "6:45"
+		if (data.sunrise) sunriseEl.textContent = stripLeadingZero(data.sunrise);
+		if (data.sunset)  sunsetEl.textContent  = stripLeadingZero(data.sunset);
 	}
 
-	// Fallback clock
+	function stripLeadingZero(timeStr) {
+		if (!timeStr) return "";
+		return timeStr.replace(/^0(\d):/, '$1:');
+	}
+
+	// Fallback to local clock only after GPS timeout
 	function updateClock() {
+		const timeSinceLastGPS = Date.now() - lastGPSUpdate;
+
+		const dateEl = document.getElementById('tile-date');
+		const timeEl = document.getElementById('tile-time');
+
+		// If we still have fresh GPS data, do nothing (keep GPS time)
+		if (timeSinceLastGPS < GPS_TIMEOUT_MS) {
+			return;
+		}
+
+		// Otherwise show local time with *
 		const now = new Date();
 		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
 		const day = now.getDate();
 		const month = now.toLocaleDateString('en-AU', { month: 'short' });
 
-		const dateEl = document.getElementById('tile-date');
-		const timeEl = document.getElementById('tile-time');
-
 		if (dateEl) dateEl.textContent = `${dayName} ${day} ${month} *`;
-		if (timeEl) {
-			let hours = now.getHours();
-			let minutes = now.getMinutes().toString().padStart(2, '0');
-			const ampm = hours >= 12 ? 'PM' : 'AM';
-			hours = hours % 12 || 12;
-			timeEl.textContent = `${hours}:${minutes} ${ampm} *`;
-		}
+
+		let hours = now.getHours();
+		let minutes = now.getMinutes().toString().padStart(2, '0');
+		const ampm = hours >= 12 ? 'PM' : 'AM';
+		hours = hours % 12 || 12;
+
+		if (timeEl) timeEl.textContent = `${hours}:${minutes} ${ampm} *`;
 	}
 
     function updateSensors(data) {
-      if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
-      if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
-      if (data.battery_voltage !== undefined) {
-        const voltage = parseFloat(data.battery_voltage);
-        document.getElementById('battery-voltage').textContent = `${voltage.toFixed(1)}V`;
-      }
-      if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
-      if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
+        if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
+        if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
+        if (data.battery_voltage !== undefined) {
+            const voltage = parseFloat(data.battery_voltage);
+            document.getElementById('battery-voltage').textContent = `${voltage.toFixed(1)}V`;
+        }
+        if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
+        if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
     }
 
-	async function fetchWeatherForecast(lat, lon) {
-	  try {
-		const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
-		const res = await fetch(url, { cache: 'no-store' });
-		if (!res.ok) throw new Error('Weather fetch failed');
+    async function fetchWeatherForecast(lat, lon) {
+        try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error('Weather fetch failed');
 
-		const data = await res.json();
+            const data = await res.json();
 
-		if (data.daily) {
-		  const max = Math.round(data.daily.temperature_2m_max[0]);
-		  const min = Math.round(data.daily.temperature_2m_min[0]);
-		  document.getElementById('temp-range').textContent = `${min}° / ${max}°`;
-		}
+            if (data.daily) {
+                const max = Math.round(data.daily.temperature_2m_max[0]);
+                const min = Math.round(data.daily.temperature_2m_min[0]);
+                document.getElementById('temp-range').textContent = `${min}° / ${max}°`;
+            }
 
-		const weatherIcon = document.getElementById('weather-icon');
-		if (data.current_weather && weatherIcon) {
-		  const code = data.current_weather.weathercode;
-		  const isDay = data.current_weather.is_day === 1;
-		  weatherIcon.className = `fa-solid ${getWeatherIcon(code, isDay)} text-2xl accent-sky`;
-		}
+            const weatherIcon = document.getElementById('weather-icon');
+            if (data.current_weather && weatherIcon) {
+                const code = data.current_weather.weathercode;
+                const isDay = data.current_weather.is_day === 1;
+                weatherIcon.className = `fa-solid ${getWeatherIcon(code, isDay)} text-2xl accent-sky`;
+            }
+        } catch (e) {
+            console.warn('Weather fetch failed:', e);
+            document.getElementById('weather-icon').className = 'fa-solid fa-cloud text-2xl accent-sky';
+        }
+    }
 
-	  } catch (e) {
-		console.warn('Weather fetch failed:', e);
-		document.getElementById('weather-icon').className = 'fa-solid fa-cloud text-2xl accent-sky';
-	  }
-	}
-	
-	function getWeatherIcon(code, isDay) {
-	  const icons = {
-		0: isDay ? 'fa-sun' : 'fa-moon',
-		1: isDay ? 'fa-sun' : 'fa-moon',
-		2: 'fa-cloud',
-		3: 'fa-cloud',
-		45: 'fa-smog',
-		48: 'fa-smog',
-		51: 'fa-cloud-rain',
-		53: 'fa-cloud-rain',
-		55: 'fa-cloud-rain',
-		61: 'fa-cloud-showers-heavy',
-		63: 'fa-cloud-showers-heavy',
-		65: 'fa-cloud-showers-heavy',
-		71: 'fa-snowflake',
-		73: 'fa-snowflake',
-		75: 'fa-snowflake',
-		80: 'fa-cloud-showers-heavy',
-		81: 'fa-cloud-showers-heavy',
-		82: 'fa-cloud-showers-heavy',
-		95: 'fa-bolt',
-		96: 'fa-bolt',
-		99: 'fa-bolt'
-	  };
-	  return icons[code] || 'fa-cloud';
-	}
+    function getWeatherIcon(code, isDay) {
+        const icons = {
+            0: isDay ? 'fa-sun' : 'fa-moon',
+            1: isDay ? 'fa-sun' : 'fa-moon',
+            2: 'fa-cloud', 3: 'fa-cloud',
+            45: 'fa-smog', 48: 'fa-smog',
+            51: 'fa-cloud-rain', 53: 'fa-cloud-rain', 55: 'fa-cloud-rain',
+            61: 'fa-cloud-showers-heavy', 63: 'fa-cloud-showers-heavy', 65: 'fa-cloud-showers-heavy',
+            71: 'fa-snowflake', 73: 'fa-snowflake', 75: 'fa-snowflake',
+            80: 'fa-cloud-showers-heavy', 81: 'fa-cloud-showers-heavy', 82: 'fa-cloud-showers-heavy',
+            95: 'fa-bolt', 96: 'fa-bolt', 99: 'fa-bolt'
+        };
+        return icons[code] || 'fa-cloud';
+    }
 
     // ==================== UI UPDATES ====================
-	function applyOptimisticUpdate(wrapper, percent) {
-	  const name = wrapper.dataset.name;
-	  const fill = wrapper.querySelector('.slider-fill');
-	  const thumb = wrapper.querySelector('.slider-thumb');
-	  const valueEl = document.getElementById(`val-${name}`);
+    function applyOptimisticUpdate(wrapper, percent) {
+        const name = wrapper.dataset.name;
+        const fill = wrapper.querySelector('.slider-fill');
+        const thumb = wrapper.querySelector('.slider-thumb');
+        const valueEl = document.getElementById(`val-${name}`);
 
-	  wrapper.dataset.value = percent;
-	  wrapper.dataset.lastBrightness = percent;
+        wrapper.dataset.value = percent;
+        wrapper.dataset.lastBrightness = percent;
 
-	  fill.style.transition = 'width 0.1s linear';
-	  thumb.style.transition = 'none';
+        fill.style.transition = 'width 0.1s linear';
+        thumb.style.transition = 'none';
 
-	  fill.style.width = `${percent}%`;
-	  thumb.style.left = `${percent}%`;
-	  valueEl.textContent = `${percent}%`;
+        fill.style.width = `${percent}%`;
+        thumb.style.left = `${percent}%`;
+        valueEl.textContent = `${percent}%`;
 
-	  updateToggleUI(name, percent);
-	}
-
-    function updateToggleUI(name, brightness) {
-      const card = document.querySelector(`.slider-wrapper[data-name="${name}"]`)?.closest('.slider-card');
-      if (!card) return;
-      const toggle = card.querySelector('.toggle-pill');
-      if (!toggle) return;
-
-      if (name === 'kitchen_panel' || name === 'awning') {
-        const isRed = currentModes[name] === 'red';
-        toggle.classList.add('colour-toggle');
-        toggle.classList.toggle('bug-mode', isRed);
-        toggle.classList.toggle('on', isRed);
-        toggle.classList.toggle('white-off', !isRed);
-        toggle.dataset.state = isRed ? 'red' : 'white';
-
-        const fill = card.querySelector('.slider-fill');
-        if (fill) fill.classList.toggle('bug-mode', isRed);
-      } else {
-        const isOn = brightness > 0;
-        toggle.classList.toggle('on', isOn);
-        toggle.dataset.state = isOn ? 'on' : 'off';
-      }
+        updateToggleUI(name, percent);
     }
 
-	function updateUIFromState() {
-	  document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
-		const name = wrapper.dataset.name;
+    function updateToggleUI(name, brightness) {
+        const card = document.querySelector(`.slider-wrapper[data-name="${name}"]`)?.closest('.slider-card');
+        if (!card) return;
+        const toggle = card.querySelector('.toggle-pill');
+        if (!toggle) return;
 
-		if (currentlyDragging.has(name) || userJustSet.has(name)) return;
+        if (name === 'kitchen_panel' || name === 'awning') {
+            const isRed = currentModes[name] === 'red';
+            toggle.classList.add('colour-toggle');
+            toggle.classList.toggle('bug-mode', isRed);
+            toggle.classList.toggle('on', isRed);
+            toggle.classList.toggle('white-off', !isRed);
+            toggle.dataset.state = isRed ? 'red' : 'white';
 
-		const brightness = currentState[name] ?? 0;
-		wrapper.dataset.value = brightness;
+            const fill = card.querySelector('.slider-fill');
+            if (fill) fill.classList.toggle('bug-mode', isRed);
+        } else {
+            const isOn = brightness > 0;
+            toggle.classList.toggle('on', isOn);
+            toggle.dataset.state = isOn ? 'on' : 'off';
+        }
+    }
 
-		const fill = wrapper.querySelector('.slider-fill');
-		const thumb = wrapper.querySelector('.slider-thumb');
-		const valueEl = document.getElementById(`val-${name}`);
+    function updateUIFromState() {
+        document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
+            const name = wrapper.dataset.name;
+            if (currentlyDragging.has(name) || userJustSet.has(name)) return;
 
-		fill.style.transition = 'width 0.6s ease-out';
-		thumb.style.transition = 'left 0.6s ease-out';
+            const brightness = currentState[name] ?? 0;
+            wrapper.dataset.value = brightness;
 
-		fill.style.width = `${brightness}%`;
-		thumb.style.left = `${brightness}%`;
-		valueEl.textContent = `${brightness}%`;
+            const fill = wrapper.querySelector('.slider-fill');
+            const thumb = wrapper.querySelector('.slider-thumb');
+            const valueEl = document.getElementById(`val-${name}`);
 
-		updateToggleUI(name, brightness);
-	  });
+            fill.style.transition = 'width 0.6s ease-out';
+            thumb.style.transition = 'left 0.6s ease-out';
 
-	  const floodToggle = document.getElementById('flood-toggle');
-	  if (floodToggle) {
-		const isOn = !!currentState.floodlights;
-		floodToggle.classList.toggle('on', isOn);
-		floodToggle.dataset.state = isOn ? 'on' : 'off';
-	  }
-	  
-	  updateRooftopTentControls();
-	}
+            fill.style.width = `${brightness}%`;
+            thumb.style.left = `${brightness}%`;
+            valueEl.textContent = `${brightness}%`;
 
-	// ==================== SCENES ====================
-	function setScene(scene) {
-	  console.log('🎬 Scene activated:', scene);
+            updateToggleUI(name, brightness);
+        });
 
-	  document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+        const floodToggle = document.getElementById('flood-toggle');
+        if (floodToggle) {
+            const isOn = !!currentState.floodlights;
+            floodToggle.classList.toggle('on', isOn);
+            floodToggle.dataset.state = isOn ? 'on' : 'off';
+        }
+        
+        updateRooftopTentControls();
+    }
 
-	  const activeBtn = Array.from(document.querySelectorAll('.scene-btn'))
-		.find(btn => btn.getAttribute('onclick').includes(`'${scene}'`));
+    // ==================== SCENES ====================
+    function setScene(scene) {
+        console.log('🎬 Scene activated:', scene);
 
-	  if (activeBtn) {
-		activeBtn.classList.add('active');
-		setTimeout(() => activeBtn.classList.remove('active'), 750);
-	  }
+        document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
 
-	  socket.emit('set_scene', { scene: scene });
-	}
+        const activeBtn = Array.from(document.querySelectorAll('.scene-btn'))
+            .find(btn => btn.getAttribute('onclick').includes(`'${scene}'`));
+
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            setTimeout(() => activeBtn.classList.remove('active'), 750);
+        }
+
+        socket.emit('set_scene', { scene: scene });
+    }
 
     // ==================== TOGGLE & DRAG ====================
-	function toggleLight(toggleEl) {
-	  const card = toggleEl.closest('.slider-card');
-	  const wrapper = card.querySelector('.slider-wrapper');
-	  const name = wrapper.dataset.name;
-	  const currentBrightness = parseInt(wrapper.dataset.value) || 0;
+    function toggleLight(toggleEl) {
+        const card = toggleEl.closest('.slider-card');
+        const wrapper = card.querySelector('.slider-wrapper');
+        const name = wrapper.dataset.name;
+        const currentBrightness = parseInt(wrapper.dataset.value) || 0;
 
-	  userJustSet.add(name);
-	  setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+        userJustSet.add(name);
+        setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
 
-	  if (name !== 'kitchen_panel' && name !== 'awning') {
-		const isOn = toggleEl.dataset.state === 'on';
-		const newBrightness = isOn ? 0 : (parseInt(wrapper.dataset.lastBrightness) || 100);
+        if (name !== 'kitchen_panel' && name !== 'awning') {
+            const isOn = toggleEl.dataset.state === 'on';
+            const newBrightness = isOn ? 0 : (parseInt(wrapper.dataset.lastBrightness) || 100);
 
-		applyOptimisticUpdate(wrapper, newBrightness);
-		toggleEl.classList.toggle('on', !isOn);
-		toggleEl.dataset.state = isOn ? 'off' : 'on';
+            applyOptimisticUpdate(wrapper, newBrightness);
+            toggleEl.classList.toggle('on', !isOn);
+            toggleEl.dataset.state = isOn ? 'off' : 'on';
 
-		socket.emit('light_change', { name, brightness: newBrightness });
-		return;
-	  }
+            socket.emit('light_change', { name, brightness: newBrightness });
+            return;
+        }
 
-	  const newMode = currentModes[name] === 'white' ? 'red' : 'white';
-	  currentModes[name] = newMode;
+        const newMode = currentModes[name] === 'white' ? 'red' : 'white';
+        currentModes[name] = newMode;
 
-	  applyOptimisticUpdate(wrapper, currentBrightness);
-	  updateToggleUI(name, currentBrightness);
+        applyOptimisticUpdate(wrapper, currentBrightness);
+        updateToggleUI(name, currentBrightness);
 
-	  socket.emit('light_change', { name, brightness: currentBrightness, mode: newMode });
-	}
+        socket.emit('light_change', { name, brightness: currentBrightness, mode: newMode });
+    }
 
 	function makeDraggable(wrapper) {
-	  const inner = wrapper.querySelector('.slider-inner');
-	  const fill = wrapper.querySelector('.slider-fill');
-	  const thumb = wrapper.querySelector('.slider-thumb');
-	  const name = wrapper.dataset.name;
-	  const valueEl = document.getElementById(`val-${name}`);
+		const inner = wrapper.querySelector('.slider-inner');
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const name = wrapper.dataset.name;
+		const valueEl = document.getElementById(`val-${name}`);
 
-	  let lastSent = 0;
+		let lastSent = 0;
+		let isDragging = false;
+		let startX = 0;
+		let startY = 0;
+		let hasCommittedToDrag = false;
 
-	  function updatePosition(clientX) {
-		const rect = inner.getBoundingClientRect();
-		let percent = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+		function updatePosition(clientX) {
+			const rect = inner.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
 
-		wrapper.dataset.value = percent;
-		fill.style.width = `${percent}%`;
-		thumb.style.left = `${percent}%`;
-		valueEl.textContent = `${percent}%`;
+			wrapper.dataset.value = percent;
+			fill.style.width = `${percent}%`;
+			thumb.style.left = `${percent}%`;
+			valueEl.textContent = `${percent}%`;
 
-		updateToggleUI(name, percent);
+			updateToggleUI(name, percent);
 
-		const now = Date.now();
-		if (now - lastSent > 50) {
-		  lastSent = now;
-		  const payload = { name, brightness: percent };
-		  if ((name === 'kitchen_panel' || name === 'awning') && currentModes[name]) {
-			payload.mode = currentModes[name];
-		  }
-		  socket.emit('light_change', payload);
+			const now = Date.now();
+			if (now - lastSent > 50) {
+				lastSent = now;
+				const payload = { name, brightness: percent };
+				if ((name === 'kitchen_panel' || name === 'awning') && currentModes[name]) {
+					payload.mode = currentModes[name];
+				}
+				socket.emit('light_change', payload);
+			}
 		}
-	  }
 
-	  function startDrag() {
-		wrapper.classList.add('dragging');
-		currentlyDragging.add(name);
-		userJustSet.delete(name);
+		function startDrag() {
+			isDragging = true;
+			hasCommittedToDrag = true;
+			wrapper.classList.add('dragging');
+			currentlyDragging.add(name);
+			userJustSet.delete(name);
 
-		fill.style.transition = 'none';
-		thumb.style.transition = 'none';
-	  }
+			fill.style.transition = 'none';
+			thumb.style.transition = 'none';
+		}
 
-	  function endDrag() {
-		wrapper.classList.remove('dragging');
-		currentlyDragging.delete(name);
+		function endDrag() {
+			if (!isDragging) return;
+			isDragging = false;
+			wrapper.classList.remove('dragging');
+			currentlyDragging.delete(name);
 
-		const final = parseInt(wrapper.dataset.value) || 0;
-		applyOptimisticUpdate(wrapper, final);
+			const final = parseInt(wrapper.dataset.value) || 0;
+			applyOptimisticUpdate(wrapper, final);
 
-		userJustSet.add(name);
-		setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
-	  }
+			userJustSet.add(name);
+			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+		}
 
-	  wrapper.addEventListener('mousedown', e => {
-		startDrag();
-		updatePosition(e.clientX);
-		const move = ev => updatePosition(ev.clientX);
-		const up = () => { 
-		  document.removeEventListener('mousemove', move); 
-		  endDrag(); 
-		};
-		document.addEventListener('mousemove', move);
-		document.addEventListener('mouseup', up, { once: true });
-	  });
+		// ==================== TOUCH HANDLERS ====================
+		wrapper.addEventListener('touchstart', e => {
+			startX = e.touches[0].clientX;
+			startY = e.touches[0].clientY;
+			hasCommittedToDrag = false;
+			// Do NOT preventDefault here - let browser decide initially
+		}, { passive: true });
 
-	  wrapper.addEventListener('touchstart', e => {
-		e.preventDefault();
-		startDrag();
-		updatePosition(e.touches[0].clientX);
-	  }, { passive: false });
+		wrapper.addEventListener('touchmove', e => {
+			const touch = e.touches[0];
+			const deltaX = Math.abs(touch.clientX - startX);
+			const deltaY = Math.abs(touch.clientY - startY);
 
-	  wrapper.addEventListener('touchmove', e => {
-		e.preventDefault();
-		updatePosition(e.touches[0].clientX);
-	  }, { passive: false });
+			if (!hasCommittedToDrag) {
+				// Strong preference for vertical scrolling
+				if (deltaY > 12 && deltaY > deltaX * 1.8) {
+					return; // Let browser scroll vertically
+				}
 
-	  wrapper.addEventListener('touchend', endDrag, { passive: false });
+				// Only commit to drag after clear horizontal intent
+				if (deltaX > 25 && deltaX > deltaY * 1.4) {
+					e.preventDefault();
+					startDrag();
+					updatePosition(touch.clientX);
+				}
+				return;
+			}
+
+			// Already dragging horizontally
+			if (isDragging) {
+				e.preventDefault();
+				updatePosition(touch.clientX);
+			}
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', () => {
+			endDrag();
+		}, { passive: true });
+
+		wrapper.addEventListener('touchcancel', () => {
+			endDrag();
+		}, { passive: true });
+
+		// Keep your existing mouse support unchanged
+		wrapper.addEventListener('mousedown', e => {
+			startX = e.clientX;
+			startY = e.clientY;
+			startDrag();
+			updatePosition(e.clientX);
+
+			const move = ev => updatePosition(ev.clientX);
+			const up = () => { 
+				document.removeEventListener('mousemove', move); 
+				endDrag(); 
+			};
+			document.addEventListener('mousemove', move);
+			document.addEventListener('mouseup', up, { once: true });
+		});
 	}
 
     function initSliders() {
-      document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
     }
 
     function toggleFloodlights(toggle) {
-      const isOn = toggle.dataset.state === 'on';
-      socket.emit('flood_change', { on: !isOn });
+        const isOn = toggle.dataset.state === 'on';
+        socket.emit('flood_change', { on: !isOn });
     }
 
-	// ==================== SOCKET LISTENERS ====================
+    // ==================== ROOFTOP TENT SAFETY ====================
+    function updateRooftopTentControls() {
+        const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
+        if (!tentCard) return;
+        
+        const isClosed = !!currentReeds.rooftop_tent;
+        
+        if (isClosed) {
+            tentCard.classList.add('rooftop-disabled');
+            
+            const wrapper = tentCard.querySelector('.slider-wrapper');
+            if (wrapper) {
+                wrapper.dataset.value = "0";
+                const fill = wrapper.querySelector('.slider-fill');
+                const thumb = wrapper.querySelector('.slider-thumb');
+                const valEl = document.getElementById('val-rooftop_tent');
+                
+                if (fill) fill.style.width = '0%';
+                if (thumb) thumb.style.left = '0%';
+                if (valEl) valEl.textContent = '0%';
+            }
+            
+            const toggle = tentCard.querySelector('.toggle-pill');
+            if (toggle) {
+                toggle.classList.remove('on');
+                toggle.dataset.state = 'off';
+            }
+        } else {
+            tentCard.classList.remove('rooftop-disabled');
+        }
+    }
 
-	socket.on('state_update', (newState) => {
-		currentState = newState;
-		if (newState.kitchen_panel_mode) currentModes.kitchen_panel = newState.kitchen_panel_mode;
-		if (newState.awning_mode) currentModes.awning = newState.awning_mode;
-		updateUIFromState();
-	});
+    // ==================== SOCKET LISTENERS ====================
+    socket.on('state_update', (newState) => {
+        currentState = newState;
+        if (newState.kitchen_panel_mode) currentModes.kitchen_panel = newState.kitchen_panel_mode;
+        if (newState.awning_mode) currentModes.awning = newState.awning_mode;
+        updateUIFromState();
+    });
 
-	socket.on('reed_update', (payload) => {
-		currentReeds = {};
-		const raw = payload.states || {};
-		const forced = payload.forced || {};
-		
-		Object.keys(raw).forEach(name => {
-			currentReeds[name] = (name in forced) ? forced[name] : raw[name];
-		});
-		
-		updateRooftopTentControls();
-	});
+    socket.on('reed_update', (payload) => {
+        currentReeds = {};
+        const raw = payload.states || {};
+        const forced = payload.forced || {};
+        
+        Object.keys(raw).forEach(name => {
+            currentReeds[name] = (name in forced) ? forced[name] : raw[name];
+        });
+        updateRooftopTentControls();
+    });
 
     socket.on('sensor_update', updateSensors);
     socket.on('gps_update', updateGPS);
 
-	// ==================== ROOFTOP TENT SAFETY ====================
-	function updateRooftopTentControls() {
-	  const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
-	  if (!tentCard) return;
-	  
-	  const isClosed = !!currentReeds.rooftop_tent;
-	  
-	  if (isClosed) {
-		tentCard.classList.add('rooftop-disabled');
-		
-		const wrapper = tentCard.querySelector('.slider-wrapper');
-		if (wrapper) {
-		  wrapper.dataset.value = "0";
-		  const fill = wrapper.querySelector('.slider-fill');
-		  const thumb = wrapper.querySelector('.slider-thumb');
-		  const valEl = document.getElementById('val-rooftop_tent');
-		  
-		  if (fill) fill.style.width = '0%';
-		  if (thumb) thumb.style.left = '0%';
-		  if (valEl) valEl.textContent = '0%';
-		}
-		
-		const toggle = tentCard.querySelector('.toggle-pill');
-		if (toggle) {
-		  toggle.classList.remove('on');
-		  toggle.dataset.state = 'off';
-		}
-	  } else {
-		tentCard.classList.remove('rooftop-disabled');
-	  }
-	}
-
     // ==================== INIT ====================
     window.onload = function() {
         loadCurrentTheme();
+		loadCurrentDarkMode();
 
         updateClock();
         setInterval(updateClock, 10000);
@@ -926,83 +1010,6 @@
 
         console.log("🚀 PCCS Frontend Ready");
     };
-	
-	// ==================== THEME SYSTEM ====================
-
-	function applyTheme(themeName) {
-	  console.log('🎨 Applying theme:', themeName);
-	  
-	  const overrideLink = document.getElementById('theme-override');
-	  if (!overrideLink) {
-		console.warn('theme-override link not found');
-		return;
-	  }
-
-	  const timestamp = Date.now();
-	  if (themeName === 'base' || themeName === 'neumorphism') {
-		overrideLink.href = '';
-	  } else {
-		overrideLink.href = `/static/css/themes/${themeName}.css?v=${timestamp}`;
-	  }
-
-	  localStorage.setItem('pccs-active-theme', themeName);
-	}
-
-	async function loadCurrentTheme() {
-	  try {
-		const res = await fetch('/api/current-theme?' + Date.now()); // prevent cache
-		if (!res.ok) throw new Error('Failed');
-		const data = await res.json();
-		applyTheme(data.theme);
-	  } catch (e) {
-		console.warn('Could not fetch theme from server, using localStorage');
-		const saved = localStorage.getItem('pccs-active-theme') || 'stealth';
-		applyTheme(saved);
-	  }
-	}
-
-	socket.on('global_theme_update', (data) => {
-	  if (data && data.theme) {
-		applyTheme(data.theme);
-	  }
-	});
-
-	// ==================== LIGHT/DARK MODE ====================
-	function applyGlobalDarkMode() {
-	  const saved = localStorage.getItem('pccs-dark-mode');
-	  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-	  const isDark = saved === null ? prefersDark : saved === 'dark';
-
-	  const html = document.documentElement;
-
-	  if (isDark) {
-		html.setAttribute('data-theme', 'dark');
-		html.classList.remove('light');
-		html.classList.add('dark');
-	  } else {
-		html.setAttribute('data-theme', 'light');
-		html.classList.remove('dark');
-		html.classList.add('light');
-	  }
-
-	  console.log('🌗 Light/Dark mode applied:', isDark ? 'Dark' : 'Light');
-	}
-
-	// Listen for changes from Diagnostics page
-	window.addEventListener('storage', (e) => {
-	  if (e.key === 'pccs-active-theme' && e.newValue) {
-		applyTheme(e.newValue);
-	  }
-	  if (e.key === 'pccs-dark-mode') {
-		applyGlobalDarkMode();
-	  }
-	});
-
-	// Initial load
-	window.addEventListener('load', () => {
-	  applyGlobalDarkMode();        // ← This was missing
-	});
-	
 </script>
 </body>
 </html>

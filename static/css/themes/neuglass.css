@@ -1,0 +1,148 @@
+/* Neumorphism with Glass */
+
+:root {
+  --accent-color: #22d3ee;
+  --accent-hover: #67e8f9;
+  --accent-light: #a5f3fc;
+  --accent-glow: #67e8f9;
+
+  --background: #0a0a0a;
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --control-bg: rgba(255, 255, 255, 0.08);
+  --slider-bg: rgba(255, 255, 255, 0.09);
+
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+
+  --shadow-dark: rgba(0, 0, 0, 0.5);
+  --shadow-light: rgba(255, 255, 255, 0.08);
+  --inner-shadow-light: rgba(255, 255, 255, 0.12);
+  --inner-shadow-dark: rgba(0, 0, 0, 0.4);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-on-accent: #0f172a;
+
+  --border-color: rgba(255, 255, 255, 0.1);
+
+  --toggle-bg-off: rgba(51, 65, 85, 0.6);
+  --toggle-handle: #e2e8f0;
+  --toggle-checked-color: #22d3ee;
+}
+
+/* Light mode fallback */
+html.light, .light {
+  --background: #f8fafc;
+  --card-bg: rgba(255, 255, 255, 0.75);
+  --control-bg: rgba(241, 245, 249, 0.85);
+  --slider-bg: rgba(226, 232, 240, 0.9);
+  --glass-border: rgba(148, 163, 184, 0.3);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --accent-color: #0284c8;
+}
+
+/* ====================== GLASS CARDS ====================== */
+.neumorph,
+.tile,
+.slider-card {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 
+    0 8px 32px -8px var(--shadow-dark),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.3) !important;
+}
+
+.neumorph::before,
+.tile::before,
+.slider-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(145deg, 
+    rgba(255,255,255,0.07) 0%, 
+    transparent 40%, 
+    transparent 60%, 
+    rgba(255,255,255,0.04) 100%);
+  pointer-events: none;
+}
+
+/* ====================== SCENE BUTTONS ====================== */
+.scene-btn {
+  background: var(--control-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 8px 25px -6px var(--shadow-dark) !important;
+}
+
+.scene-btn:hover {
+  box-shadow: 0 12px 30px -8px var(--shadow-dark) !important;
+  border-color: rgba(103, 232, 249, 0.3) !important;
+}
+
+.scene-btn.active {
+  background: linear-gradient(90deg, var(--accent-color), #67e8f9) !important;
+  box-shadow: 0 0 25px rgba(103, 232, 249, 0.5) !important;
+}
+
+/* ====================== SLIDERS ====================== */
+.slider-track {
+  background: var(--slider-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.slider-fill {
+  box-shadow: 0 0 20px rgba(103, 232, 249, 0.6),
+              inset 0 2px 4px rgba(255,255,255,0.4) !important;
+}
+
+.slider-thumb {
+  background: rgba(255,255,255,0.95) !important;
+  box-shadow: 
+    0 10px 25px -4px var(--shadow-dark),
+    inset 0 3px 6px rgba(255,255,255,0.9),
+    inset 0 -3px 6px rgba(0,0,0,0.2) !important;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: var(--toggle-bg-off) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, var(--toggle-checked-color), #67e8f9) !important;
+  box-shadow: 0 0 20px rgba(103, 232, 249, 0.5) !important;
+}
+
+/* ====================== BACKGROUND ====================== */
+body {
+  background: var(--background) !important;
+}
+
+body::before {
+  background: radial-gradient(circle at 40% 20%, rgba(34, 211, 238, 0.08) 0%, transparent 50%),
+              radial-gradient(circle at 80% 70%, rgba(103, 232, 249, 0.06) 0%, transparent 60%) !important;
+}
+
+body::after {
+  background: rgba(15, 23, 42, 0.4) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* Extra polish */
+.tile:hover,
+.slider-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6) !important;
+}

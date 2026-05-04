@@ -1,5 +1,20 @@
 /* Neumorphism */
 
+/* Allow vertical scrolling while still letting horizontal slider drag work */
+.slider-wrapper {
+  touch-action: pan-y pinch-zoom;   /* Allow vertical scroll, block nothing else */
+  user-select: none;
+}
+
+.slider-thumb {
+  touch-action: none;   /* Only the thumb itself blocks scrolling */
+}
+
+/* Optional: make the whole card a bit less sensitive */
+.slider-card {
+  touch-action: pan-y pinch-zoom;
+}
+
 :root {
   /* === Core Colors === */
   --accent-color: #4FC3F7;
@@ -322,7 +337,7 @@ body::before {
   margin: 0 auto;
   cursor: grab;
   user-select: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .slider-wrapper.dragging .slider-thumb {
@@ -377,6 +392,7 @@ body::before {
   font-size: 32px;
   color: var(--accent-color);
   z-index: 30;
+  touch-action: none;  
   transition: all 0.25s ease;
   will-change: left;
   box-shadow: 

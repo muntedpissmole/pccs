@@ -45,6 +45,9 @@ class ReedManager:
 
         self.reed_ramp_time_ms = 2000
 
+        self.ambient_locked = False
+        self.current_ambient_phase = None
+
         self.on_reed_change: Dict[str, Callable] = {}
 
         # Force states
@@ -119,51 +122,72 @@ class ReedManager:
             if isinstance(brightness, tuple):
                 brightness = brightness[0]
             return brightness, "white"
+            
+    def _set_ambient_light(self, light_name: str, brightness: int, mode: str = "white", source: str = "ambient"):
+        ramp_ms = self.reed_ramp_time_ms
+
+        if light_name in self.RGB_LIGHTS and self.set_rgb_bug_light:
+            self.set_rgb_bug_light(light_name, brightness, mode)
+        elif light_name in self.LIGHT_MAP and self.send_command:
+            pwm = int(brightness * 2.55)
+            self.send_command(f"RAMP {self.LIGHT_MAP[light_name]} {pwm} {ramp_ms}")
+
+        if self.ramp_and_broadcast:
+            self.ramp_and_broadcast(
+                light_name, brightness, ramp_ms,
+                mode if light_name in self.RGB_LIGHTS else None,
+                source=source
+            )
 
     # ====================== AMBIENT LIGHTS (accent + awning) ======================
     def update_ambient_lights(self):
-        """Auto-control accent (white) + awning (RGB)"""
         if not hasattr(self, 'phase_manager') or self.phase_manager is None:
             logger.debug("🌟 update_ambient_lights: phase_manager not ready - skipping")
             return
 
-        phase = self.phase_manager.get_phase()
+        phase = self.phase_manager.get_phase().lower()
         any_open = any(not self.get_effective_state(name)
                        for name in self.gpio.reed_states)
 
-        logger.debug(f"🌟 Ambient update → phase={phase} | any_open={any_open}")
-        ...
+        if self.current_ambient_phase != phase:
+            self.ambient_locked = False
+            self.current_ambient_phase = phase
+            logger.info(f"🌟 Ambient: phase changed to {phase} - lock reset")
 
-        for light_name in ("accent", "awning"):
-            if any_open:
-                settings = self.get_light_settings(phase, light_name)
-                
-                if settings is None:          # ← new handling
-                    logger.debug(f"   → {light_name} skipped (day phase, no day setting)")
-                    continue
-                    
+        logger.debug(f"🌟 Ambient update → phase={phase} | any_open={any_open} | locked={self.ambient_locked}")
+
+        # === LOCKOUT LOGIC ===
+        if phase in ("evening", "night"):
+            if not any_open:
+                if self.ambient_locked:
+                    logger.info("🌟 All reeds closed → ambient unlocked + off")
+                self.ambient_locked = False
+                brightness = 0
+                mode = "white"
+            elif self.ambient_locked:
+                logger.debug("🌟 Ambient locked – skipping update (manual override preserved)")
+                return
+            else:
+                settings = self.get_light_settings(phase, "accent")  # accent/awning use same settings
+                if settings is None:
+                    logger.debug("   → accent/awning skipped (no setting for this phase)")
+                    return
                 brightness, mode = settings
-                ramp_ms = self.reed_ramp_time_ms
+                self.ambient_locked = True
+                logger.info(f"🌟 Evening/night + reeds open → applied presets and LOCKED ambient")
+        else:
+            if any_open:
+                settings = self.get_light_settings(phase, "accent")
+                if settings is None:
+                    logger.debug("   → accent/awning skipped (day phase, no day setting)")
+                    return
+                brightness, mode = settings
             else:
                 brightness = 0
                 mode = "white"
-                ramp_ms = SCENE_RAMP_TIME
 
-            logger.debug(f"   → {light_name} → {brightness}% {mode} ({ramp_ms}ms)")
-
-            if light_name in self.RGB_LIGHTS and self.set_rgb_bug_light:
-                self.set_rgb_bug_light(light_name, brightness, mode)
-            elif light_name in self.LIGHT_MAP and self.send_command:
-                pwm = int(brightness * 2.55)
-                self.send_command(f"RAMP {self.LIGHT_MAP[light_name]} {pwm} {ramp_ms}")
-            ...
-
-            if self.ramp_and_broadcast:
-                self.ramp_and_broadcast(
-                    light_name, brightness, ramp_ms,
-                    mode if light_name in self.RGB_LIGHTS else None,
-                    source="ambient"
-                )
+        for light_name in ("accent", "awning"):
+            self._set_ambient_light(light_name, brightness, mode, source="ambient")
 
     # ====================== PHASE CHANGE HANDLER ======================
     def reapply_all_open_lights(self, phase_manager):

@@ -54,6 +54,30 @@ def save_active_theme(theme_name: str):
     except Exception as e:
         logger.error(f"Failed to save theme: {e}")
 
+
+# ====================== GLOBAL DARK/LIGHT MODE ======================
+DARK_MODE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'active_dark_mode.json')
+
+def load_active_dark_mode():
+    try:
+        os.makedirs(os.path.dirname(DARK_MODE_CONFIG_PATH), exist_ok=True)
+        if os.path.exists(DARK_MODE_CONFIG_PATH):
+            with open(DARK_MODE_CONFIG_PATH, 'r') as f:
+                data = json.load(f)
+                return data.get('mode', 'dark')
+    except Exception as e:
+        logger.error(f"Failed to load dark mode config: {e}")
+    return 'dark'
+
+def save_active_dark_mode(mode: str):
+    try:
+        os.makedirs(os.path.dirname(DARK_MODE_CONFIG_PATH), exist_ok=True)
+        with open(DARK_MODE_CONFIG_PATH, 'w') as f:
+            json.dump({'mode': mode}, f, indent=2)
+        logger.info(f"💾 Saved global dark mode: {mode}")
+    except Exception as e:
+        logger.error(f"Failed to save dark mode: {e}")
+
 # ====================== RAMP CONTROL ======================
 active_ramps: dict[str, threading.Timer] = {}
 active_warnings: set[str] = set()
@@ -72,7 +96,8 @@ app.config['SECRET_KEY'] = 'pccs-secret'
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 current_global_theme = load_active_theme()
-logger.info(f"🎨 Loaded theme: {current_global_theme}")
+current_global_dark_mode = load_active_dark_mode()
+logger.info(f"🎨 Loaded theme: {current_global_theme} | 🌗 Theme mode defaulting to: {current_global_dark_mode}")
 
 # ====================== REAL-TIME LOG HANDLER ======================
 class SocketIOHandler(logging.Handler):
@@ -511,7 +536,8 @@ def handle_connect():
     else:
         logger.debug("📤 Sending cached state to new client")
     
-    emit('state_update', state)
+    emit('state_update', state.copy())
+    emit('global_dark_mode_update', {'mode': current_global_dark_mode})
     
     if gps:
         emit('gps_update', gps.get_state())
@@ -520,11 +546,18 @@ def handle_connect():
         'states': reed_manager.get_states(),
         'forced': reed_manager.get_forced_states()
     })
-    emit('phase_update', {
+    phase_data = {
         'phase': phase_manager.get_phase() if phase_manager else 'Day',
         'forced': phase_manager.is_forced() if phase_manager else False,
-        **(phase_manager.get_phase_times() if phase_manager else {})
-    })
+    }
+    
+    if phase_manager:
+        try:
+            phase_data.update(phase_manager.get_phase_times())
+        except Exception as e:
+            logger.warning(f"Failed to get phase times: {e}")
+    
+    emit('phase_update', phase_data)
 
 
 @socketio.on('flood_change')
@@ -597,7 +630,10 @@ def gps_json():
     if phase_manager:
         data['phase'] = phase_manager.get_phase()
         data['forced'] = phase_manager.is_forced()
-        data.update(phase_manager.get_phase_times())
+        try:
+            data.update(phase_manager.get_phase_times() or {})
+        except Exception as e:
+            logger.warning(f"Failed to get phase times for gps_json: {e}")
     
     if gps:
         data['fallback_suburb'] = gps.FALLBACK_NAME
@@ -658,34 +694,36 @@ def _process_css_file(filepath: str, themes_list: list, seen: set):
         'name': display_name
     }) 
     
-@socketio.on('set_global_theme')
-def handle_set_global_theme(data):
-    global current_global_theme
-    theme = data.get('theme')
-    
-    if not theme:
+@socketio.on('set_global_dark_mode')
+def handle_set_global_dark_mode(data):
+    global current_global_dark_mode
+    mode = data.get('mode')  # 'dark' or 'light'
+
+    if mode not in ('dark', 'light'):
         return
 
-    if getattr(handle_set_global_theme, '_last_theme', None) == theme:
-        if time.time() - getattr(handle_set_global_theme, '_last_time', 0) < 1.0:
-            logger.debug(f"Duplicate theme event ignored: {theme}")
+    # debounce
+    if getattr(handle_set_global_dark_mode, '_last_mode', None) == mode:
+        if time.time() - getattr(handle_set_global_dark_mode, '_last_time', 0) < 1.0:
             return
-    
-    handle_set_global_theme._last_theme = theme
-    handle_set_global_theme._last_time = time.time()
 
-    current_global_theme = theme
-    save_active_theme(theme)
-    
-    logger.info(f"🌐 Theme changed to: {theme}")
-    emit('global_theme_update', 
-                  {'theme': theme}, 
-                  broadcast=True, 
-                  include_self=True)
+    handle_set_global_dark_mode._last_mode = mode
+    handle_set_global_dark_mode._last_time = time.time()
+
+    current_global_dark_mode = mode
+    save_active_dark_mode(mode)
+
+    logger.info(f"🌗 Theme mode changed to: {mode}")
+    emit('global_dark_mode_update', {'mode': mode}, broadcast=True, include_self=True)
     
 @app.route('/api/current-theme')
 def get_current_theme():
     return {'theme': current_global_theme}
+
+
+@app.route('/api/current-dark-mode')
+def get_current_dark_mode():
+    return {'mode': current_global_dark_mode}
 
 
 # ====================== CLEANUP ======================
