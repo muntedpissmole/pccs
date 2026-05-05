@@ -32,7 +32,7 @@ class PhaseManager:
         self.evening_offset_minutes = 45
         self.night_start_hour = 21
 
-        # Auto Dark/Light Mode - tied to existing phase times
+        # Dark/Light Mode - PhaseManager is now single source of truth
         self.current_dark_mode = 'dark'
 
         # Timeouts
@@ -57,11 +57,8 @@ class PhaseManager:
         self.running = True
 
         self._calculate_and_cache_times()
-
         self._update_phase(use_fallback=False)
-
-        # Force initial dark mode evaluation from real phase (removes race condition)
-        self._auto_update_dark_mode()
+        self._auto_update_dark_mode()   # Initial sync
 
         self.thread = threading.Thread(target=self._phase_loop, daemon=True, name="PhaseLoop")
         self.thread.start()
@@ -74,7 +71,6 @@ class PhaseManager:
 
     # ====================== MAIN LOOP ======================
     def _phase_loop(self):
-        """Background thread that updates phase every 5 seconds."""
         while self.running:
             try:
                 has_real_fix = self._has_valid_gps()
@@ -100,7 +96,6 @@ class PhaseManager:
 
     # ====================== CORE LOGIC ======================
     def _update_phase(self, use_fallback: bool = False):
-        """Calculate and apply new phase if changed."""
         if self.forced_phase is not None:
             new_phase = self.forced_phase
         else:
@@ -118,25 +113,32 @@ class PhaseManager:
             self._broadcast_phase_update()
             self._auto_update_dark_mode()
 
-    def _calculate_phase(self, use_fallback: bool) -> str:
-        """Calculate current phase from sun times."""
-        try:
-            tz = self.fallback_tz
+    def _get_sun_times(self, use_fallback: bool):
+        """Single source of truth for sunrise/sunset calculation."""
+        tz = self.fallback_tz
+        now = datetime.datetime.now(tz)
+
+        if not use_fallback and self._has_valid_gps():
+            state = self.gps.get_state()
+            tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
             now = datetime.datetime.now(tz)
 
-            if not use_fallback and self._has_valid_gps():
-                state = self.gps.get_state()
-                tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
-                now = datetime.datetime.now(tz)
+            sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
+            sunset = self._parse_sun_time(state.get("sunset"), tz, now)
+            source = "GPS"
+        else:
+            sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
+            sunset = self.fallback_sun.get_local_sunset_time(now, tz)
+            source = "FALLBACK"
 
-                sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
-                sunset = self._parse_sun_time(state.get("sunset"), tz, now)
-            else:
-                sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
-                sunset = self.fallback_sun.get_local_sunset_time(now, tz)
+        sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
+        sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
 
-            sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
-            sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
+        return sunrise, sunset, source, tz, now
+
+    def _calculate_phase(self, use_fallback: bool) -> str:
+        try:
+            sunrise, sunset, _, _, now = self._get_sun_times(use_fallback)
 
             day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
             evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
@@ -155,14 +157,13 @@ class PhaseManager:
             return "Day"
 
     def _auto_update_dark_mode(self):
-        """Update global dark/light mode based on current phase."""
+        """Update dark/light mode based on current phase. PhaseManager is source of truth."""
         if not self.socketio:
             return
 
         try:
             phase = self.get_phase().lower()
             if phase not in ("day", "evening", "night"):
-                logger.debug(f"🌗 Skipping dark mode auto-update - phase not ready ({phase})")
                 return
 
             desired_mode = 'light' if phase == 'day' else 'dark'
@@ -171,23 +172,13 @@ class PhaseManager:
                 self.current_dark_mode = desired_mode
                 logger.info(f"🌗 Auto dark mode → {desired_mode} (phase = {phase})")
 
-                self.socketio.emit('set_global_dark_mode', {
-                    'mode': desired_mode,
-                    'auto': True
-                })
-
-                # Optional: persist to disk so UI reloads have the correct value
-                try:
-                    from app import save_active_dark_mode
-                    save_active_dark_mode(desired_mode)
-                except Exception:
-                    pass  # Not critical
+                self.socketio.emit('global_dark_mode_update', {'mode': desired_mode})
 
         except Exception as e:
             logger.debug(f"Auto dark mode check failed: {e}")
 
+    # ====================== HELPERS ======================
     def _has_valid_gps(self) -> bool:
-        """Check if we have usable GPS sun data."""
         state = self.gps.get_state()
         return (
             state.get("fix_quality", 0) >= 1 and
@@ -196,7 +187,6 @@ class PhaseManager:
         )
 
     def _parse_sun_time(self, time_str: str, tz, now):
-        """Safely parse sunrise/sunset strings."""
         if not time_str:
             raise ValueError("No sun time available")
         for fmt in ("%I:%M %p", "%-I:%M %p", "%H:%M"):
@@ -208,34 +198,11 @@ class PhaseManager:
         raise ValueError(f"Could not parse sun time: {time_str}")
 
     def _calculate_and_cache_times(self):
-        """Calculate and cache phase transition times."""
         start_time = time.time()
         logger.debug("🌗 [CACHE] Starting phase times calculation")
 
         try:
-            tz = self.fallback_tz
-            now = datetime.datetime.now(tz)
-
-            if self._has_valid_gps():
-                try:
-                    state = self.gps.get_state()
-                    tz = zoneinfo.ZoneInfo(state.get("timezone", "Australia/Melbourne"))
-                    now = datetime.datetime.now(tz)
-
-                    sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
-                    sunset = self._parse_sun_time(state.get("sunset"), tz, now)
-                    source = "GPS"
-                except Exception:
-                    sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
-                    sunset = self.fallback_sun.get_local_sunset_time(now, tz)
-                    source = "FALLBACK"
-            else:
-                sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
-                sunset = self.fallback_sun.get_local_sunset_time(now, tz)
-                source = "FALLBACK"
-
-            sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
-            sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
+            sunrise, sunset, source, _, now = self._get_sun_times(use_fallback=False)
 
             day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
             evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
@@ -256,16 +223,12 @@ class PhaseManager:
 
         except Exception as e:
             logger.error(f"🌗 [CACHE] FAILED → setting em-dashes. Error: {e}", exc_info=True)
-            self._cached_phase_times = {
-                "day_start": "—",
-                "evening_start": "—",
-                "night_start": "—",
-            }
+            self._cached_phase_times = {"day_start": "—", "evening_start": "—", "night_start": "—"}
 
     # ====================== PUBLIC API ======================
     def get_phase(self) -> str:
         if self.forced_phase is not None:
-            return str(self.forced_phase).strip().Title()
+            return str(self.forced_phase).strip().title()
         return self.current_phase or "Day"
 
     def is_forced(self) -> bool:
@@ -273,6 +236,10 @@ class PhaseManager:
 
     def get_phase_ramp_time(self):
         return self.phase_ramp_time_ms
+
+    def get_current_dark_mode(self) -> str:
+        """Single source of truth for UI dark/light mode."""
+        return self.current_dark_mode
 
     def force_phase(self, phase: str):
         if self.force_timer:
@@ -284,7 +251,6 @@ class PhaseManager:
         self._update_phase()
 
     def clear_force(self):
-        """Clear any forced phase."""
         old = self.forced_phase
         self.forced_phase = None
         if self.force_timer:
@@ -299,7 +265,6 @@ class PhaseManager:
         self._update_phase()
 
     def get_phase_times(self) -> dict:
-        """Always return valid phase transition times."""
         if not self._cached_phase_times or len(self._cached_phase_times) < 3:
             self._calculate_and_cache_times()
         return self._cached_phase_times.copy()

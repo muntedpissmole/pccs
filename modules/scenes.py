@@ -1,6 +1,5 @@
 # modules/scenes.py
-
-from typing import Dict
+from typing import Dict, Any
 
 # ====================== SCENE CONFIGURATION ======================
 SCENE_RAMP_TIME = 4000
@@ -41,6 +40,13 @@ def get_scene_config(scene_name: str) -> dict | None:
     return SCENES.get(key)
 
 
+def _clamp_brightness(value: Any) -> int:
+    try:
+        return max(0, min(100, int(value)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def activate_scene(
     scene_name: str,
     ramp_and_broadcast,
@@ -79,20 +85,22 @@ def activate_scene(
     # ====================== NORMAL SCENE ======================
     for light_name, value in config["lights"].items():
         if isinstance(value, dict):
-            target = max(0, min(100, int(value.get("brightness", 0))))
+            target = _clamp_brightness(value.get("brightness", 0))
             mode = value.get("mode", "white")
         else:
-            target = max(0, min(100, int(value)))
+            target = _clamp_brightness(value)
             mode = "white"
 
+        # Prefer reed trigger (respects interlocks/safety)
         if reed_manager and light_name in reed_manager.on_reed_change:
             trigger = reed_manager.on_reed_change[light_name]
             try:
                 trigger(is_closed=False, desired_brightness=target, desired_mode=mode)
             except TypeError:
+                # Fallback for older trigger signatures
                 trigger(False)
         else:
-            # Direct apply for lights without reed triggers (accent, etc.)
+            # Direct control for lights without reed triggers (accent, ensuite, etc.)
             if light_name in RGB_LIGHTS:
                 set_rgb_bug_light(light_name, target, mode)
                 state[f"{light_name}_mode"] = mode
@@ -100,6 +108,10 @@ def activate_scene(
                 pwm = int(target * 2.55)
                 send_command(f"RAMP {LIGHT_MAP[light_name]} {pwm} {ramp_ms}")
 
-            ramp_and_broadcast(light_name, target, ramp_ms, mode if light_name in RGB_LIGHTS else None, source="scene")
+            ramp_and_broadcast(
+                light_name, target, ramp_ms,
+                mode if light_name in RGB_LIGHTS else None,
+                source="scene"
+            )
 
     return True

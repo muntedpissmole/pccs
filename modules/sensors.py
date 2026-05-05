@@ -5,7 +5,7 @@ import logging
 import glob
 import os
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("pccs")
 logger.propagate = True
 
 
@@ -178,7 +178,7 @@ class SensorManager:
         return max(0.0, round(current, 1))
 
     def update_sensors(self):
-        logger.info("🔄 Updating sensors...")
+        logger.debug("🔄 Updating sensors...")
         
         adc_battery = self._read_analog(0)
         adc_water   = self._read_analog(1)

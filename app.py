@@ -17,70 +17,54 @@ def log_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = log_exception
 
-# ====================== LOGGING SETUP ======================
+# ====================== LOGGING ======================
 from modules.logger import setup_logging
 logger = setup_logging(logging.INFO)
+
 if hasattr(sys, '_pccs_already_started'):
     logger.warning("⚠️ Module reloaded - skipping duplicate initialization")
 else:
     sys._pccs_already_started = True
+
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 logging.getLogger("engineio").setLevel(logging.WARNING)
 logging.getLogger("socketio").setLevel(logging.WARNING)
 
-# ====================== USER CONFIG ======================
-UI_RAMP_TIME_MS = 1000      # Ramp time for manual slider / UI changes (ms)
+# ====================== CONFIG ======================
+class ConfigManager:
+    def __init__(self, filename: str, default: dict):
+        self.path = os.path.join(os.path.dirname(__file__), 'config', filename)
+        self.default = default
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
 
-# ====================== GLOBAL THEME ======================
-THEME_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'active_theme.json')
+    def load(self):
+        try:
+            if os.path.exists(self.path):
+                with open(self.path, 'r') as f:
+                    data = json.load(f)
+                    return {**self.default, **data}
+        except Exception as e:
+            logger.error(f"Failed to load config {self.path}: {e}")
+        return self.default.copy()
 
-def load_active_theme():
-    try:
-        os.makedirs(os.path.dirname(THEME_CONFIG_PATH), exist_ok=True)
-        if os.path.exists(THEME_CONFIG_PATH):
-            with open(THEME_CONFIG_PATH, 'r') as f:
-                data = json.load(f)
-                return data.get('theme', 'stealth')
-    except Exception as e:
-        logger.error(f"Failed to load theme config: {e}")
-    return 'stealth'
-
-def save_active_theme(theme_name: str):
-    try:
-        os.makedirs(os.path.dirname(THEME_CONFIG_PATH), exist_ok=True)
-        with open(THEME_CONFIG_PATH, 'w') as f:
-            json.dump({'theme': theme_name}, f, indent=2)
-        logger.info(f"💾 Saved global theme: {theme_name}")
-    except Exception as e:
-        logger.error(f"Failed to save theme: {e}")
+    def save(self, data: dict):
+        try:
+            with open(self.path, 'w') as f:
+                json.dump(data, f, indent=2)
+            logger.info(f"💾 Saved config: {self.path}")
+        except Exception as e:
+            logger.error(f"Failed to save config: {e}")
 
 
-# ====================== GLOBAL DARK/LIGHT MODE ======================
-DARK_MODE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'active_dark_mode.json')
+theme_config = ConfigManager('active_theme.json', {'theme': 'stealth'})
+dark_mode_config = ConfigManager('active_dark_mode.json', {'mode': 'dark'})
 
-def load_active_dark_mode():
-    try:
-        os.makedirs(os.path.dirname(DARK_MODE_CONFIG_PATH), exist_ok=True)
-        if os.path.exists(DARK_MODE_CONFIG_PATH):
-            with open(DARK_MODE_CONFIG_PATH, 'r') as f:
-                data = json.load(f)
-                return data.get('mode', 'dark')
-    except Exception as e:
-        logger.error(f"Failed to load dark mode config: {e}")
-    return 'dark'
+current_global_theme = theme_config.load()['theme']
+logger.info(f"🎨 Loaded theme: {current_global_theme}")
 
-def save_active_dark_mode(mode: str):
-    try:
-        os.makedirs(os.path.dirname(DARK_MODE_CONFIG_PATH), exist_ok=True)
-        with open(DARK_MODE_CONFIG_PATH, 'w') as f:
-            json.dump({'mode': mode}, f, indent=2)
-        logger.info(f"💾 Saved global dark mode: {mode}")
-    except Exception as e:
-        logger.error(f"Failed to save dark mode: {e}")
-
-# ====================== RAMP CONTROL ======================
-active_ramps: dict[str, threading.Timer] = {}
-active_warnings: set[str] = set()
+# ====================== CONSTANTS & GLOBALS ======================
+UI_RAMP_TIME_MS = 1000
+first_state_read_done = False
 
 # ====================== MODULES ======================
 from modules.gps import GPSModule
@@ -95,105 +79,32 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pccs-secret'
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
-current_global_theme = load_active_theme()
-current_global_dark_mode = load_active_dark_mode()
-logger.info(f"🎨 Loaded theme: {current_global_theme} | 🌗 Theme mode defaulting to: {current_global_dark_mode}")
-
-# ====================== REAL-TIME LOG HANDLER ======================
-class SocketIOHandler(logging.Handler):
-    def emit(self, record):
-        try:
-            log_entry = self.format(record)
-            socketio.emit('new_log', {
-                'timestamp': time.strftime('%H:%M:%S'),
-                'level': record.levelname,
-                'message': log_entry,
-                'full': f"[{time.strftime('%H:%M:%S')}] {record.levelname:8} {record.getMessage()}"
-            }, broadcast=True)
-        except Exception:
-            pass
-
-for handler in logger.handlers[:]:
-    if isinstance(handler, SocketIOHandler):
-        logger.removeHandler(handler)
-
-socket_handler = SocketIOHandler()
-socket_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(message)s')
-socket_handler.setFormatter(formatter)
-
-logger.addHandler(socket_handler)
-logger.debug("📡 SocketIO log handler attached")
-
-# ====================== STATE SYNC CONTROL ======================
-first_state_read_done = False   # Ensures we only do full Arduino read on first connection
 
 # ====================== ARDUINO ======================
 arduino = ArduinoManager()
 LIGHT_MAP = arduino.LIGHT_MAP
-RGB_BUG_LIGHTS = arduino.RGB_BUG_LIGHTS
 RGB_LIGHTS = arduino.RGB_LIGHTS
-__all__ = ['RGB_LIGHTS', 'LIGHT_MAP', 'set_rgb_bug_light', 'send_command', 'ramp_and_broadcast']
+RGB_BUG_LIGHTS = arduino.RGB_BUG_LIGHTS
 
-# Current state cache
 state = {name: 0 for name in list(LIGHT_MAP.keys()) + list(RGB_BUG_LIGHTS.keys())}
-state["floodlights"] = False
-state["kitchen_panel_mode"] = "white"
-state["awning_mode"] = "white"
+state.update({"floodlights": False, "kitchen_panel_mode": "white", "awning_mode": "white"})
+arduino.state = state
 
-arduino.state = state  # Link shared state
-
-# GPIO Configuration
+# ====================== GPIO ======================
 GPIO_DEVICES = {
-    # Floodlights - Digital Output
-    'floodlights': {
-        'type': 'output',
-        'pin': 17,
-        'active_high': False,
-        'initial': False
-    },
-    # Reed Switches - Digital Inputs
-    'kitchen_panel':  {'type': 'input', 'pin': 23, 'pull_up': True, 'bounce_time': 0.5},
-    'kitchen_bench':  {'type': 'input', 'pin': 12, 'pull_up': True, 'bounce_time': 0.5},
-    'storage_panel':  {'type': 'input', 'pin': 24, 'pull_up': True, 'bounce_time': 0.5},
-    'rear_drawer':    {'type': 'input', 'pin': 25, 'pull_up': True, 'bounce_time': 0.5},
-    'rooftop_tent':   {'type': 'input', 'pin': 26, 'pull_up': True, 'bounce_time': 0.5},
+    'floodlights': {'type': 'output', 'pin': 17, 'active_high': False, 'initial': False},
+    'kitchen_panel': {'type': 'input', 'pin': 23, 'pull_up': True, 'bounce_time': 0.5},
+    'kitchen_bench': {'type': 'input', 'pin': 12, 'pull_up': True, 'bounce_time': 0.5},
+    'storage_panel': {'type': 'input', 'pin': 24, 'pull_up': True, 'bounce_time': 0.5},
+    'rear_drawer': {'type': 'input', 'pin': 25, 'pull_up': True, 'bounce_time': 0.5},
+    'rooftop_tent': {'type': 'input', 'pin': 26, 'pull_up': True, 'bounce_time': 0.5},
 }
 
-# ====================== ARDUINO WRAPPERS (unchanged interface) ======================
-def send_command(cmd: str):
-    return arduino.send_command(cmd)
+# ====================== RAMP & SAFETY ======================
+active_ramps: dict[str, threading.Timer] = {}
+active_warnings: set[str] = set()
 
-def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white'):
-    return arduino.set_rgb_bug_light(name, brightness, mode)
-
-def read_all_states():
-    arduino.read_all_states()
-    socketio.emit('state_update', state.copy())
-    logger.debug(f"Final synced state: {state}")
-
-# ====================== LIGHT CONTROL ======================
-def set_floodlights(on: bool):
-    global state
-    state["floodlights"] = on
-    device = gpio_manager.get_device('floodlights')
-    if device:
-        try:
-            if on:
-                device.on()
-            else:
-                device.off()
-            return True
-        except Exception as e:
-            logger.error(f"⚠️ Floodlights error: {e}")
-            return False
-    else:
-        logger.error("⚠️ Floodlights device not initialized")
-        return False
-
-# ====================== SMOOTH RAMP BROADCAST (OPTIMISTIC) ======================
 def cancel_ramp(name: str):
-    """Cancel any active ramp for a light"""
     if name in active_ramps:
         try:
             active_ramps[name].cancel()
@@ -201,49 +112,43 @@ def cancel_ramp(name: str):
             pass
         active_ramps.pop(name, None)
 
+
+def apply_safety_constraints(name: str, target: int, source: str | None = None) -> int:
+    """Centralised safety checks (rooftop tent interlock etc.)"""
+    if name == 'rooftop_tent' and target > 0:
+        effective = reed_manager.get_effective_state('rooftop_tent') if 'reed_manager' in globals() else None
+        physical_closed = (reed_manager.gpio.reed_states.get('rooftop_tent', True)
+                          if 'reed_manager' in globals() and hasattr(reed_manager, 'gpio') else True)
+
+        if effective is True:
+            logger.warning(f"🔥 rooftop_tent cannot turn on while closed (requested {target}%)")
+            return 0
+        elif effective is False and physical_closed and source == "user interface":
+            warning_key = f"{name}_circuit_warning"
+            if warning_key not in active_warnings:
+                active_warnings.add(warning_key)
+                logger.warning("🔥 rooftop_tent light turned on with physical reed closed - Ensure the lighting circuit is off")
+                threading.Timer(30.0, lambda k=warning_key: active_warnings.discard(k)).start()
+    return target
+
+
 def ramp_and_broadcast(name: str, target: int, duration_ms: int, mode: str | None = None, source: str | None = None):
     if name not in state:
         return
 
-    # === Rooftop tent safety check ===
-    if name == 'rooftop_tent' and target > 0:
-        effective = reed_manager.get_effective_state('rooftop_tent') if reed_manager else None
-        physical_closed = (reed_manager.gpio.reed_states.get('rooftop_tent', True)
-                          if reed_manager and hasattr(reed_manager, 'gpio') else True)
-
-        if effective is True:
-            logger.warning(f"🔥 rooftop_tent cannot turn on while closed (requested {target}%)")
-            target = 0
-
-        elif effective is False and physical_closed:
-            if source == "user interface":
-                warning_key = f"{name}_circuit_warning"
-                if warning_key not in active_warnings:
-                    active_warnings.add(warning_key)
-                    logger.warning(
-                        f"🔥 rooftop_tent light turned on with physical reed closed - Ensure the lighting circuit is off"
-                    )
-                    threading.Timer(30.0, lambda k=warning_key: active_warnings.discard(k)).start()
-
+    target = apply_safety_constraints(name, target, source)
     cancel_ramp(name)
 
-    start = state.get(name, 0)
-
-    # === MODE HANDLING FIRST ===
     mode_changed = False
-    if name in RGB_LIGHTS:
-        if mode is not None:
-            old_mode = state.get(f"{name}_mode")
-            if old_mode != mode:
-                mode_changed = True
-                logger.debug(f"🎨 Mode change for {name}: {old_mode} → {mode}")
-            state[f"{name}_mode"] = mode
-        elif f"{name}_mode" in state:
-            state.pop(f"{name}_mode", None)
+    if name in RGB_LIGHTS and mode is not None:
+        if state.get(f"{name}_mode") != mode:
+            mode_changed = True
+        state[f"{name}_mode"] = mode
 
-    if start == target and not mode_changed:
+    if state.get(name) == target and not mode_changed:
         return
 
+    start = state.get(name, 0)
     steps = max(8, int(duration_ms / 50))
     delay = duration_ms / steps / 1000.0
 
@@ -252,24 +157,12 @@ def ramp_and_broadcast(name: str, target: int, duration_ms: int, mode: str | Non
 
     def ramp_step(i: int):
         if i > steps:
-            # Final step
             state[name] = target
             socketio.emit('state_update', state.copy())
-
             if source:
-                colour = ""
-                mode_str = ""
-
-                if name in RGB_LIGHTS and mode:
-                    if mode == "red":
-                        colour = "🔴"
-                    elif mode == "white":
-                        colour = "⚪"
-                    if mode != "white":
-                        mode_str = f" {mode.title()} mode"
-
+                colour = "🔴" if mode == "red" else "⚪" if mode == "white" else ""
+                mode_str = f" {mode.title()} mode" if mode and mode != "white" else ""
                 logger.info(f"💡{colour} {name} → {target}%{mode_str} [{source}]")
-
             active_ramps.pop(name, None)
             return
 
@@ -287,9 +180,79 @@ def ramp_and_broadcast(name: str, target: int, duration_ms: int, mode: str | Non
     ramp_step(1)
 
 
-# ====================== MODULE INSTANCES ======================
-gpio_manager = GPIODeviceManager()
+# ====================== UNIFIED REED TRIGGER ======================
+def make_reed_trigger(reed_name: str):
+    def trigger(is_closed: bool, is_phase_change: bool = False,
+                desired_brightness: int = None, desired_mode: str = None):
+        if not phase_manager or not reed_manager:
+            return
 
+        ramp = (phase_manager.get_phase_ramp_time() 
+                if is_phase_change 
+                else reed_manager.get_reed_ramp_time())
+
+        # Scene override
+        if desired_brightness is not None:
+            if reed_manager.get_effective_state(reed_name):
+                logger.debug(f"🚪 {reed_name} change ignored (reed closed) [scene]")
+                return
+
+            mode = desired_mode or "white"
+            if reed_name in RGB_LIGHTS:
+                set_rgb_bug_light(reed_name, desired_brightness, mode)
+            else:
+                pwm = int(desired_brightness * 2.55)
+                send_command(f"RAMP {LIGHT_MAP.get(reed_name)} {pwm} {ramp}")
+
+            ramp_and_broadcast(reed_name, desired_brightness, ramp,
+                               mode if reed_name in RGB_LIGHTS else None, source="scene")
+            return
+
+        # Normal reed / phase logic
+        effective_closed = reed_manager.get_effective_state(reed_name)
+        if effective_closed is not None:
+            is_closed = effective_closed
+
+        phase = phase_manager.get_phase()
+
+        if not is_closed:  # OPEN
+            brightness, mode = reed_manager.get_light_settings(phase, reed_name)
+            if reed_name in RGB_LIGHTS:
+                set_rgb_bug_light(reed_name, brightness, mode)
+            else:
+                pwm = int(brightness * 2.55)
+                send_command(f"RAMP {LIGHT_MAP.get(reed_name)} {pwm} {ramp}")
+
+            ramp_and_broadcast(reed_name, brightness, ramp,
+                               mode if reed_name in RGB_LIGHTS else None,
+                               source="reed" if not is_phase_change else "phase change")
+        else:  # CLOSED
+            if reed_name in RGB_LIGHTS:
+                set_rgb_bug_light(reed_name, 0, "white")
+            else:
+                send_command(f"RAMP {LIGHT_MAP.get(reed_name)} 0 {ramp}")
+
+            ramp_and_broadcast(reed_name, 0, ramp,
+                               source="reed" if not is_phase_change else "phase change")
+
+    return trigger
+
+
+# ====================== WRAPPERS ======================
+def send_command(cmd: str):
+    return arduino.send_command(cmd)
+
+def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white'):
+    return arduino.set_rgb_bug_light(name, brightness, mode)
+
+def read_all_states():
+    arduino.read_all_states()
+    socketio.emit('state_update', state.copy())
+    logger.debug(f"Final synced state: {state}")
+
+
+# ====================== INSTANCES ======================
+gpio_manager = GPIODeviceManager()
 reed_manager = ReedManager(
     gpio_manager=gpio_manager,
     socketio=socketio,
@@ -304,186 +267,103 @@ gps = None
 phase_manager = None
 sensor_manager = None
 
-# ====================== BACKGROUND STATE SYNC ======================
+
+# ====================== BACKGROUND SYNC ======================
 def background_state_sync():
-    """Periodically re-sync with Arduino in case of drift or missed updates"""
     while True:
-        time.sleep(45)  # Check every 45 seconds
+        time.sleep(45)
         try:
             if arduino.ser and arduino.ser.is_open:
-                logger.debug("🔄 Background state sync running...")
                 read_all_states()
-                socketio.emit('state_update', state.copy())
         except Exception as e:
             logger.debug(f"Background sync skipped: {e}")
 
-# ====================== REED TRIGGERS ======================
-def make_reed_trigger(reed_name: str):
-    light_name = reed_name
 
-    def trigger(is_closed: bool, is_phase_change: bool = False, 
-                desired_brightness: int = None, desired_mode: str = None):
-        if not phase_manager or not reed_manager:
+# ====================== ROUTES ======================
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/diag')
+def diagnostics():
+    return render_template('diag.html')
+
+@app.route('/gps_json')
+def gps_json():
+    data = gps.get_state() if gps else {}
+    if phase_manager:
+        data['phase'] = phase_manager.get_phase()
+        data['forced'] = phase_manager.is_forced()
+        try:
+            data.update(phase_manager.get_phase_times() or {})
+        except Exception as e:
+            logger.warning(f"Failed to get phase times for gps_json: {e}")
+    if gps:
+        data['fallback_suburb'] = gps.FALLBACK_NAME
+    return data
+
+@app.route('/reed_json')
+def reed_json():
+    return {
+        'states': reed_manager.get_states(),
+        'forced': reed_manager.get_forced_states()
+    }
+
+@app.route('/api/themes')
+def get_themes():
+    themes = []
+    seen = set()
+    directories = [
+        os.path.join(app.static_folder, 'css/themes'),
+        os.path.join(app.static_folder, 'css')
+    ]
+
+    def process_css_file(filepath: str):
+        filename = os.path.basename(filepath)
+        base_name = filename[:-4]
+        if base_name in seen:
             return
+        seen.add(base_name)
 
-        ramp = (phase_manager.get_phase_ramp_time() 
-                if is_phase_change 
-                else reed_manager.get_reed_ramp_time())
+        display_name = base_name.replace('-', ' ').replace('_', ' ').title()
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                first = f.readline().strip()
+                if first.startswith('/*') and first.endswith('*/'):
+                    comment = first[2:-2].strip()
+                    if comment:
+                        display_name = comment
+        except Exception:
+            pass
 
-        # ====================== SCENE OVERRIDE ======================
-        if desired_brightness is not None:
-            # CENTRAL SAFETY CHECK - works for ANY reed light
-            if reed_manager.get_effective_state(light_name):
-                logger.debug(f"🚪 {light_name} change ignored (reed closed) [scene]")
-                return
+        themes.append({'file': base_name, 'name': display_name})
 
-            brightness = desired_brightness
-            mode = desired_mode or "white"
+    for directory in directories:
+        if os.path.exists(directory):
+            for fn in os.listdir(directory):
+                if fn.endswith('.css'):
+                    process_css_file(os.path.join(directory, fn))
 
-            if light_name in RGB_LIGHTS:
-                set_rgb_bug_light(light_name, brightness, mode)
-            else:
-                pwm = int(brightness * 2.55)
-                send_command(f"RAMP {LIGHT_MAP[light_name]} {pwm} {ramp}")
+    themes.sort(key=lambda x: (x['name'].lower() != 'base', x['name'].lower()))
+    return {'themes': themes}
 
-            ramp_and_broadcast(light_name, brightness, ramp, 
-                               mode if light_name in RGB_LIGHTS else None,
-                               source="scene")
-            return
+@app.route('/api/current-theme')
+def get_current_theme():
+    return {'theme': current_global_theme}
 
-        # ====================== NORMAL REED / PHASE LOGIC ======================
-        phase = phase_manager.get_phase()
-        
-        effective_closed = reed_manager.get_effective_state(reed_name)
-        if effective_closed is not None:
-            is_closed = effective_closed
+@app.route('/api/current-dark-mode')
+def get_current_dark_mode():
+    return {'mode': phase_manager.get_current_dark_mode() if phase_manager else 'dark'}
 
-        if not is_closed:   # OPEN
-            brightness, mode = reed_manager.get_light_settings(phase, light_name)
-            if light_name in RGB_LIGHTS:
-                set_rgb_bug_light(light_name, brightness, mode)
-            else:
-                pwm = int(brightness * 2.55)
-                send_command(f"RAMP {LIGHT_MAP[light_name]} {pwm} {ramp}")
-
-            ramp_and_broadcast(light_name, brightness, ramp, 
-                               mode if light_name in RGB_LIGHTS else None,
-                               source="reed" if not is_phase_change else "phase change")
-        else:  # CLOSED
-            if light_name in RGB_LIGHTS:
-                set_rgb_bug_light(light_name, 0, "white")
-            else:
-                send_command(f"RAMP {LIGHT_MAP[light_name]} 0 {ramp}")
-
-            ramp_and_broadcast(light_name, 0, ramp, 
-                               source="reed" if not is_phase_change else "phase change")
-
-    return trigger
-
-# ====================== SPECIAL KITCHEN LOGIC ======================
-def make_kitchen_panel_trigger():
-    def trigger(is_closed: bool, is_phase_change: bool = False,
-                desired_brightness: int = None, desired_mode: str = None):
-        if not phase_manager or not reed_manager:
-            return
-
-        ramp = (phase_manager.get_phase_ramp_time() 
-                if is_phase_change 
-                else reed_manager.get_reed_ramp_time())
-        phase = phase_manager.get_phase()
-
-        # ====================== SCENE OVERRIDE ======================
-        if desired_brightness is not None:
-            if reed_manager.get_effective_state("kitchen_panel"):   # closed
-                logger.debug("🚪 kitchen_panel change ignored (panel closed) [scene]")
-                return
-
-            # Panel is open → apply scene
-            set_rgb_bug_light("kitchen_panel", desired_brightness, desired_mode or "white")
-            ramp_and_broadcast("kitchen_panel", desired_brightness, ramp, 
-                               desired_mode or "white", source="scene")
-
-            # Turn on bench too
-            bright_b, _ = reed_manager.get_light_settings(phase, "kitchen_bench")
-            pwm = int(bright_b * 2.55)
-            send_command(f"RAMP {LIGHT_MAP['kitchen_bench']} {pwm} {ramp}")
-            ramp_and_broadcast("kitchen_bench", bright_b, ramp, source="scene")
-            return
-
-        # ====================== NORMAL REED LOGIC ======================
-        effective_closed = reed_manager.get_effective_state("kitchen_panel")
-        if effective_closed is not None:
-            is_closed = effective_closed
-
-        if not is_closed:  # Panel OPEN
-            bright_p, mode_p = reed_manager.get_light_settings(phase, "kitchen_panel")
-            set_rgb_bug_light("kitchen_panel", bright_p, mode_p)
-            ramp_and_broadcast("kitchen_panel", bright_p, ramp, mode_p, 
-                               source="reed" if not is_phase_change else "phase change")
-
-            if not reed_manager.get_effective_state("kitchen_bench"):
-                bright_b, _ = reed_manager.get_light_settings(phase, "kitchen_bench")
-                pwm = int(bright_b * 2.55)
-                send_command(f"RAMP {LIGHT_MAP['kitchen_bench']} {pwm} {ramp}")
-                ramp_and_broadcast("kitchen_bench", bright_b, ramp, 
-                                   source="reed" if not is_phase_change else "phase change")
-        else:  # CLOSED
-            set_rgb_bug_light("kitchen_panel", 0, "white")
-            ramp_and_broadcast("kitchen_panel", 0, ramp, 
-                               source="reed" if not is_phase_change else "phase change")
-
-            send_command(f"RAMP {LIGHT_MAP['kitchen_bench']} 0 {ramp}")
-            ramp_and_broadcast("kitchen_bench", 0, ramp, 
-                               source="reed" if not is_phase_change else "phase change")
-
-    return trigger
-
-def make_kitchen_bench_trigger():
-    def trigger(is_closed: bool, is_phase_change: bool = False,
-                desired_brightness: int = None, desired_mode: str = None):
-        if not phase_manager or not reed_manager:
-            return
-
-        # Panel is closed → always ignore bench
-        if reed_manager.get_effective_state("kitchen_panel"):
-            if desired_brightness is not None:
-                logger.debug("🚪 kitchen_bench change ignored (panel closed) [scene]")
-            else:
-                logger.debug("🚪 kitchen_bench change ignored (panel closed)")
-            return
-
-        ramp = (phase_manager.get_phase_ramp_time() 
-                if is_phase_change 
-                else reed_manager.get_reed_ramp_time())
-        phase = phase_manager.get_phase()
-
-        if desired_brightness is not None or not is_closed:
-            brightness = desired_brightness if desired_brightness is not None \
-                        else reed_manager.get_light_settings(phase, "kitchen_bench")[0]
-
-            pwm = int(brightness * 2.55)
-            send_command(f"RAMP {LIGHT_MAP['kitchen_bench']} {pwm} {ramp}")
-            ramp_and_broadcast("kitchen_bench", brightness, ramp, 
-                               source="scene" if desired_brightness is not None else "reed")
-        else:
-            send_command(f"RAMP {LIGHT_MAP['kitchen_bench']} 0 {ramp}")
-            ramp_and_broadcast("kitchen_bench", 0, ramp, source="reed")
-
-    return trigger
 
 # ====================== SOCKETIO ======================
 @socketio.on('light_change')
 def handle_light_change(data):
     name = data['name']
     target = max(0, min(100, int(data.get('brightness', 0))))
-    mode = data.get('mode', 'white')
+    mode = data.get('mode', 'white') if name in RGB_LIGHTS else None
 
-    is_rgb = name in RGB_LIGHTS
-
-    if not is_rgb:
-        mode = None
-
-    if is_rgb:
+    if name in RGB_LIGHTS:
         set_rgb_bug_light(name, target, mode or "white")
     elif name in LIGHT_MAP:
         pwm = int(target * 2.55)
@@ -491,8 +371,8 @@ def handle_light_change(data):
 
     ramp_and_broadcast(name, target, UI_RAMP_TIME_MS, mode, source="user interface")
 
-    if is_rgb:
-        state[f"{name}_mode"] = mode or "white"
+    if name in RGB_LIGHTS and mode:
+        state[f"{name}_mode"] = mode
 
 
 @socketio.on('force_reed')
@@ -501,7 +381,6 @@ def handle_force_reed(data):
     closed = data.get('closed')
     if name is None:
         return
-    
     if closed is None:
         if name == 'all':
             reed_manager.clear_all_forces()
@@ -509,15 +388,13 @@ def handle_force_reed(data):
             reed_manager.clear_force(name)
     else:
         reed_manager.force_state(name, bool(closed))
-        
+
 
 @socketio.on('force_phase')
 def handle_force_phase(data):
     if not phase_manager:
         return
-    
     phase = data.get('phase')
-    
     if phase is None:
         phase_manager.clear_force()
     else:
@@ -526,9 +403,9 @@ def handle_force_phase(data):
 
 @socketio.on('connect')
 def handle_connect():
+    global first_state_read_done
     logger.debug(f"🔌 Client connected from {request.remote_addr or 'unknown'}")
     
-    global first_state_read_done
     if not first_state_read_done:
         logger.debug("🔄 First connection — reading full state from Arduino")
         read_all_states()
@@ -537,10 +414,11 @@ def handle_connect():
         logger.debug("📤 Sending cached state to new client")
     
     emit('state_update', state.copy())
-    if phase_manager and phase_manager.current_phase is not None:
-        emit('global_dark_mode_update', {'mode': phase_manager.current_dark_mode})
+    
+    if phase_manager:
+        emit('global_dark_mode_update', {'mode': phase_manager.get_current_dark_mode()})
     else:
-        emit('global_dark_mode_update', {'mode': current_global_dark_mode})
+        emit('global_dark_mode_update', {'mode': 'dark'})
     
     if gps:
         emit('gps_update', gps.get_state())
@@ -549,11 +427,11 @@ def handle_connect():
         'states': reed_manager.get_states(),
         'forced': reed_manager.get_forced_states()
     })
+    
     phase_data = {
         'phase': phase_manager.get_phase() if phase_manager else 'Day',
         'forced': phase_manager.is_forced() if phase_manager else False,
     }
-    
     if phase_manager:
         try:
             phase_data.update(phase_manager.get_phase_times())
@@ -566,10 +444,17 @@ def handle_connect():
 @socketio.on('flood_change')
 def handle_flood_change(data):
     on = bool(data.get('on', False))
-
     logger.info(f"💡 Floodlights turned {'On' if on else 'Off'} [user interface]")
-
-    set_floodlights(on)
+    state["floodlights"] = on
+    device = gpio_manager.get_device('floodlights')
+    if device:
+        try:
+            if on:
+                device.on()
+            else:
+                device.off()
+        except Exception as e:
+            logger.error(f"⚠️ Floodlights error: {e}")
     socketio.emit('state_update', state)
 
 
@@ -578,9 +463,7 @@ def handle_set_scene(data):
     scene = data.get('scene')
     if not scene:
         return
-
     logger.info(f"🎬 Scene activated: {scene}")
-
     success = activate_scene(
         scene_name=scene,
         ramp_and_broadcast=ramp_and_broadcast,
@@ -591,161 +474,37 @@ def handle_set_scene(data):
         RGB_LIGHTS=RGB_LIGHTS,
         reed_manager=reed_manager
     )
-
     if success:
         socketio.emit('state_update', state.copy())
-        logger.debug(f"🎬 Scene '{scene}' applied successfully")
-    else:
-        logger.warning(f"⚠️ Unknown scene requested: {scene}")
 
 
 @socketio.on('set_gps_simulation')
 def handle_gps_simulation(data):
-    """Handle 'No GPS Fix' simulation toggle from the diag page."""
     no_fix = bool(data.get('no_fix', False))
-    if hasattr(gps, 'set_no_fix_simulation'):   # 'gps' is your GPSModule instance
+    if gps and hasattr(gps, 'set_no_fix_simulation'):
         gps.set_no_fix_simulation(no_fix)
-    else:
-        logger.error("GPS module not initialized")
 
 
-# ====================== GPS ======================
-def init_gps_module():
-    global gps
-    gps = GPSModule(socketio)
-    gps.init_gps()
-    gps.init_geolocator()
-
-
-# ====================== ROUTES ======================
-@app.route('/')
-def index():
-    return render_template('index.html')
-    
-@app.route('/diag')
-def diagnostics():
-    return render_template('diag.html')
-
-@app.route('/gps_json')
-def gps_json():
-    data = gps.get_state() if gps else {}
-    
-    if phase_manager:
-        data['phase'] = phase_manager.get_phase()
-        data['forced'] = phase_manager.is_forced()
-        try:
-            data.update(phase_manager.get_phase_times() or {})
-        except Exception as e:
-            logger.warning(f"Failed to get phase times for gps_json: {e}")
-    
-    if gps:
-        data['fallback_suburb'] = gps.FALLBACK_NAME
-    
-    return data
-
-@app.route('/reed_json')
-def reed_json():
-    return {
-        'states': reed_manager.get_states(),
-        'forced': reed_manager.get_forced_states()
-    }
-    
-@app.route('/api/themes')
-def get_themes():
-    themes = []
-    seen = set()
-
-    themes_dir = os.path.join(app.static_folder, 'css/themes')
-    if os.path.exists(themes_dir):
-        for filename in os.listdir(themes_dir):
-            if filename.endswith('.css'):
-                _process_css_file(os.path.join(themes_dir, filename), themes, seen)
-
-    css_root = os.path.join(app.static_folder, 'css')
-    if os.path.exists(css_root):
-        for filename in os.listdir(css_root):
-            if filename.endswith('.css'):
-                _process_css_file(os.path.join(css_root, filename), themes, seen)
-
-    themes.sort(key=lambda x: (x['name'].lower() != 'base', x['name'].lower()))
-    return {'themes': themes}
-
-
-def _process_css_file(filepath: str, themes_list: list, seen: set):
-    filename = os.path.basename(filepath)
-    base_name = filename[:-4]
-
-    if base_name in seen:
-        return
-    seen.add(base_name)
-
-    display_name = base_name.replace('-', ' ').replace('_', ' ').title()
-
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            first_line = f.readline().strip()
-            
-            if first_line.startswith('/*') and first_line.endswith('*/'):
-                comment = first_line[2:-2].strip()
-                if comment:
-                    display_name = comment
-    except Exception:
-        pass
-
-    themes_list.append({
-        'file': base_name,
-        'name': display_name
-    }) 
-    
 @socketio.on('set_global_dark_mode')
 def handle_set_global_dark_mode(data):
-    global current_global_dark_mode
-    mode = data.get('mode')  # 'dark' or 'light'
-
-    if mode not in ('dark', 'light'):
-        return
-
-    # debounce
-    if getattr(handle_set_global_dark_mode, '_last_mode', None) == mode:
-        if time.time() - getattr(handle_set_global_dark_mode, '_last_time', 0) < 1.0:
-            return
-
-    handle_set_global_dark_mode._last_mode = mode
-    handle_set_global_dark_mode._last_time = time.time()
-
-    current_global_dark_mode = mode
-    save_active_dark_mode(mode)
-
-    logger.info(f"🌗 Theme mode changed to: {mode}")
-    emit('global_dark_mode_update', {'mode': mode}, broadcast=True, include_self=True)
-    
-@app.route('/api/current-theme')
-def get_current_theme():
-    return {'theme': current_global_theme}
-
-
-@app.route('/api/current-dark-mode')
-def get_current_dark_mode():
-    return {'mode': current_global_dark_mode}
+    mode = data.get('mode')
+    if mode in ('dark', 'light'):
+        dark_mode_config.save({'mode': mode})
+        logger.info(f"🌗 Theme mode changed to: {mode}")
+        emit('global_dark_mode_update', {'mode': mode}, broadcast=True, include_self=True)
 
 
 # ====================== CLEANUP ======================
 def cleanup():
     logger.info("🧹 Cleaning up resources...")
-    
     for name in list(active_ramps.keys()):
         cancel_ramp(name)
-
     try:
-        if phase_manager:
-            phase_manager.stop()
-        if reed_manager:
-            reed_manager.stop()
-        if gpio_manager:
-            gpio_manager.cleanup()
-        if sensor_manager:
-            sensor_manager.stop()
-        arduino.cleanup()
+        if phase_manager: phase_manager.stop()
+        if reed_manager: reed_manager.stop()
+        if gpio_manager: gpio_manager.cleanup()
+        if sensor_manager: sensor_manager.stop()
+        if arduino: arduino.cleanup()
     except Exception as e:
         logger.error(f"⚠️ Error during cleanup: {e}")
     logger.info("✅ Cleanup completed")
@@ -763,39 +522,25 @@ if __name__ == "__main__":
     sensor_manager = SensorManager(send_command, socketio)
     gpio_manager.init_devices(GPIO_DEVICES)
 
-    # Register reed triggers
-    for reed_name in GPIO_DEVICES:
-        if GPIO_DEVICES[reed_name]['type'] != 'input':
-            continue
-
-        if reed_name == "kitchen_panel":
-            trigger_func = make_kitchen_panel_trigger()
-        elif reed_name == "kitchen_bench":
-            trigger_func = make_kitchen_bench_trigger()
-        else:
-            trigger_func = make_reed_trigger(reed_name)
-
-        reed_manager.register_trigger(reed_name, trigger_func)
+    # Register unified reed triggers
+    for reed_name in [n for n, d in GPIO_DEVICES.items() if d['type'] == 'input']:
+        reed_manager.register_trigger(reed_name, make_reed_trigger(reed_name))
 
     reed_manager.start_monitor(interval=0.25)
     sensor_manager.start()
-    init_gps_module()
 
-    # Phase Manager
-    if not hasattr(app, '_phase_manager_initialized'):
-        phase_manager = PhaseManager(gps, socketio)
-        phase_manager.reed_manager = reed_manager
-        reed_manager.phase_manager = phase_manager
-        phase_manager.start()
-        app._phase_manager_initialized = True
+    gps = GPSModule(socketio)
+    gps.init_gps()
+    gps.init_geolocator()
 
-    phase_manager.clear_force()
-    logger.debug("🧹 All forced states cleared on startup")
+    phase_manager = PhaseManager(gps, socketio)
+    phase_manager.reed_manager = reed_manager
+    reed_manager.phase_manager = phase_manager
+    phase_manager.start()
 
-    if gps and getattr(gps, 'serial', None):
+    if getattr(gps, 'serial', None):
         gps.start_reader()
 
-    # Background sync
     threading.Thread(target=background_state_sync, daemon=True).start()
 
     logger.info("🎉🎉🎉 The Pissmole Camper Control System lives! 🎉🎉🎉")

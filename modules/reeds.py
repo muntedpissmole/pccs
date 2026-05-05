@@ -32,7 +32,7 @@ class ReedManager:
         self.gpio = gpio_manager
         self.socketio = socketio
 
-        # Injected dependencies (clean architecture)
+        # Injected dependencies
         self.RGB_LIGHTS = rgb_lights
         self.LIGHT_MAP = light_map
         self.set_rgb_bug_light = set_rgb_bug_light
@@ -56,44 +56,20 @@ class ReedManager:
 
         # Per-reed phase light settings
         self.phase_settings: Dict[str, Dict[str, Tuple[int, str] | int]] = {
-            # RGB lights
             "kitchen_panel": {
                 "day":     (100, "white"),
                 "evening": (30, "white"),
                 "night":   (10, "red"),
             },
-            # Ambient lighting
             "awning": {
                 "evening": (20, "white"),
                 "night":   (10, "red"),
             },
-
-            # White-only lights
-            "kitchen_bench": {
-                "day":     100,
-                "evening": 80,
-                "night":   10,
-            },
-            "storage_panel": {
-                "day":     100,
-                "evening": 30,
-                "night":   5,
-            },
-            "rear_drawer": {
-                "day":     0,
-                "evening": 50,
-                "night":   10,
-            },
-            "rooftop_tent": {
-                "day":     0,
-                "evening": 20,
-                "night":   5,
-            },
-            # Ambient lighting
-            "accent": {
-                "evening": 20,
-                "night":   5,
-            },
+            "kitchen_bench":  {"day": 100, "evening": 80, "night": 10},
+            "storage_panel":  {"day": 100, "evening": 30, "night": 5},
+            "rear_drawer":    {"day": 0,   "evening": 50, "night": 10},
+            "rooftop_tent":   {"day": 0,   "evening": 20, "night": 5},
+            "accent":         {"evening": 20, "night": 5},
         }
 
         self.registered = False
@@ -101,28 +77,22 @@ class ReedManager:
 
         logger.info("🚪 ReedManager initialized")
 
-    def get_light_settings(self, phase: str, reed_name: str) -> Tuple[int, str] | None:
+    def get_light_settings(self, phase: str, reed_name: str) -> Tuple[int, str]:
         phase = str(phase).strip().lower()
         config = self.phase_settings.get(reed_name, {})
 
+        settings = config.get(phase, config.get("day", (0, "white")))
+
         if reed_name in self.RGB_LIGHTS:
-            settings = config.get(phase, config.get("day", (0, "white")))
             if isinstance(settings, tuple):
                 return settings
             else:
                 mode = "red" if reed_name == "kitchen_panel" and phase == "night" else "white"
-                return (settings, mode)
+                return (int(settings), mode)
         else:
-            if phase == "day" and "day" not in config:
-                return None
+            brightness = settings if isinstance(settings, (int, float)) else settings[0]
+            return (int(brightness), "white")
 
-            setting = config.get(phase, config.get("day", 0))
-
-            if isinstance(setting, tuple):
-                return setting
-            else:
-                return (setting, "white")
-            
     def _set_ambient_light(self, light_name: str, brightness: int, mode: str = "white", source: str = "ambient"):
         ramp_ms = self.reed_ramp_time_ms
 
@@ -141,47 +111,49 @@ class ReedManager:
 
     # ====================== AMBIENT LIGHTS (accent + awning) ======================
     def update_ambient_lights(self):
+        """Update accent and awning lights based on phase and door states."""
         if not hasattr(self, 'phase_manager') or self.phase_manager is None:
             return
 
         phase = self.phase_manager.get_phase().lower()
         any_open = any(not self.get_effective_state(name) for name in self.gpio.reed_states)
 
+        # Reset lock when phase changes
         if self.current_ambient_phase != phase:
             self.ambient_locked = False
             self.current_ambient_phase = phase
 
         if phase in ("evening", "night"):
             if not any_open:
+                # All closed at night → turn ambient off
                 self.ambient_locked = False
                 brightness = 0
                 mode = "white"
-                apply_to = ["accent", "awning"]
             elif self.ambient_locked:
                 logger.debug("🌟 Ambient locked – skipping")
                 return
             else:
+                # First time any door opened in evening/night → lock ambient on
                 self.ambient_locked = True
-                apply_to = ["accent", "awning"]
+                brightness, mode = self.get_light_settings(phase, "accent")
         else:
-            # day logic...
+            # Daytime
             if any_open:
-                apply_to = ["accent", "awning"]
+                brightness, mode = self.get_light_settings(phase, "accent")
             else:
                 brightness = 0
                 mode = "white"
-                apply_to = ["accent", "awning"]
 
+        # Apply to both ambient lights
         for light_name in ("accent", "awning"):
-            if light_name not in apply_to:
-                continue
-
             settings = self.get_light_settings(phase, light_name)
             if settings is None:
                 continue
-
-            brightness, mode = settings
-            self._set_ambient_light(light_name, brightness, mode, source="ambient")
+            b, m = settings
+            # Use the calculated brightness for accent, but respect per-light settings for awning
+            self._set_ambient_light(light_name, b if light_name == "accent" else brightness, 
+                                  m if light_name == "accent" else mode, 
+                                  source="ambient")
 
     # ====================== PHASE CHANGE HANDLER ======================
     def reapply_all_open_lights(self, phase_manager):
@@ -218,7 +190,6 @@ class ReedManager:
         return True
 
     def clear_force(self, reed_name: str) -> bool:
-        """Clear a forced reed state. Safe version - no deadlock."""
         was_forced = False
         with self.force_lock:
             if reed_name in self.forced_states:
@@ -230,7 +201,7 @@ class ReedManager:
                 was_forced = True
 
         if was_forced:
-            self.broadcast_update()          # ← was missing!
+            self.broadcast_update()
             self.update_ambient_lights()
             return True
         return False
@@ -249,10 +220,6 @@ class ReedManager:
     def get_forced_states(self) -> Dict[str, bool]:
         with self.force_lock:
             return {name: data['state'] for name, data in self.forced_states.items()}
-
-    def is_forced(self, reed_name: str) -> bool:
-        with self.force_lock:
-            return reed_name in self.forced_states
 
     def get_effective_state(self, reed_name: str) -> Optional[bool]:
         with self.force_lock:
@@ -322,7 +289,6 @@ class ReedManager:
                         if delta_ms > 10:
                             action = "Closed" if effective_closed else "Open"
                             logger.info(f"🚪 Reed {name} → {action}")
-
                             self.last_change_time[name] = now
 
                         last_states[name] = effective_closed
@@ -351,12 +317,11 @@ class ReedManager:
         self.on_reed_change[reed_name] = callback
 
     def broadcast_update(self):
-        payload = {
-            'states': self.get_states(),
-            'forced': self.get_forced_states()
-        }
         try:
-            self.socketio.emit('reed_update', payload)
+            self.socketio.emit('reed_update', {
+                'states': self.get_states(),
+                'forced': self.get_forced_states()
+            })
         except Exception as e:
             logger.warning(f"Failed to emit reed_update: {e}")
 
