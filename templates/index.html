@@ -4,38 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Pissmole Camper Control System</title>
-	<script src="/static/tailwind.min.js"></script>
-	  <link id="base-stylesheet" rel="stylesheet" href="/static/css/base.css">
-	  <link id="theme-override" rel="stylesheet" href="">
-	  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+  
+  <script src="/static/tailwind.min.js"></script>
+  <link id="base-stylesheet" rel="stylesheet" href="/static/css/base.css">
+  <link id="theme-override" rel="stylesheet" href="">
+  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
 </head>
 <body class="bg-zinc-950 text-white min-h-screen">
 
   <div class="flex-1 p-4 md:p-4 xl:p-4 space-y-4">
   
-	<!-- OFFLINE OVERLAY -->
-	<div id="offline-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
-	  <div id="offline-banner" 
-		   class="text-white text-center py-6 px-10 rounded-3xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
-		   style="background: #f43f5e; 
-				  width: 90%; 
-				  max-width: 1024px;
-				  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
-		
-		<i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
-		
-		<div class="flex-1 text-left">
-		  System Offline
-		  <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
-		</div>
-		
-		<div class="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0"></div>
-	  </div>
-	</div>
+    <!-- OFFLINE OVERLAY -->
+    <div id="offline-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
+      <div id="offline-banner" 
+           class="text-white text-center py-6 px-10 rounded-3xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
+           style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
+        <i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
+        <div class="flex-1 text-left">
+          System Offline
+          <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
+        </div>
+        <div class="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0"></div>
+      </div>
+    </div>
 
     <!-- STATUS TILES -->
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-
       <div class="tile neumorph p-5">
         <div class="flex justify-between items-start">
           <div>
@@ -74,323 +68,105 @@
         </div>
       </div>
 
-		<div class="tile neumorph p-5">
-		  <div class="flex justify-between items-start">
-			<div>
-			  <p class="tile-label">Battery</p>
-			  <p class="tile-value" id="battery-voltage">—</p>
-			</div>
-			<i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
-		  </div>
-		  <div class="mt-6">
-			<div class="flex justify-between items-start">
-			  <div>
-				<p class="tile-label">Charge</p>
-				<p class="tile-value" id="battery-charge">—</p>
-			  </div>
-			  <i class="fa-solid fa-bolt text-2xl accent-sky"></i>   <!-- or fa-plug / fa-charging-station -->
-			</div>
-		  </div>
-		</div>
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Battery</p>
+            <p class="tile-value" id="battery-voltage">—</p>
+          </div>
+          <i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Charge</p>
+              <p class="tile-value" id="battery-charge">—</p>
+            </div>
+            <i class="fa-solid fa-bolt text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
 
-		<div class="tile neumorph p-5">
-		  <div class="flex justify-between items-start">
-			<div>
-			  <p class="tile-label">Sunrise</p>
-			  <p class="tile-value" id="sunrise">—</p>
-			</div>
-			<i class="fa-solid fa-sun text-3xl accent-sky"></i>
-		  </div>
-		  <div class="mt-6">
-			<div class="flex justify-between items-start">
-			  <div>
-				<p class="tile-label">Sunset</p>
-				<p class="tile-value" id="sunset">—</p>
-			  </div>
-			  <i class="fa-solid fa-moon text-2xl accent-sky"></i>
-			</div>
-		  </div>
-		</div>
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Sunrise</p>
+            <p class="tile-value" id="sunrise">—</p>
+          </div>
+          <i class="fa-solid fa-sun text-3xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Sunset</p>
+              <p class="tile-value" id="sunset">—</p>
+            </div>
+            <i class="fa-solid fa-moon text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
 
-		<div class="tile neumorph p-5">
-		  <div class="flex justify-between items-start">
-			<div>
-			  <p class="tile-label">Current Temp</p>
-			  <p class="tile-value" id="outside-temp">—°C</p>
-			</div>
-			<i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
-		  </div>
-		  
-		  <div class="mt-6">
-			<div class="flex justify-between items-start">
-			  <div>
-				<p class="tile-label">Min/Max</p>
-				<div class="flex items-center gap-3">
-				  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
-				</div>
-			  </div>
-			  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
-			</div>
-		  </div>
-		</div>
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Current Temp</p>
+            <p class="tile-value" id="outside-temp">—°C</p>
+          </div>
+          <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Min/Max</p>
+              <div class="flex items-center gap-3">
+                <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+              </div>
+            </div>
+            <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
 
-		<div class="tile neumorph p-5">
-		  <div class="flex justify-between items-start">
-			<div>
-			  <p class="tile-label">Satellites</p>
-			  <p class="tile-value" id="satellites">— / —</p>
-			</div>
-			<i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
-		  </div>
-		  <div class="mt-6">
-			<div class="flex justify-between items-start">
-			  <div>
-				<p class="tile-label">Location</p>
-				<p class="tile-value" id="location">---</p>
-			  </div>
-			  <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
-			</div>
-		  </div>
-		</div>
+      <div class="tile neumorph p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Satellites</p>
+            <p class="tile-value" id="satellites">— / —</p>
+          </div>
+          <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Location</p>
+              <p class="tile-value" id="location">---</p>
+            </div>
+            <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
     </div>
 	
-	<!-- LIGHTING SCENES -->
-	<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-	  <button onclick="setScene('bedtime')" class="scene-btn">
-		<i class="fa-solid fa-bed"></i>
-		<span>Bedtime</span>
-	  </button>
-	  <button onclick="setScene('ensuite')" class="scene-btn">
-		<i class="fa-solid fa-bath"></i>
-		<span>Bathroom</span>
-	  </button>
-	  <button onclick="setScene('all_off')" class="scene-btn">
-		<i class="fa-solid fa-power-off"></i>
-		<span>All Off</span>
-	  </button>
-	</div>
+    <!-- LIGHTING SCENES -->
+    <div class="grid grid-cols-3 gap-4">
+      <button data-scene="bedtime" class="scene-btn">
+        <i class="fa-solid fa-bed"></i>
+        <span>Bedtime</span>
+      </button>
+      <button data-scene="ensuite" class="scene-btn">
+        <i class="fa-solid fa-bath"></i>
+        <span>Bathroom</span>
+      </button>
+      <button data-scene="all_off" class="scene-btn">
+        <i class="fa-solid fa-power-off"></i>
+        <span>All Off</span>
+      </button>
+    </div>
 
-	<!-- ALL LIGHTING CONTROLS -->
-	<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-
-	  <!-- Kitchen -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-utensils"></i>
-			  <span class="slider-label">Kitchen</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-kitchen_panel">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="kitchen_panel" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Kitchen Bench -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-mug-hot"></i>
-			  <span class="slider-label">Kitchen Bench</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-kitchen_bench">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="kitchen_bench" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Storage Panel -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-boxes-stacked"></i>
-			  <span class="slider-label">Storage Panel</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-storage_panel">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="storage_panel" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Rear Drawer -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-archive"></i>
-			  <span class="slider-label">Rear Drawer</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-rear_drawer">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="rear_drawer" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Accent -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-lightbulb"></i>
-			  <span class="slider-label">Accent</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-accent">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="accent" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Awning -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-umbrella"></i>
-			  <span class="slider-label">Awning</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-awning">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="awning" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Rooftop Tent -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-tent"></i>
-			  <span class="slider-label">Rooftop Tent</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-rooftop_tent">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="rooftop_tent" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Ensuite -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-bath"></i>
-			  <span class="slider-label">Ensuite</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div class="value-display" id="val-ensuite">0%</div>
-			<div onclick="toggleLight(this)" class="toggle-pill" data-state="off">
-			  <div class="toggle-knob"></div>
-			</div>
-		  </div>
-		</div>
-		<div class="slider-wrapper" data-name="ensuite" data-value="0">
-		  <div class="slider-inner">
-			<div class="slider-track"></div>
-			<div class="slider-fill" style="width: 0%"></div>
-			<div class="slider-thumb" style="left: 0%"></div>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Floodlights -->
-	  <div class="slider-card neumorph">
-		<div class="slider-card-header">
-		  <div class="slider-card-left">
-			<div class="slider-card-title">
-			  <i class="fa-solid fa-lightbulb"></i>
-			  <span class="slider-label">Floodlights</span>
-			</div>
-		  </div>
-		  <div class="slider-card-right">
-			<div onclick="toggleFloodlights(this)" id="flood-toggle" class="relay-toggle off" data-state="off">
-			  <div class="relay-knob"></div>
-			</div>
-		  </div>
-		</div>
-	  </div>
-
-	</div>
+    <!-- ALL LIGHTING CONTROLS -->
+    <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+      <!-- Populated by JavaScript -->
+    </div>
 
   </div>
 
@@ -406,12 +182,24 @@
     const userJustSet = new Set();
     const JUST_SET_DURATION = 2800;
 
+    // ==================== LIGHT CONFIG ====================
+    const LIGHTS = [
+      { name: "kitchen_panel",   label: "Kitchen",        icon: "fa-utensils" },
+      { name: "kitchen_bench",   label: "Kitchen Bench",  icon: "fa-mug-hot" },
+      { name: "storage_panel",   label: "Storage Panel",  icon: "fa-boxes-stacked" },
+      { name: "rear_drawer",     label: "Rear Drawer",    icon: "fa-archive" },
+      { name: "accent",          label: "Accent",         icon: "fa-lightbulb" },
+      { name: "awning",          label: "Awning",         icon: "fa-umbrella" },
+      { name: "rooftop_tent",    label: "Rooftop Tent",   icon: "fa-tent" },
+      { name: "ensuite",         label: "Ensuite",        icon: "fa-bath" },
+      { name: "floodlights",     label: "Floodlights",    icon: "fa-lightbulb", isRelay: true }
+    ];
+
     // ==================== OFFLINE HANDLER ====================
     let offlineTimeout = null;
 
     function showOfflineBanner() {
         if (offlineTimeout) clearTimeout(offlineTimeout);
-        
         offlineTimeout = setTimeout(() => {
             const overlay = document.getElementById('offline-overlay');
             if (overlay) {
@@ -424,22 +212,19 @@
     }
 
     function hideOfflineBanner() {
-        if (offlineTimeout) {
-            clearTimeout(offlineTimeout);
-            offlineTimeout = null;
-        }
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        offlineTimeout = null;
         const overlay = document.getElementById('offline-overlay');
         if (overlay) overlay.classList.add('hidden');
-        
         const mainContent = document.querySelector('.flex-1');
         if (mainContent) mainContent.style.pointerEvents = 'auto';
     }
 
-    // ==================== SOCKET.IO CONNECTION ====================
+    // ==================== SOCKET.IO ====================
     socket.on('connect', () => {
         console.log('✅ Backend connected');
         hideOfflineBanner();
-        updateRooftopTentControls();
+        socket.emit('request_full_state');
     });
 
     socket.on('disconnect', () => {
@@ -449,201 +234,374 @@
 
     socket.on('connect_error', () => showOfflineBanner());
 
-    // ==================== THEME SYSTEM ====================
-    function applyTheme(themeName) {
-        console.log('🎨 Applying theme:', themeName);
+    // ==================== LIGHTING RENDERING ====================
+    function renderLightingControls() {
+        const container = document.getElementById('lighting-controls');
         
-        const overrideLink = document.getElementById('theme-override');
-        if (!overrideLink) {
-            console.warn('theme-override link not found');
+        container.innerHTML = LIGHTS.map(light => {
+            if (light.isRelay) {
+                return `
+                    <div class="slider-card neumorph">
+                        <div class="slider-card-header">
+                            <div class="slider-card-left">
+                                <div class="slider-card-title">
+                                    <i class="fa-solid ${light.icon}"></i>
+                                    <span class="slider-label">${light.label}</span>
+                                </div>
+                            </div>
+                            <div class="slider-card-right">
+                                <div class="relay-toggle" data-name="floodlights" data-state="off">
+                                    <div class="relay-knob"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="slider-card neumorph">
+                    <div class="slider-card-header">
+                        <div class="slider-card-left">
+                            <div class="slider-card-title">
+                                <i class="fa-solid ${light.icon}"></i>
+                                <span class="slider-label">${light.label}</span>
+                            </div>
+                        </div>
+                        <div class="slider-card-right">
+                            <div class="value-display" id="val-${light.name}">0%</div>
+                            <div class="toggle-pill" data-name="${light.name}" data-state="off">
+                                <div class="toggle-knob"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper" data-name="${light.name}" data-value="0" data-last-brightness="100">
+                        <div class="slider-inner">
+                            <div class="slider-track"></div>
+                            <div class="slider-fill" style="width: 0%"></div>
+                            <div class="slider-thumb" style="left: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        initSliders();
+        initToggleListeners();
+    }
+
+    // ==================== UNIFIED TOGGLE ====================
+    function toggleControl(el) {
+        const name = el.dataset.name;
+        const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+        const currentBrightness = wrapper ? parseInt(wrapper.dataset.value) || 0 : 0;
+
+        userJustSet.add(name);
+        setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+
+        if (name === 'floodlights') {
+            const isOn = el.dataset.state === 'on';
+            socket.emit('flood_change', { on: !isOn });
             return;
         }
 
-        const timestamp = Date.now();
-        if (themeName === 'base' || themeName === 'neumorphism') {
-            overrideLink.href = '';
+        if (name !== 'kitchen_panel' && name !== 'awning') {
+            const isOn = el.dataset.state === 'on';
+            const newBrightness = isOn ? 0 : (parseInt(wrapper.dataset.lastBrightness) || 100);
+            updateLightUI(name, newBrightness);
+            socket.emit('light_change', { name, brightness: newBrightness });
+            return;
+        }
+
+        // Colour toggle
+        const newMode = currentModes[name] === 'white' ? 'red' : 'white';
+        currentModes[name] = newMode;
+        updateLightUI(name, currentBrightness);
+        socket.emit('light_change', { name, brightness: currentBrightness, mode: newMode });
+    }
+
+    function initToggleListeners() {
+        const container = document.getElementById('lighting-controls');
+        container.addEventListener('click', (e) => {
+            const toggle = e.target.closest('.toggle-pill, .relay-toggle');
+            if (toggle) toggleControl(toggle);
+        });
+    }
+
+    // ==================== UNIFIED LIGHT UI UPDATE ====================
+    function updateLightUI(name, brightness) {
+        const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+
+        if (wrapper) {
+            const fill = wrapper.querySelector('.slider-fill');
+            const thumb = wrapper.querySelector('.slider-thumb');
+            const valueEl = document.getElementById(`val-${name}`);
+
+            wrapper.dataset.value = brightness;
+            wrapper.dataset.lastBrightness = brightness;
+
+            if (fill) fill.style.width = `${brightness}%`;
+            if (thumb) thumb.style.left = `${brightness}%`;
+            if (valueEl) valueEl.textContent = `${brightness}%`;
+        }
+
+        const toggle = document.querySelector(`[data-name="${name}"]`);
+        if (!toggle) return;
+
+        if (name === 'floodlights') {
+            toggle.classList.toggle('on', !!brightness);
+            toggle.dataset.state = brightness ? 'on' : 'off';
+        } else if (name === 'kitchen_panel' || name === 'awning') {
+            const isRed = currentModes[name] === 'red';
+            toggle.classList.add('colour-toggle');
+            toggle.classList.toggle('bug-mode', isRed);
+            toggle.classList.toggle('on', isRed);
+            toggle.classList.toggle('white-off', !isRed);
+            toggle.dataset.state = isRed ? 'red' : 'white';
+
+            const fill = wrapper?.querySelector('.slider-fill');
+            if (fill) fill.classList.toggle('bug-mode', isRed);
         } else {
-            overrideLink.href = `/static/css/themes/${themeName}.css?v=${timestamp}`;
-        }
-
-        localStorage.setItem('pccs-active-theme', themeName);
-    }
-
-    async function loadCurrentTheme() {
-        try {
-            const res = await fetch('/api/current-theme?' + Date.now());
-            if (!res.ok) throw new Error('Failed');
-            const data = await res.json();
-            applyTheme(data.theme);
-        } catch (e) {
-            console.warn('Could not fetch theme from server, using localStorage');
-            const saved = localStorage.getItem('pccs-active-theme') || 'stealth';
-            applyTheme(saved);
+            const isOn = brightness > 0;
+            toggle.classList.toggle('on', isOn);
+            toggle.dataset.state = isOn ? 'on' : 'off';
         }
     }
 
-    socket.on('global_theme_update', (data) => {
-        if (data?.theme) applyTheme(data.theme);
-    });
+    function updateUIFromState() {
+        document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
+            const name = wrapper.dataset.name;
+            if (currentlyDragging.has(name) || userJustSet.has(name)) return;
+            updateLightUI(name, currentState[name] ?? 0);
+        });
 
-    // ==================== GLOBAL DARK/LIGHT MODE (server-driven) ====================
-    function applyGlobalDarkMode(mode) {
-        console.log('🌗 Applying dark mode:', mode);
-        const html = document.documentElement;
+        if (currentState.floodlights !== undefined) {
+            updateLightUI('floodlights', currentState.floodlights ? 100 : 0);
+        }
+
+        updateRooftopTentControls();
+    }
+
+	// ==================== DRAG LOGIC (Mobile Scroll Fixed v2) ====================
+	function makeDraggable(wrapper) {
+		const inner = wrapper.querySelector('.slider-inner');
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const name = wrapper.dataset.name;
+		const valueEl = document.getElementById(`val-${name}`);
+
+		let lastSent = 0;
+		let isDragging = false;
+		let startX = 0;
+		let startY = 0;
+		let hasMoved = false;           // ← New: tracks any meaningful movement
+
+		function updatePosition(clientX) {
+			const rect = inner.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+
+			wrapper.dataset.value = percent;
+			if (fill) fill.style.width = `${percent}%`;
+			if (thumb) thumb.style.left = `${percent}%`;
+			if (valueEl) valueEl.textContent = `${percent}%`;
+
+			const now = Date.now();
+			if (now - lastSent > 50) {
+				lastSent = now;
+				const payload = { name, brightness: percent };
+				if ((name === 'kitchen_panel' || name === 'awning') && currentModes[name]) {
+					payload.mode = currentModes[name];
+				}
+				socket.emit('light_change', payload);
+			}
+		}
+
+		function startDrag() {
+			isDragging = true;
+			wrapper.classList.add('dragging');
+			currentlyDragging.add(name);
+			userJustSet.delete(name);
+			fill.style.transition = 'none';
+			thumb.style.transition = 'none';
+		}
+
+		function endDrag() {
+			if (!isDragging) return;
+			isDragging = false;
+			wrapper.classList.remove('dragging');
+			currentlyDragging.delete(name);
+
+			const final = parseInt(wrapper.dataset.value) || 0;
+			updateLightUI(name, final);
+
+			userJustSet.add(name);
+			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+		}
+
+		// ───── TOUCH (mobile) ─────
+		wrapper.addEventListener('touchstart', e => {
+			startX = e.touches[0].clientX;
+			startY = e.touches[0].clientY;
+			isDragging = false;
+			hasMoved = false;
+		}, { passive: true });
+
+		wrapper.addEventListener('touchmove', e => {
+			const touch = e.touches[0];
+			const deltaX = Math.abs(touch.clientX - startX);
+			const deltaY = Math.abs(touch.clientY - startY);
+
+			hasMoved = hasMoved || (deltaX > 8 || deltaY > 8);
+
+			if (isDragging) {
+				e.preventDefault();
+				updatePosition(touch.clientX);
+				return;
+			}
+
+			// Only start dragging if mostly horizontal movement
+			if (deltaX > 15 && deltaX > deltaY * 1.2) {
+				e.preventDefault();
+				startDrag();
+				updatePosition(touch.clientX);
+			}
+			// Vertical movement → do nothing (let browser scroll)
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', e => {
+			const touch = e.changedTouches[0];
+			const totalDeltaX = Math.abs(touch.clientX - startX);
+			const totalDeltaY = Math.abs(touch.clientY - startY);
+
+			if (!isDragging && !hasMoved && totalDeltaX < 12 && totalDeltaY < 12) {
+				// True tap (very little movement) → jump to position
+				const rect = inner.getBoundingClientRect();
+				const tapX = touch.clientX;
+				const percent = Math.max(0, Math.min(100, Math.round(((tapX - rect.left) / rect.width) * 100)));
+				
+				wrapper.dataset.value = percent;
+				updatePosition(tapX);
+			}
+			// Otherwise: it was a scroll or drag → do NOT jump
+
+			endDrag();
+		}, { passive: true });
+
+		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
+
+		// ───── MOUSE (desktop) ─────
+		wrapper.addEventListener('mousedown', e => {
+			startX = e.clientX;
+			startY = e.clientY;
+			startDrag();
+			updatePosition(e.clientX);
+
+			const move = ev => updatePosition(ev.clientX);
+			const up = () => {
+				document.removeEventListener('mousemove', move);
+				endDrag();
+			};
+			document.addEventListener('mousemove', move);
+			document.addEventListener('mouseup', up, { once: true });
+		});
+	}
+
+    function initSliders() {
+        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+    }
+
+    // ==================== ROOFTOP TENT ====================
+    function updateRooftopTentControls() {
+        const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
+        if (!tentCard) return;
         
-        if (mode === 'dark') {
-            html.classList.remove('light');
-            html.classList.add('dark');
-            html.setAttribute('data-theme', 'dark');
+        const isClosed = !!currentReeds.rooftop_tent;
+        
+        if (isClosed) {
+            tentCard.classList.add('rooftop-disabled');
+            updateLightUI('rooftop_tent', 0);
         } else {
-            html.classList.remove('dark');
-            html.classList.add('light');
-            html.setAttribute('data-theme', 'light');
-        }
-        localStorage.setItem('pccs-dark-mode', mode); // keep local cache for instant feel
-    }
-
-    async function loadCurrentDarkMode() {
-        try {
-            const res = await fetch('/api/current-dark-mode?' + Date.now());
-            if (!res.ok) throw new Error('Failed');
-            const data = await res.json();
-            applyGlobalDarkMode(data.mode);
-        } catch (e) {
-            console.warn('Could not fetch dark mode, using localStorage');
-            const saved = localStorage.getItem('pccs-dark-mode') || 'dark';
-            applyGlobalDarkMode(saved);
+            tentCard.classList.remove('rooftop-disabled');
         }
     }
 
-    socket.on('global_dark_mode_update', (data) => {
-        if (data?.mode) applyGlobalDarkMode(data.mode);
-    });
+    // ==================== GPS, SENSORS, WEATHER ====================
+    let lastGPSUpdate = 0;
+    const GPS_TIMEOUT_MS = 60 * 1000;
+    let lastWeatherUpdate = 0;
+    const WEATHER_INTERVAL_MS = 3600 * 1000;
+    let lastSuburb = "";
 
-	// ==================== GPS & CLOCK ====================
-	let lastGPSUpdate = 0;
-	const GPS_TIMEOUT_MS = 60 * 1000; // 60 seconds before falling back to local time
+    function updateGPS(data) { 
+        if (!data) return;
+        lastGPSUpdate = Date.now();
 
-	let lastWeatherUpdate = 0;
-	const WEATHER_INTERVAL_MS = 3600 * 1000;
-	let lastSuburb = "";
+        if (data.satellites !== undefined) {
+            document.getElementById('satellites').textContent = `${data.satellites || 0} / ${data.fix_quality || 0}`;
+        }
 
-	function updateGPS(data) {
-		if (!data) return;
+        const locationEl = document.getElementById('location');
+        if (locationEl) {
+            locationEl.textContent = (data.suburb && data.suburb.trim()) ? data.suburb.trim() : "No GPS Fix";
+        }
 
-		const now = Date.now();
-		lastGPSUpdate = now;                    // Record fresh GPS data arrival
+        if (data.date) {
+            const dateObj = new Date(data.date);
+            if (!isNaN(dateObj.getTime())) {
+                const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
+                const day = dateObj.getDate();
+                const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+                document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}`;
+            }
+        }
 
-		// Satellites
-		const satEl = document.getElementById('satellites');
-		if (satEl) {
-			satEl.textContent = `${data.satellites || 0} / ${data.fix_quality || 0}`;
-		}
+        if (data.local_time) {
+            const dateObj = new Date(`1970-01-01 ${data.local_time}`);
+            if (!isNaN(dateObj.getTime())) {
+                let hours = dateObj.getHours();
+                const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}`;
+            }
+        }
 
-		// Location
-		const hasFix = !!(data.suburb && data.suburb.trim() !== "") || 
-					   !!(data.latitude && data.longitude && Math.abs(data.latitude) > 0.0001);
+        const currentSuburb = (data.suburb || "").trim();
+        if (data.latitude && data.longitude && 
+            ((currentSuburb && currentSuburb !== lastSuburb) || 
+             (Date.now() - lastWeatherUpdate > WEATHER_INTERVAL_MS))) {
+            fetchWeatherForecast(data.latitude, data.longitude);
+            lastWeatherUpdate = Date.now();
+            if (currentSuburb) lastSuburb = currentSuburb;
+        }
 
-		const locationEl = document.getElementById('location');
-		if (locationEl) {
-			if (data.suburb && data.suburb.trim() !== "") {
-				let display = data.suburb.trim();
-				if (/^\d+\.\d+,\s*\d+\.\d+$/.test(display)) display += " (rural)";
-				locationEl.textContent = display;
-			} else {
-				locationEl.textContent = "No GPS Fix";
-			}
-			// Only show * on location if no fix at all
-			if (!hasFix) locationEl.textContent += " *";
-		}
+        if (data.sunrise) document.getElementById('sunrise').textContent = stripLeadingZero(data.sunrise);
+        if (data.sunset)  document.getElementById('sunset').textContent  = stripLeadingZero(data.sunset);
+    }
 
-		// Date from GPS
-		if (data.date) {
-			const dateObj = new Date(data.date);
-			if (!isNaN(dateObj.getTime())) {
-				const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
-				const day = dateObj.getDate();
-				const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
-				const dateEl = document.getElementById('tile-date');
-				if (dateEl) dateEl.textContent = `${dayName} ${day} ${month}`;
-			}
-		}
+    function stripLeadingZero(timeStr) {
+        return timeStr ? timeStr.replace(/^0(\d):/, '$1:') : "";
+    }
 
-		// Time from GPS
-		if (data.local_time) {
-			const dateObj = new Date(`1970-01-01 ${data.local_time}`);
-			if (!isNaN(dateObj.getTime())) {
-				let hours = dateObj.getHours();
-				const minutes = dateObj.getMinutes().toString().padStart(2, '0');
-				const ampm = hours >= 12 ? 'PM' : 'AM';
-				hours = hours % 12 || 12;
-				const timeEl = document.getElementById('tile-time');
-				if (timeEl) timeEl.textContent = `${hours}:${minutes} ${ampm}`;
-			}
-		}
+    function updateClock() {
+        if (Date.now() - lastGPSUpdate < GPS_TIMEOUT_MS) return;
+        const now = new Date();
+        const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
+        const day = now.getDate();
+        const month = now.toLocaleDateString('en-AU', { month: 'short' });
+        document.getElementById('tile-date').textContent = `${dayName} ${day} ${month} *`;
 
-		// Trigger weather update when needed
-		const currentSuburb = (data.suburb || "").trim();
-		const hasValidPosition = !!(data.latitude && data.longitude);
-
-		if (hasValidPosition && ((currentSuburb && currentSuburb !== lastSuburb) || 
-			(now - lastWeatherUpdate) > WEATHER_INTERVAL_MS)) {
-			fetchWeatherForecast(data.latitude, data.longitude);
-			lastWeatherUpdate = now;
-			if (currentSuburb) lastSuburb = currentSuburb;
-		}
-
-		updateSunTimes(data);
-	}
-
-	function updateSunTimes(data) {
-		const sunriseEl = document.getElementById('sunrise');
-		const sunsetEl = document.getElementById('sunset');
-
-		if (data.sunrise) sunriseEl.textContent = stripLeadingZero(data.sunrise);
-		if (data.sunset)  sunsetEl.textContent  = stripLeadingZero(data.sunset);
-	}
-
-	function stripLeadingZero(timeStr) {
-		if (!timeStr) return "";
-		return timeStr.replace(/^0(\d):/, '$1:');
-	}
-
-	// Fallback to local clock only after GPS timeout
-	function updateClock() {
-		const timeSinceLastGPS = Date.now() - lastGPSUpdate;
-
-		const dateEl = document.getElementById('tile-date');
-		const timeEl = document.getElementById('tile-time');
-
-		// If we still have fresh GPS data, do nothing (keep GPS time)
-		if (timeSinceLastGPS < GPS_TIMEOUT_MS) {
-			return;
-		}
-
-		// Otherwise show local time with *
-		const now = new Date();
-		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
-		const day = now.getDate();
-		const month = now.toLocaleDateString('en-AU', { month: 'short' });
-
-		if (dateEl) dateEl.textContent = `${dayName} ${day} ${month} *`;
-
-		let hours = now.getHours();
-		let minutes = now.getMinutes().toString().padStart(2, '0');
-		const ampm = hours >= 12 ? 'PM' : 'AM';
-		hours = hours % 12 || 12;
-
-		if (timeEl) timeEl.textContent = `${hours}:${minutes} ${ampm} *`;
-	}
+        let hours = now.getHours();
+        let minutes = now.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm} *`;
+    }
 
     function updateSensors(data) {
         if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
         if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
-        if (data.battery_voltage !== undefined) {
-            const voltage = parseFloat(data.battery_voltage);
-            document.getElementById('battery-voltage').textContent = `${voltage.toFixed(1)}V`;
-        }
+        if (data.battery_voltage !== undefined) document.getElementById('battery-voltage').textContent = `${parseFloat(data.battery_voltage).toFixed(1)}V`;
         if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
         if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
     }
@@ -652,8 +610,6 @@
         try {
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
             const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) throw new Error('Weather fetch failed');
-
             const data = await res.json();
 
             if (data.daily) {
@@ -670,7 +626,6 @@
             }
         } catch (e) {
             console.warn('Weather fetch failed:', e);
-            document.getElementById('weather-icon').className = 'fa-solid fa-cloud text-2xl accent-sky';
         }
     }
 
@@ -689,289 +644,6 @@
         return icons[code] || 'fa-cloud';
     }
 
-    // ==================== UI UPDATES ====================
-    function applyOptimisticUpdate(wrapper, percent) {
-        const name = wrapper.dataset.name;
-        const fill = wrapper.querySelector('.slider-fill');
-        const thumb = wrapper.querySelector('.slider-thumb');
-        const valueEl = document.getElementById(`val-${name}`);
-
-        wrapper.dataset.value = percent;
-        wrapper.dataset.lastBrightness = percent;
-
-        fill.style.transition = 'width 0.1s linear';
-        thumb.style.transition = 'none';
-
-        fill.style.width = `${percent}%`;
-        thumb.style.left = `${percent}%`;
-        valueEl.textContent = `${percent}%`;
-
-        updateToggleUI(name, percent);
-    }
-
-    function updateToggleUI(name, brightness) {
-        const card = document.querySelector(`.slider-wrapper[data-name="${name}"]`)?.closest('.slider-card');
-        if (!card) return;
-        const toggle = card.querySelector('.toggle-pill');
-        if (!toggle) return;
-
-        if (name === 'kitchen_panel' || name === 'awning') {
-            const isRed = currentModes[name] === 'red';
-            toggle.classList.add('colour-toggle');
-            toggle.classList.toggle('bug-mode', isRed);
-            toggle.classList.toggle('on', isRed);
-            toggle.classList.toggle('white-off', !isRed);
-            toggle.dataset.state = isRed ? 'red' : 'white';
-
-            const fill = card.querySelector('.slider-fill');
-            if (fill) fill.classList.toggle('bug-mode', isRed);
-        } else {
-            const isOn = brightness > 0;
-            toggle.classList.toggle('on', isOn);
-            toggle.dataset.state = isOn ? 'on' : 'off';
-        }
-    }
-
-    function updateUIFromState() {
-        document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
-            const name = wrapper.dataset.name;
-            if (currentlyDragging.has(name) || userJustSet.has(name)) return;
-
-            const brightness = currentState[name] ?? 0;
-            wrapper.dataset.value = brightness;
-
-            const fill = wrapper.querySelector('.slider-fill');
-            const thumb = wrapper.querySelector('.slider-thumb');
-            const valueEl = document.getElementById(`val-${name}`);
-
-            fill.style.transition = 'width 0.6s ease-out';
-            thumb.style.transition = 'left 0.6s ease-out';
-
-            fill.style.width = `${brightness}%`;
-            thumb.style.left = `${brightness}%`;
-            valueEl.textContent = `${brightness}%`;
-
-            updateToggleUI(name, brightness);
-        });
-
-        const floodToggle = document.getElementById('flood-toggle');
-        if (floodToggle) {
-            const isOn = !!currentState.floodlights;
-            floodToggle.classList.toggle('on', isOn);
-            floodToggle.dataset.state = isOn ? 'on' : 'off';
-        }
-        
-        updateRooftopTentControls();
-    }
-
-    // ==================== SCENES ====================
-    function setScene(scene) {
-        console.log('🎬 Scene activated:', scene);
-
-        document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
-
-        const activeBtn = Array.from(document.querySelectorAll('.scene-btn'))
-            .find(btn => btn.getAttribute('onclick').includes(`'${scene}'`));
-
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-            setTimeout(() => activeBtn.classList.remove('active'), 750);
-        }
-
-        socket.emit('set_scene', { scene: scene });
-    }
-
-    // ==================== TOGGLE & DRAG ====================
-    function toggleLight(toggleEl) {
-        const card = toggleEl.closest('.slider-card');
-        const wrapper = card.querySelector('.slider-wrapper');
-        const name = wrapper.dataset.name;
-        const currentBrightness = parseInt(wrapper.dataset.value) || 0;
-
-        userJustSet.add(name);
-        setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
-
-        if (name !== 'kitchen_panel' && name !== 'awning') {
-            const isOn = toggleEl.dataset.state === 'on';
-            const newBrightness = isOn ? 0 : (parseInt(wrapper.dataset.lastBrightness) || 100);
-
-            applyOptimisticUpdate(wrapper, newBrightness);
-            toggleEl.classList.toggle('on', !isOn);
-            toggleEl.dataset.state = isOn ? 'off' : 'on';
-
-            socket.emit('light_change', { name, brightness: newBrightness });
-            return;
-        }
-
-        const newMode = currentModes[name] === 'white' ? 'red' : 'white';
-        currentModes[name] = newMode;
-
-        applyOptimisticUpdate(wrapper, currentBrightness);
-        updateToggleUI(name, currentBrightness);
-
-        socket.emit('light_change', { name, brightness: currentBrightness, mode: newMode });
-    }
-
-	function makeDraggable(wrapper) {
-		const inner = wrapper.querySelector('.slider-inner');
-		const fill = wrapper.querySelector('.slider-fill');
-		const thumb = wrapper.querySelector('.slider-thumb');
-		const name = wrapper.dataset.name;
-		const valueEl = document.getElementById(`val-${name}`);
-
-		let lastSent = 0;
-		let isDragging = false;
-		let startX = 0;
-		let startY = 0;
-		let hasCommittedToDrag = false;
-
-		function updatePosition(clientX) {
-			const rect = inner.getBoundingClientRect();
-			let percent = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
-
-			wrapper.dataset.value = percent;
-			fill.style.width = `${percent}%`;
-			thumb.style.left = `${percent}%`;
-			valueEl.textContent = `${percent}%`;
-
-			updateToggleUI(name, percent);
-
-			const now = Date.now();
-			if (now - lastSent > 50) {
-				lastSent = now;
-				const payload = { name, brightness: percent };
-				if ((name === 'kitchen_panel' || name === 'awning') && currentModes[name]) {
-					payload.mode = currentModes[name];
-				}
-				socket.emit('light_change', payload);
-			}
-		}
-
-		function startDrag() {
-			isDragging = true;
-			hasCommittedToDrag = true;
-			wrapper.classList.add('dragging');
-			currentlyDragging.add(name);
-			userJustSet.delete(name);
-
-			fill.style.transition = 'none';
-			thumb.style.transition = 'none';
-		}
-
-		function endDrag() {
-			if (!isDragging) return;
-			isDragging = false;
-			wrapper.classList.remove('dragging');
-			currentlyDragging.delete(name);
-
-			const final = parseInt(wrapper.dataset.value) || 0;
-			applyOptimisticUpdate(wrapper, final);
-
-			userJustSet.add(name);
-			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
-		}
-
-		// ==================== TOUCH HANDLERS ====================
-		wrapper.addEventListener('touchstart', e => {
-			startX = e.touches[0].clientX;
-			startY = e.touches[0].clientY;
-			hasCommittedToDrag = false;
-			// Do NOT preventDefault here - let browser decide initially
-		}, { passive: true });
-
-		wrapper.addEventListener('touchmove', e => {
-			const touch = e.touches[0];
-			const deltaX = Math.abs(touch.clientX - startX);
-			const deltaY = Math.abs(touch.clientY - startY);
-
-			if (!hasCommittedToDrag) {
-				// Strong preference for vertical scrolling
-				if (deltaY > 12 && deltaY > deltaX * 1.8) {
-					return; // Let browser scroll vertically
-				}
-
-				// Only commit to drag after clear horizontal intent
-				if (deltaX > 25 && deltaX > deltaY * 1.4) {
-					e.preventDefault();
-					startDrag();
-					updatePosition(touch.clientX);
-				}
-				return;
-			}
-
-			// Already dragging horizontally
-			if (isDragging) {
-				e.preventDefault();
-				updatePosition(touch.clientX);
-			}
-		}, { passive: false });
-
-		wrapper.addEventListener('touchend', () => {
-			endDrag();
-		}, { passive: true });
-
-		wrapper.addEventListener('touchcancel', () => {
-			endDrag();
-		}, { passive: true });
-
-		// Keep your existing mouse support unchanged
-		wrapper.addEventListener('mousedown', e => {
-			startX = e.clientX;
-			startY = e.clientY;
-			startDrag();
-			updatePosition(e.clientX);
-
-			const move = ev => updatePosition(ev.clientX);
-			const up = () => { 
-				document.removeEventListener('mousemove', move); 
-				endDrag(); 
-			};
-			document.addEventListener('mousemove', move);
-			document.addEventListener('mouseup', up, { once: true });
-		});
-	}
-
-    function initSliders() {
-        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
-    }
-
-    function toggleFloodlights(toggle) {
-        const isOn = toggle.dataset.state === 'on';
-        socket.emit('flood_change', { on: !isOn });
-    }
-
-    // ==================== ROOFTOP TENT SAFETY ====================
-    function updateRooftopTentControls() {
-        const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
-        if (!tentCard) return;
-        
-        const isClosed = !!currentReeds.rooftop_tent;
-        
-        if (isClosed) {
-            tentCard.classList.add('rooftop-disabled');
-            
-            const wrapper = tentCard.querySelector('.slider-wrapper');
-            if (wrapper) {
-                wrapper.dataset.value = "0";
-                const fill = wrapper.querySelector('.slider-fill');
-                const thumb = wrapper.querySelector('.slider-thumb');
-                const valEl = document.getElementById('val-rooftop_tent');
-                
-                if (fill) fill.style.width = '0%';
-                if (thumb) thumb.style.left = '0%';
-                if (valEl) valEl.textContent = '0%';
-            }
-            
-            const toggle = tentCard.querySelector('.toggle-pill');
-            if (toggle) {
-                toggle.classList.remove('on');
-                toggle.dataset.state = 'off';
-            }
-        } else {
-            tentCard.classList.remove('rooftop-disabled');
-        }
-    }
-
     // ==================== SOCKET LISTENERS ====================
     socket.on('state_update', (newState) => {
         currentState = newState;
@@ -981,34 +653,78 @@
     });
 
     socket.on('reed_update', (payload) => {
-        currentReeds = {};
-        const raw = payload.states || {};
-        const forced = payload.forced || {};
-        
-        Object.keys(raw).forEach(name => {
-            currentReeds[name] = (name in forced) ? forced[name] : raw[name];
-        });
+        currentReeds = { ...(payload.states || {}), ...(payload.forced || {}) };
         updateRooftopTentControls();
     });
 
     socket.on('sensor_update', updateSensors);
     socket.on('gps_update', updateGPS);
 
+    socket.on('global_theme_update', (data) => { if (data?.theme) applyTheme(data.theme); });
+    socket.on('global_dark_mode_update', (data) => { if (data?.mode) applyGlobalDarkMode(data.mode); });
+
+    // ==================== THEME HELPERS ====================
+    function applyTheme(themeName) {
+        const overrideLink = document.getElementById('theme-override');
+        if (!overrideLink) return;
+        const timestamp = Date.now();
+        overrideLink.href = (themeName === 'base' || themeName === 'neumorphism') 
+            ? '' 
+            : `/static/css/themes/${themeName}.css?v=${timestamp}`;
+        localStorage.setItem('pccs-active-theme', themeName);
+    }
+
+    function applyGlobalDarkMode(mode) {
+        const html = document.documentElement;
+        if (mode === 'dark') {
+            html.classList.remove('light');
+            html.classList.add('dark');
+            html.setAttribute('data-theme', 'dark');
+        } else {
+            html.classList.remove('dark');
+            html.classList.add('light');
+            html.setAttribute('data-theme', 'light');
+        }
+        localStorage.setItem('pccs-dark-mode', mode);
+    }
+
+    // ==================== SCENES ====================
+    function setScene(scene) {
+        console.log('🎬 Scene activated:', scene);
+
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.scene === scene);
+        });
+
+        setTimeout(() => {
+            document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+        }, 750);
+
+        socket.emit('set_scene', { scene });
+    }
+
     // ==================== INIT ====================
     window.onload = function() {
-        loadCurrentTheme();
-		loadCurrentDarkMode();
+        const savedTheme = localStorage.getItem('pccs-active-theme') || 'stealth';
+        applyTheme(savedTheme);
+        
+        const savedDark = localStorage.getItem('pccs-dark-mode') || 'dark';
+        applyGlobalDarkMode(savedDark);
 
+        renderLightingControls();
+        
         updateClock();
         setInterval(updateClock, 10000);
-        initSliders();
 
         setTimeout(() => {
             if (Object.keys(currentState).length) updateUIFromState();
-            updateRooftopTentControls();
-        }, 800);
+        }, 600);
 
-        console.log("🚀 PCCS Frontend Ready");
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.addEventListener('click', () => setScene(btn.dataset.scene));
+        });
+
+        console.log("🚀 PCCS Frontend Ready (fixed & complete)");
     };
 </script>
 </body>

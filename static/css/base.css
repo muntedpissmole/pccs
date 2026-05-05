@@ -1,34 +1,46 @@
 /* Neumorphism */
 
-/* Allow vertical scrolling while still letting horizontal slider drag work */
-.slider-wrapper {
-  touch-action: pan-y pinch-zoom;   /* Allow vertical scroll, block nothing else */
-  user-select: none;
+/* ====================== MOBILE SCROLL PROTECTION ====================== */
+.slider-wrapper,
+.slider-card {
+  touch-action: pan-y pinch-zoom;     /* Allow vertical scroll + pinch zoom */
+  overscroll-behavior-y: contain;     /* Prevent pull-to-refresh bounce */
+  -webkit-overflow-scrolling: touch;
+}
+
+.slider-inner,
+.slider-track,
+.slider-fill {
+  touch-action: pan-y;                /* Let vertical swipes scroll the page */
 }
 
 .slider-thumb {
-  touch-action: none;   /* Only the thumb itself blocks scrolling */
+  touch-action: none;                 /* Thumb fully controls horizontal drag */
 }
 
-/* Optional: make the whole card a bit less sensitive */
-.slider-card {
-  touch-action: pan-y pinch-zoom;
+.slider-wrapper.dragging .slider-thumb {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    0 0 25px var(--accent-glow);
 }
 
+/* ====================== CUSTOM PROPERTIES ====================== */
 :root {
-  /* === Core Colors === */
+  /* Core Accent */
   --accent-color: #4FC3F7;
   --accent-hover: #38bdf8;
   --accent-light: #bae6fd;
   --accent-glow: #67e8f9;
 
-  /* Backgrounds */
+  /* Backgrounds & Surfaces */
   --background: #121212;
   --card-bg: rgba(40, 40, 40, 0.95);
   --control-bg: #252525;
   --slider-bg: #353535;
 
-  /* Shadows & Depth */
+  /* Neumorphism Shadows */
   --shadow-dark: #080808;
   --shadow-light: #404040;
   --inner-shadow-light: rgba(255,255,255,0.08);
@@ -40,10 +52,8 @@
   --text-muted: #94a3b8;
   --text-on-accent: #0f172a;
 
-  /* Borders */
+  /* Borders & Toggles */
   --border-color: #444444;
-
-  /* Toggles */
   --toggle-bg-off: #353535;
   --toggle-handle: linear-gradient(to bottom, #909090, #707070);
   --toggle-checked-color: #0ea5e9;
@@ -52,13 +62,11 @@
   --status-closed: #38bdf8;
   --status-open: #64748b;
   --status-forced: #fbbf24;
-  --phase-day: #38bdf8;
-  --phase-evening: #fb923c;
-  --phase-night: #6366f1;
 }
 
-/* ====================== DARK MODE ====================== */
-html.dark, .dark {
+/* ====================== DARK MODE (Default) ====================== */
+html.dark,
+.dark {
   --background: #121212;
   --card-bg: rgba(40, 40, 40, 0.95);
   --control-bg: #252525;
@@ -73,8 +81,9 @@ html.dark, .dark {
   --toggle-checked-color: #0ea5e9;
 }
 
-/* ====================== LIGHT MODE (FIXED) ====================== */
-html.light, .light {
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
   --background: #f5f5f5;
   --card-bg: rgba(255, 255, 255, 0.95);
   --control-bg: #ffffff;
@@ -113,9 +122,9 @@ html.light, .light {
   src: url('/static/fonts/Satoshi-Black.woff2') format('woff2'); font-weight: 900; font-display: swap;
 }
 
-/* ====================== BASE STYLES ====================== */
+/* ====================== GLOBAL ====================== */
 body {
-  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  font-family: 'Satoshi', system-ui, sans-serif;
   background: var(--background);
   color: var(--text-primary);
   min-height: 100vh;
@@ -132,52 +141,18 @@ body::before {
   z-index: -1;
 }
 
-[data-theme="light"] body::before {
+.light body::before {
   background: radial-gradient(circle at 50% 30%, rgba(148, 163, 184, 0.18) 0%, transparent 75%);
 }
 
-/* ====================== Cards & Tiles ====================== */
-.card {
-  background: var(--card-bg);
-  border-radius: 15px;
-  padding: 10px 15px;
-  box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
-  border: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 16px;
-  text-align: left;
-  transition: all 0.3s ease;
-}
-
-.card .header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--accent-color);
-  font-weight: 500;
-}
-
-.card .value {
-  font-size: 20px;
-  color: var(--text-primary);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  transition: color 0.3s ease;
-}
-
-/* Base Neumorphic Elements */
+/* ====================== NEUMORPHISM BASE ====================== */
 .neumorph,
 .tile,
 .slider-card {
   background: var(--card-bg);
   border-radius: 20px;
-  position: relative;
-  padding: 20px;
   border: 1px solid var(--border-color);
+  padding: 20px;
   box-shadow: 
     6px 6px 12px var(--shadow-dark),
     -6px -6px 12px var(--shadow-light),
@@ -186,17 +161,7 @@ body::before {
   transition: all 0.3s ease;
 }
 
-[data-theme="light"] .neumorph,
-[data-theme="light"] .tile,
-[data-theme="light"] .slider-card {
-  box-shadow: 
-    6px 6px 12px var(--shadow-dark),
-    -6px -6px 12px var(--shadow-light),
-    inset 3px 3px 6px rgba(255,255,255,0.7),
-    inset -3px -3px 6px rgba(0,0,0,0.08);
-}
-
-/* Tile-specific colors */
+/* ====================== STATUS TILES ====================== */
 .tile i.fa-solid {
   color: var(--accent-color) !important;
 }
@@ -215,10 +180,7 @@ body::before {
   color: var(--text-primary);
 }
 
-[data-theme="light"] .tile-label { color: #2563eb; }
-[data-theme="light"] .tile-value { color: #0c4a6e; }
-
-/* ====================== Scene Buttons ====================== */
+/* ====================== SCENE BUTTONS ====================== */
 .scene-btn {
   display: flex;
   flex-direction: column;
@@ -232,13 +194,8 @@ body::before {
   border-radius: 20px;
   border: 1px solid var(--border-color);
   cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  color: var(--text-primary);
   box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
-  transition: background 1.8s cubic-bezier(0.4, 0, 0.2, 1),
-              color 1.8s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 1.9s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .scene-btn:hover {
@@ -254,56 +211,39 @@ body::before {
 
 .scene-btn i {
   font-size: 32px;
-  color: #bae6fd;
+  color: var(--accent-light);
   transition: color 0.3s ease;
 }
 
 .scene-btn.active i {
-  color: #0f172a;
+  color: var(--text-on-accent);
 }
 
-[data-theme="light"] .scene-btn i { color: #0369a1; }
-[data-theme="light"] .scene-btn.active i { color: #ffffff; }
-
-/* ====================== Slider Cards ====================== */
+/* ====================== SLIDER CARDS ====================== */
 .slider-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: nowrap;
 }
 
 .slider-card-left {
-  flex: 1 1 auto;
-  min-width: 0;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
 }
 
 .slider-card-title {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
 }
 
 .slider-card-title i {
   font-size: 1.75rem;
   color: var(--accent-color);
   flex-shrink: 0;
-  width: 1.75rem;
-  text-align: center;
-}
-
-.slider-card-title span.slider-label {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
 }
 
 .slider-card-right {
@@ -319,17 +259,10 @@ body::before {
   color: var(--text-secondary);
   min-width: 58px;
   text-align: right;
-  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
-[data-theme="light"] .slider-card-title i,
-[data-theme="light"] .slider-card-title span.slider-label,
-[data-theme="light"] .value-display {
-  color: #1e40af;
-}
-
-/* Slider Track & Thumb */
+/* Slider */
 .slider-wrapper {
   position: relative;
   width: 100%;
@@ -337,11 +270,6 @@ body::before {
   margin: 0 auto;
   cursor: grab;
   user-select: none;
-  touch-action: pan-y;
-}
-
-.slider-wrapper.dragging .slider-thumb {
-  transition: none !important;
 }
 
 .slider-inner {
@@ -355,9 +283,7 @@ body::before {
 
 .slider-track {
   position: absolute;
-  left: 0;
-  right: 0;
-  height: 22px;
+  inset: 0;
   background: var(--slider-bg);
   border-radius: 9999px;
   box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
@@ -366,7 +292,8 @@ body::before {
 .slider-fill {
   position: absolute;
   left: 0;
-  height: 22px;
+  top: 0;
+  height: 100%;
   background: linear-gradient(90deg, var(--accent-color), #38bdf8, #7dd3fc);
   border-radius: 9999px;
   box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 20px rgba(79, 195, 247, 0.7);
@@ -380,41 +307,23 @@ body::before {
 .slider-thumb {
   position: absolute;
   top: 50%;
+  left: 0;
   width: 64px;
   height: 64px;
   background: var(--toggle-handle);
   border: 2px solid var(--accent-color);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  color: var(--accent-color);
-  z-index: 30;
-  touch-action: none;  
-  transition: all 0.25s ease;
-  will-change: left;
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
     inset 3px 3px 6px rgba(255,255,255,0.3),
     inset -3px -3px 6px rgba(0,0,0,0.5);
+  transition: all 0.25s ease;
+  will-change: left;
 }
 
-[data-theme="light"] .slider-thumb {
-  box-shadow: 
-    5px 5px 10px var(--shadow-dark),
-    -5px -5px 10px var(--shadow-light),
-    inset 4px 4px 8px rgba(255,255,255,0.8),
-    inset -4px -4px 8px rgba(0,0,0,0.1);
-}
-
-.slider-thumb:active {
-  box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
-}
-
-/* ====================== Toggles ====================== */
+/* ====================== TOGGLES ====================== */
 .toggle-pill,
 .relay-toggle {
   position: relative;
@@ -423,10 +332,8 @@ body::before {
   background: var(--toggle-bg-off);
   border-radius: 9999px;
   cursor: pointer;
-  overflow: hidden;
   box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
   transition: background 0.4s ease;
-  flex-shrink: 0;
 }
 
 .toggle-pill.on,
@@ -444,9 +351,9 @@ body::before {
   background: var(--toggle-handle);
   border-radius: 9999px;
   transform: translateY(-50%);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 3px 3px 8px rgba(0,0,0,0.4), -2px -2px 6px rgba(255,255,255,0.7);
   border: 2px solid #e2e8f0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-pill.on .toggle-knob,
@@ -456,15 +363,9 @@ body::before {
   border-color: #bae6fd;
 }
 
-[data-theme="light"] .toggle-pill .toggle-knob,
-[data-theme="light"] .relay-toggle .relay-knob {
-  box-shadow: 3px 3px 8px rgba(0,0,0,0.2), -3px -3px 8px rgba(255,255,255,0.9);
-}
-
-/* Colour Toggle Variants */
+/* Colour-mode variants */
 .toggle-pill.colour-toggle.white-off {
   background: linear-gradient(90deg, #e2e8f0, #f1f5f9) !important;
-  box-shadow: inset 6px 6px 12px rgba(0,0,0,0.4), inset -6px -6px 12px rgba(255,255,255,0.8);
 }
 
 .toggle-pill.colour-toggle.white-off .toggle-knob {
@@ -481,9 +382,8 @@ body::before {
   border-color: #fda4af;
 }
 
-/* ====================== Disabled States ====================== */
-.slider-card.rooftop-disabled .slider-wrapper,
-.slider-card.rooftop-disabled .toggle-pill {
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
   opacity: 0.45;
   pointer-events: none;
   cursor: not-allowed;
@@ -493,7 +393,6 @@ body::before {
   opacity: 0.4;
   border-color: #64748b;
   color: #64748b;
-  box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
 }
 
 .slider-card.rooftop-disabled .slider-fill {
@@ -505,7 +404,6 @@ body::before {
   content: "\f023";
   font-family: "Font Awesome 6 Free";
   font-weight: 900;
-  font-size: 1.1rem;
   margin-left: 8px;
   color: var(--accent-color);
   opacity: 0.7;
