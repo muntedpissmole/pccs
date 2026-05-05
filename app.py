@@ -74,11 +74,17 @@ from modules.phases import PhaseManager
 from modules.sensors import SensorManager
 from modules.arduino import ArduinoManager
 from modules.scenes import activate_scene
+from modules.toasts import ToastManager, toast_manager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pccs-secret'
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# ====================== TOASTS ======================
+toast_manager = ToastManager(socketio)
+import modules.toasts
+modules.toasts.toast_manager = toast_manager
 
 # ====================== ARDUINO ======================
 arduino = ArduinoManager()
@@ -260,7 +266,8 @@ reed_manager = ReedManager(
     light_map=LIGHT_MAP,
     set_rgb_bug_light=set_rgb_bug_light,
     send_command=send_command,
-    ramp_and_broadcast=ramp_and_broadcast
+    ramp_and_broadcast=ramp_and_broadcast,
+    toast_manager=toast_manager
 )
 
 gps = None
@@ -492,6 +499,21 @@ def handle_set_global_dark_mode(data):
         dark_mode_config.save({'mode': mode})
         logger.info(f"🌗 Theme mode changed to: {mode}")
         emit('global_dark_mode_update', {'mode': mode}, broadcast=True, include_self=True)
+        
+
+@socketio.on('toast_test')
+def handle_toast_test(data):
+    if toast_manager:
+        toast_manager.send_toast(
+            title=data.get('title'),
+            message=data.get('message', 'Test message'),
+            toast_type=data.get('type', 'info'),
+            duration=data.get('duration', 4500),
+            persistent=data.get('persistent', False)
+        )
+        logger.info(f"🧪 Toast test: {data.get('type')} - {data.get('message')[:60]}")
+    else:
+        logger.warning("Toast test received but toast_manager is not available")
 
 
 # ====================== CLEANUP ======================

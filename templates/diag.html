@@ -325,6 +325,64 @@
       </div>
     </div>
 
+    <!-- TOAST TEST PANEL -->
+    <div class="diag-card neumorph p-8">
+      <div class="flex items-center gap-3 mb-6">
+        <i class="fa-solid fa-bell text-3xl accent-sky"></i>
+        <h2 class="text-2xl font-semibold">Toast Notifications Test</h2>
+      </div>
+      
+      <div class="space-y-6">
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Title (optional)</label>
+          <input id="toast-title" 
+                 type="text" 
+                 placeholder="e.g. Rooftop Tent"
+                 class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
+        </div>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Message</label>
+          <input id="toast-message" 
+                 type="text" 
+                 value="Rooftop tent opened — lights activated"
+                 class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button onclick="sendTestToast('success')" 
+                  class="diag-btn bg-emerald-600 hover:bg-emerald-700 text-white">
+            ✅ Success
+          </button>
+          <button onclick="sendTestToast('info')" 
+                  class="diag-btn bg-sky-600 hover:bg-sky-700 text-white">
+            ℹ️ Info
+          </button>
+          <button onclick="sendTestToast('warning')" 
+                  class="diag-btn bg-amber-600 hover:bg-amber-700 text-white">
+            ⚠️ Warning
+          </button>
+          <button onclick="sendTestToast('error')" 
+                  class="diag-btn bg-red-600 hover:bg-red-700 text-white">
+            ❌ Error
+          </button>
+        </div>
+
+        <div class="flex gap-4 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="toast-persistent" class="w-4 h-4 accent-sky-500">
+            Persistent (no auto-dismiss)
+          </label>
+          <div class="flex items-center gap-2">
+            Duration:
+            <input id="toast-duration" type="number" value="4500" 
+                   class="w-20 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1 text-center">
+            <span class="text-zinc-400">ms</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="diag-card neumorph p-8">
       <h3 class="text-xl font-semibold mb-4 flex items-center gap-3">
         <i class="fa-solid fa-code accent-sky"></i> Raw Payload
@@ -530,6 +588,25 @@
     window.clearPhaseForce = () => { 
       socket.emit('force_phase', { phase: null });
       phaseIsForced = false;
+    };
+	// ==================== TOAST TEST FUNCTIONS ====================
+    window.sendTestToast = function(type) {
+        const title = document.getElementById('toast-title').value.trim();
+        const message = document.getElementById('toast-message').value.trim() || "Test toast message";
+        const persistent = document.getElementById('toast-persistent').checked;
+        let duration = parseInt(document.getElementById('toast-duration').value);
+
+        if (isNaN(duration) || duration < 500) duration = 4500;
+
+        socket.emit('toast_test', {
+            title: title || undefined,        // only send if not empty
+            message: message,
+            type: type,
+            duration: duration,
+            persistent: persistent
+        });
+
+        console.log(`🧪 Test toast sent: ${type} | Title: "${title}"`);
     };
 
     // ==================== INIT ====================

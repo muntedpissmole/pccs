@@ -31,7 +31,7 @@
   /* Core Accent */
   --accent-color: #4FC3F7;
   --accent-hover: #38bdf8;
-  --accent-light: #bae6fd;
+  --accent-light: #4FC3F7;
   --accent-glow: #67e8f9;
 
   /* Backgrounds & Surfaces */
@@ -167,7 +167,7 @@ body::before {
 }
 
 .tile-label {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: 0.6px;
@@ -175,7 +175,7 @@ body::before {
 }
 
 .tile-value {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -188,7 +188,7 @@ body::before {
   justify-content: center;
   gap: 10px;
   padding: 20px 16px;
-  font-size: 14px;
+  font-size: 0.85rem;
   font-weight: 600;
   background: var(--control-bg);
   border-radius: 20px;
@@ -317,8 +317,8 @@ body::before {
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 6px rgba(255,255,255,0.3),
-    inset -3px -3px 6px rgba(0,0,0,0.5);
+    inset 3px 3px 8px rgba(255,255,255,0.55),
+    inset -3px -3px 8px rgba(0,0,0,0.6) !important;
   transition: all 0.25s ease;
   will-change: left;
 }
@@ -345,7 +345,7 @@ body::before {
 .relay-toggle .relay-knob {
   position: absolute;
   top: 50%;
-  left: 5px;
+  left: 4px;
   width: 38px;
   height: 38px;
   background: var(--toggle-handle);
@@ -358,7 +358,7 @@ body::before {
 
 .toggle-pill.on .toggle-knob,
 .relay-toggle.on .relay-knob {
-  transform: translate(42px, -50%);
+  transform: translate(39px, -50%);
   background: #ffffff;
   border-color: #bae6fd;
 }
@@ -380,6 +380,37 @@ body::before {
 .toggle-pill.colour-toggle.bug-mode .toggle-knob {
   background: #ffffff;
   border-color: #fda4af;
+}
+
+/* ====================== BUG MODE (RED) THUMB ====================== */
+
+.slider-wrapper.bug-mode .slider-thumb {
+  background: #ffffff !important;
+  border: 2px solid #e11d48 !important;
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px rgba(255,255,255,0.55),
+    inset -3px -3px 8px rgba(0,0,0,0.6) !important;
+}
+
+.slider-wrapper.bug-mode .slider-thumb,
+.bug-mode .slider-thumb,
+.slider-fill.bug-mode ~ .slider-thumb,
+.slider-wrapper.bug-mode .slider-thumb {
+  background: #ffffff !important;
+  border: 2px solid #e11d48 !important;
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px rgba(255,255,255,0.55),
+    inset -3px -3px 8px rgba(0,0,0,0.6) !important;
+}
+
+.slider-fill.bug-mode {
+  background: linear-gradient(90deg, #e11d48, #f43f5e, #fb7185) !important;
+  box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 
+              0 0 30px rgba(225, 29, 72, 0.9) !important;
 }
 
 /* ====================== DISABLED STATES ====================== */

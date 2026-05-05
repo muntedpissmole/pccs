@@ -28,6 +28,7 @@ class ReedManager:
         set_rgb_bug_light: Callable,
         send_command: Callable,
         ramp_and_broadcast: Callable,
+        toast_manager=None,
     ):
         self.gpio = gpio_manager
         self.socketio = socketio

@@ -17,7 +17,7 @@
     <!-- OFFLINE OVERLAY -->
     <div id="offline-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
       <div id="offline-banner" 
-           class="text-white text-center py-6 px-10 rounded-3xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
+           class="text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
            style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
         <i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
         <div class="flex-1 text-left">
@@ -36,7 +36,7 @@
             <p class="tile-label">Date</p>
             <p class="tile-value" id="tile-date">—</p>
           </div>
-          <i class="fa-solid fa-calendar-days text-3xl accent-sky"></i>
+          <i class="fa-solid fa-calendar-days text-2xl accent-sky"></i>
         </div>
         <div class="mt-6">
           <div class="flex justify-between items-start">
@@ -55,7 +55,7 @@
             <p class="tile-label">Water</p>
             <p class="tile-value" id="water-level">—</p>
           </div>
-          <i class="fa-solid fa-droplet text-3xl accent-sky"></i>
+          <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
         </div>
         <div class="mt-6">
           <div class="flex justify-between items-start">
@@ -74,7 +74,7 @@
             <p class="tile-label">Battery</p>
             <p class="tile-value" id="battery-voltage">—</p>
           </div>
-          <i class="fa-solid fa-battery-three-quarters text-3xl accent-sky"></i>
+          <i class="fa-solid fa-battery-three-quarters text-2xl accent-sky"></i>
         </div>
         <div class="mt-6">
           <div class="flex justify-between items-start">
@@ -93,7 +93,7 @@
             <p class="tile-label">Sunrise</p>
             <p class="tile-value" id="sunrise">—</p>
           </div>
-          <i class="fa-solid fa-sun text-3xl accent-sky"></i>
+          <i class="fa-solid fa-sun text-2xl accent-sky"></i>
         </div>
         <div class="mt-6">
           <div class="flex justify-between items-start">
@@ -133,7 +133,7 @@
             <p class="tile-label">Satellites</p>
             <p class="tile-value" id="satellites">— / —</p>
           </div>
-          <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+          <i class="fa-solid fa-satellite-dish text-2xl accent-sky"></i>
         </div>
         <div class="mt-6">
           <div class="flex justify-between items-start">
@@ -165,10 +165,14 @@
 
     <!-- ALL LIGHTING CONTROLS -->
     <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-      <!-- Populated by JavaScript -->
     </div>
 
   </div>
+
+	<div id="toast-container" 
+		 class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] 
+				flex flex-col gap-3 max-w-xl w-full px-4 pointer-events-none">
+	</div>
 
 <script src="/static/socket.io.min.js"></script>
 <script>
@@ -184,13 +188,13 @@
 
     // ==================== LIGHT CONFIG ====================
     const LIGHTS = [
+      { name: "rooftop_tent",    label: "Rooftop Tent",   icon: "fa-tent" },
       { name: "kitchen_panel",   label: "Kitchen",        icon: "fa-utensils" },
       { name: "kitchen_bench",   label: "Kitchen Bench",  icon: "fa-mug-hot" },
       { name: "storage_panel",   label: "Storage Panel",  icon: "fa-boxes-stacked" },
       { name: "rear_drawer",     label: "Rear Drawer",    icon: "fa-archive" },
       { name: "accent",          label: "Accent",         icon: "fa-lightbulb" },
       { name: "awning",          label: "Awning",         icon: "fa-umbrella" },
-      { name: "rooftop_tent",    label: "Rooftop Tent",   icon: "fa-tent" },
       { name: "ensuite",         label: "Ensuite",        icon: "fa-bath" },
       { name: "floodlights",     label: "Floodlights",    icon: "fa-lightbulb", isRelay: true }
     ];
@@ -328,45 +332,51 @@
         });
     }
 
-    // ==================== UNIFIED LIGHT UI UPDATE ====================
-    function updateLightUI(name, brightness) {
-        const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+	function updateLightUI(name, brightness) {
+		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
 
-        if (wrapper) {
-            const fill = wrapper.querySelector('.slider-fill');
-            const thumb = wrapper.querySelector('.slider-thumb');
-            const valueEl = document.getElementById(`val-${name}`);
+		if (wrapper) {
+			const fill = wrapper.querySelector('.slider-fill');
+			const thumb = wrapper.querySelector('.slider-thumb');
+			const valueEl = document.getElementById(`val-${name}`);
 
-            wrapper.dataset.value = brightness;
-            wrapper.dataset.lastBrightness = brightness;
+			wrapper.dataset.value = brightness;
+			wrapper.dataset.lastBrightness = brightness;
 
-            if (fill) fill.style.width = `${brightness}%`;
-            if (thumb) thumb.style.left = `${brightness}%`;
-            if (valueEl) valueEl.textContent = `${brightness}%`;
-        }
+			if (fill) fill.style.width = `${brightness}%`;
+			if (thumb) thumb.style.left = `${brightness}%`;
+			if (valueEl) valueEl.textContent = `${brightness}%`;
 
-        const toggle = document.querySelector(`[data-name="${name}"]`);
-        if (!toggle) return;
+			if (name === 'kitchen_panel' || name === 'awning') {
+				const isRed = currentModes[name] === 'red';
+				
+				wrapper.classList.toggle('bug-mode', isRed);
+				
+				if (fill) fill.classList.toggle('bug-mode', isRed);
+			}
+		}
 
-        if (name === 'floodlights') {
-            toggle.classList.toggle('on', !!brightness);
-            toggle.dataset.state = brightness ? 'on' : 'off';
-        } else if (name === 'kitchen_panel' || name === 'awning') {
-            const isRed = currentModes[name] === 'red';
-            toggle.classList.add('colour-toggle');
-            toggle.classList.toggle('bug-mode', isRed);
-            toggle.classList.toggle('on', isRed);
-            toggle.classList.toggle('white-off', !isRed);
-            toggle.dataset.state = isRed ? 'red' : 'white';
+		const toggle = document.querySelector(`[data-name="${name}"]`);
+		if (!toggle) return;
 
-            const fill = wrapper?.querySelector('.slider-fill');
-            if (fill) fill.classList.toggle('bug-mode', isRed);
-        } else {
-            const isOn = brightness > 0;
-            toggle.classList.toggle('on', isOn);
-            toggle.dataset.state = isOn ? 'on' : 'off';
-        }
-    }
+		if (name === 'floodlights') {
+			toggle.classList.toggle('on', !!brightness);
+			toggle.dataset.state = brightness ? 'on' : 'off';
+		} 
+		else if (name === 'kitchen_panel' || name === 'awning') {
+			const isRed = currentModes[name] === 'red';
+			toggle.classList.add('colour-toggle');
+			toggle.classList.toggle('bug-mode', isRed);
+			toggle.classList.toggle('on', isRed);
+			toggle.classList.toggle('white-off', !isRed);
+			toggle.dataset.state = isRed ? 'red' : 'white';
+		} 
+		else {
+			const isOn = brightness > 0;
+			toggle.classList.toggle('on', isOn);
+			toggle.dataset.state = isOn ? 'on' : 'off';
+		}
+	}
 
     function updateUIFromState() {
         document.querySelectorAll('.slider-wrapper').forEach(wrapper => {
@@ -702,6 +712,82 @@
 
         socket.emit('set_scene', { scene });
     }
+	
+	// ==================== TOAST SYSTEM ====================
+	function showToast(toast) {
+		const container = document.getElementById('toast-container');
+		if (!container) {
+			console.warn("Toast container not found");
+			return;
+		}
+
+		const { id, message, type = 'info', title, duration = 4500, persistent = false } = toast;
+
+		const toastEl = document.createElement('div');
+		toastEl.id = id || `toast-${Date.now()}`;
+		
+		toastEl.className = `toast toast-${type} pointer-events-auto`;
+
+		let html = `
+			<div class="flex-shrink-0 text-2xl mt-0.5">
+				<i class="fa-solid ${getToastIcon(type)}"></i>
+			</div>
+			<div class="flex-1 min-w-0">
+		`;
+
+		if (title && title.trim() !== '') {
+			html += `<div class="toast-title font-semibold mb-1">${title}</div>`;
+		}
+
+		html += `
+				<div class="toast-message text-sm leading-tight">${message}</div>
+			</div>
+			<button onclick="dismissToast('${toastEl.id}')" 
+					class="flex-shrink-0 text-zinc-400 hover:text-white ml-2 transition-colors">
+				<i class="fa-solid fa-xmark"></i>
+			</button>
+		`;
+
+		toastEl.innerHTML = html;
+		container.appendChild(toastEl);
+
+		// Animate in
+		setTimeout(() => {
+			toastEl.classList.add('show');
+		}, 10);
+
+		if (!persistent && duration > 0) {
+			toastEl.timeoutId = setTimeout(() => {
+				dismissToast(toastEl.id);
+			}, duration);
+		}
+	}
+
+	function getToastIcon(type) {
+		const icons = {
+			success: 'fa-check-circle',
+			error:   'fa-circle-exclamation',
+			warning: 'fa-triangle-exclamation',
+			info:    'fa-circle-info'
+		};
+		return icons[type] || icons.info;
+	}
+
+	function dismissToast(id) {
+		const toastEl = document.getElementById(id);
+		if (!toastEl) return;
+
+		if (toastEl.timeoutId) clearTimeout(toastEl.timeoutId);
+
+		toastEl.style.transition = 'all 0.35s cubic-bezier(0.4, 0, 1, 1)';
+		toastEl.style.opacity = '0';
+		toastEl.style.transform = 'translateX(120%)';
+
+		setTimeout(() => toastEl.remove(), 400);
+	}
+
+    // Socket listener
+    socket.on('toast', showToast);
 
     // ==================== INIT ====================
     window.onload = function() {
