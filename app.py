@@ -491,6 +491,26 @@ def handle_gps_simulation(data):
     if gps and hasattr(gps, 'set_no_fix_simulation'):
         gps.set_no_fix_simulation(no_fix)
 
+@socketio.on('set_global_theme')
+def handle_set_global_theme(data):
+    global current_global_theme
+    
+    theme = data.get('theme')
+    if not theme:
+        return
+
+    # Validate it exists (optional but nice)
+    if theme not in [t['file'] for t in get_themes()['themes']]:  # reuse the function
+        logger.warning(f"⚠️ Unknown theme requested: {theme}")
+        return
+
+    current_global_theme = theme
+    theme_config.save({'theme': theme})
+    
+    logger.info(f"🎨 Global theme changed to: {theme}")
+    
+    # Broadcast to all connected clients (including diag page)
+    socketio.emit('global_theme_update', {'theme': theme}, broadcast=True, include_self=True)
 
 @socketio.on('set_global_dark_mode')
 def handle_set_global_dark_mode(data):

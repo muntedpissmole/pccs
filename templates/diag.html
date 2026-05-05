@@ -403,7 +403,7 @@
     const REED_ORDER = ["kitchen_panel", "kitchen_bench", "storage_panel", "rear_drawer", "rooftop_tent"];
     const reedRows = new Map();
 
-    // ==================== THEME SYSTEM (unchanged - works fine) ====================
+    // ==================== THEME SYSTEM ====================
     async function loadThemes() {
       try {
         const res = await fetch('/api/themes');
@@ -419,9 +419,13 @@
           select.appendChild(option);
         });
 
+        // Load current theme and apply it
         const currentRes = await fetch('/api/current-theme');
         const current = await currentRes.json();
-        select.value = current.theme || 'stealth';
+        const currentTheme = current.theme || 'stealth';
+        
+        select.value = currentTheme;
+        applyThemeToPage(currentTheme);   // ← Important fix
       } catch (e) {
         console.error('Failed to load themes', e);
       }
@@ -443,6 +447,15 @@
       applyThemeToPage(filename);
       socket.emit('set_global_theme', { theme: filename });
     }
+
+    // Listen for theme changes from other pages
+    socket.on('global_theme_update', (data) => {
+      if (data?.theme) {
+        const select = document.getElementById('theme-selector');
+        if (select) select.value = data.theme;
+        applyThemeToPage(data.theme);
+      }
+    });
 
     // ==================== GLOBAL DARK/LIGHT MODE ====================
     function setGlobalDarkMode(isDark) {

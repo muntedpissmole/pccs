@@ -235,13 +235,14 @@ class GPSModule:
                     if getattr(msg, 'spd_over_grnd', None) is not None:
                         self.state["speed_kmh"] = round(float(msg.spd_over_grnd) * 1.852, 1)
 
-                # Real fix change toast
                 current_quality = self.state.get("fix_quality", 0)
+                
                 if current_quality != self._previous_fix_quality:
-                    if current_quality >= 1:
+                    if current_quality >= 1 and self._previous_fix_quality == 0:
                         self._send_fix_acquired_toast()
-                    else:
+                    elif current_quality == 0:
                         self._send_fix_lost_toast()
+                    
                     self._previous_fix_quality = current_quality
 
                 # Broadcast

@@ -145,16 +145,17 @@ class ReedManager:
                 brightness = 0
                 mode = "white"
 
-        # Apply to both ambient lights
         for light_name in ("accent", "awning"):
             settings = self.get_light_settings(phase, light_name)
             if settings is None:
                 continue
             b, m = settings
-            # Use the calculated brightness for accent, but respect per-light settings for awning
-            self._set_ambient_light(light_name, b if light_name == "accent" else brightness, 
-                                  m if light_name == "accent" else mode, 
-                                  source="ambient")
+
+            if phase in ("evening", "night") and not any_open:
+                b = 0
+                m = "white"
+
+            self._set_ambient_light(light_name, b, m, source="ambient")
 
     # ====================== PHASE CHANGE HANDLER ======================
     def reapply_all_open_lights(self, phase_manager):
