@@ -1,6 +1,7 @@
 # modules/toasts.py
 import time
 import logging
+import uuid
 from typing import Optional
 from flask_socketio import SocketIO
 
@@ -26,7 +27,7 @@ class ToastManager:
             toast_type = "info"
 
         toast_data = {
-            "id": f"toast_{int(time.time() * 1000)}",
+            "id": f"toast_{uuid.uuid4().hex[:16]}",   # ← Fixed: unique IDs
             "message": message,
             "type": toast_type,
             "duration": 0 if persistent else duration,

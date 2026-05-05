@@ -9,6 +9,21 @@ from suntime import Sun
 logger = logging.getLogger("pccs")
 
 
+def _send_phase_toast(message: str, title: str = "Phase Change", toast_type: str = "info"):
+    """Safe toast sender"""
+    try:
+        from modules.toasts import toast_manager
+        if toast_manager is None:
+            return
+
+        if toast_type == "warning":
+            toast_manager.warning(message, title=title, duration=6500)
+        else:
+            toast_manager.info(message, title=title, duration=5000)
+    except Exception as e:
+        logger.debug(f"Could not send phase toast: {e}")
+
+
 class PhaseManager:
     """Manages Day/Evening/Night phases based on GPS sun times or fallback."""
 
@@ -36,8 +51,8 @@ class PhaseManager:
         self.current_dark_mode = 'dark'
 
         # Timeouts
-        self.GPS_STARTUP_TIMEOUT = 900   # 15 minutes
-        self.GPS_LOSS_TIMEOUT = 3600     # 1 hour
+        self.GPS_STARTUP_TIMEOUT = 900
+        self.GPS_LOSS_TIMEOUT = 3600
 
         self.startup_time = time.time()
 
@@ -58,7 +73,7 @@ class PhaseManager:
 
         self._calculate_and_cache_times()
         self._update_phase(use_fallback=False)
-        self._auto_update_dark_mode()   # Initial sync
+        self._auto_update_dark_mode()
 
         self.thread = threading.Thread(target=self._phase_loop, daemon=True, name="PhaseLoop")
         self.thread.start()
@@ -109,12 +124,18 @@ class PhaseManager:
             source = "forced" if self.forced_phase else ("fallback" if use_fallback else "GPS")
             logger.info(f"🌗 Phase changed: {self.current_phase} → {new_phase} ({source})")
 
+            if self.forced_phase:
+                toast_message = f"Starting {new_phase} phase"
+                _send_phase_toast(toast_message, title="Phase Forced", toast_type="warning")
+            else:
+                toast_message = f"It is now {new_phase}, applying new lighting levels"
+                _send_phase_toast(toast_message, title="New Phase", toast_type="info")
+
             self.current_phase = new_phase
             self._broadcast_phase_update()
             self._auto_update_dark_mode()
 
     def _get_sun_times(self, use_fallback: bool):
-        """Single source of truth for sunrise/sunset calculation."""
         tz = self.fallback_tz
         now = datetime.datetime.now(tz)
 
@@ -125,20 +146,18 @@ class PhaseManager:
 
             sunrise = self._parse_sun_time(state.get("sunrise"), tz, now)
             sunset = self._parse_sun_time(state.get("sunset"), tz, now)
-            source = "GPS"
         else:
             sunrise = self.fallback_sun.get_local_sunrise_time(now, tz)
             sunset = self.fallback_sun.get_local_sunset_time(now, tz)
-            source = "FALLBACK"
 
         sunrise = sunrise.replace(year=now.year, month=now.month, day=now.day)
         sunset = sunset.replace(year=now.year, month=now.month, day=now.day)
 
-        return sunrise, sunset, source, tz, now
+        return sunrise, sunset, tz, now
 
     def _calculate_phase(self, use_fallback: bool) -> str:
         try:
-            sunrise, sunset, _, _, now = self._get_sun_times(use_fallback)
+            sunrise, sunset, _, now = self._get_sun_times(use_fallback)
 
             day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
             evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
@@ -157,10 +176,8 @@ class PhaseManager:
             return "Day"
 
     def _auto_update_dark_mode(self):
-        """Update dark/light mode based on current phase. PhaseManager is source of truth."""
         if not self.socketio:
             return
-
         try:
             phase = self.get_phase().lower()
             if phase not in ("day", "evening", "night"):
@@ -171,9 +188,7 @@ class PhaseManager:
             if desired_mode != self.current_dark_mode:
                 self.current_dark_mode = desired_mode
                 logger.info(f"🌗 Auto dark mode → {desired_mode} (phase = {phase})")
-
                 self.socketio.emit('global_dark_mode_update', {'mode': desired_mode})
-
         except Exception as e:
             logger.debug(f"Auto dark mode check failed: {e}")
 
@@ -202,7 +217,7 @@ class PhaseManager:
         logger.debug("🌗 [CACHE] Starting phase times calculation")
 
         try:
-            sunrise, sunset, source, _, now = self._get_sun_times(use_fallback=False)
+            sunrise, sunset, _, now = self._get_sun_times(use_fallback=False)
 
             day_start = sunrise + datetime.timedelta(minutes=self.day_offset_minutes)
             evening_start = sunset - datetime.timedelta(minutes=self.evening_offset_minutes)
@@ -219,10 +234,10 @@ class PhaseManager:
             }
 
             duration = (time.time() - start_time) * 1000
-            logger.debug(f"🌗 [CACHE] SUCCESS ({source}) in {duration:.1f}ms")
+            logger.debug(f"🌗 [CACHE] SUCCESS in {duration:.1f}ms")
 
         except Exception as e:
-            logger.error(f"🌗 [CACHE] FAILED → setting em-dashes. Error: {e}", exc_info=True)
+            logger.error(f"🌗 [CACHE] FAILED: {e}", exc_info=True)
             self._cached_phase_times = {"day_start": "—", "evening_start": "—", "night_start": "—"}
 
     # ====================== PUBLIC API ======================
@@ -238,7 +253,6 @@ class PhaseManager:
         return self.phase_ramp_time_ms
 
     def get_current_dark_mode(self) -> str:
-        """Single source of truth for UI dark/light mode."""
         return self.current_dark_mode
 
     def force_phase(self, phase: str):
@@ -259,6 +273,12 @@ class PhaseManager:
 
         if old is not None:
             logger.info(f"🔄 Cleared forced phase (was: {old})")
+            # ← New info toast when clearing force
+            _send_phase_toast(
+                f"Returning to {self.get_phase()} phase",
+                title="Phase Force Cleared",
+                toast_type="info"
+            )
         else:
             logger.debug("🔄 clear_force called with no active force")
 
@@ -272,8 +292,6 @@ class PhaseManager:
     def _broadcast_phase_update(self):
         try:
             times = self.get_phase_times()
-            logger.debug(f"🌗 [BROADCAST] Sending phase_update with times: {times}")
-
             payload = {
                 'phase': self.get_phase(),
                 'forced': self.is_forced(),

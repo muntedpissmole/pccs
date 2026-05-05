@@ -464,6 +464,12 @@ html.light .toast-error   { background: linear-gradient(135deg, rgba(244, 63, 94
 html.light .toast-warning { background: linear-gradient(135deg, rgba(251, 191, 36, 0.75), rgba(255,255,255,0.94)) !important; }
 html.light .toast-info    { background: linear-gradient(135deg, rgba(56, 189, 248, 0.75), rgba(255,255,255,0.94)) !important; }
 
+.toast.show,
+.toast.opacity-100 {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 /* ====================== DISABLED STATES ====================== */
 /* Rooftop tent closed state – inherits from base.css but can be tweaked here. */
 .slider-card.rooftop-disabled {

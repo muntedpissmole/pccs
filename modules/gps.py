@@ -25,6 +25,24 @@ from flask_socketio import SocketIO
 logger = logging.getLogger("pccs")
 
 
+def _send_gps_toast(message: str, title: str = "GPS", toast_type: str = "info", duration: int = 5000):
+    """Safe toast sender"""
+    try:
+        from modules.toasts import toast_manager
+        if toast_manager is None:
+            logger.debug("ToastManager not ready yet")
+            return
+
+        if toast_type == "success":
+            toast_manager.success(message, title=title, duration=duration)
+        elif toast_type == "warning":
+            toast_manager.warning(message, title=title, duration=duration)
+        else:
+            toast_manager.info(message, title=title, duration=duration)
+    except Exception as e:
+        logger.debug(f"Could not send GPS toast: {e}")
+
+
 class GPSModule:
     """Manages GPS hardware interface, position tracking, time, location naming, and solar data."""
 
@@ -44,9 +62,9 @@ class GPSModule:
     FALLBACK_NAME = "Alexandra"
 
     MOVEMENT_THRESHOLD_KM = 2.0
-    SUBURB_UPDATE_INTERVAL = 3600      # seconds
-    SUN_UPDATE_INTERVAL = 3600         # seconds
-    BROADCAST_INTERVAL = 10            # seconds
+    SUBURB_UPDATE_INTERVAL = 3600
+    SUN_UPDATE_INTERVAL = 3600
+    BROADCAST_INTERVAL = 10
 
     def __init__(self, socketio: SocketIO):
         self.socketio = socketio
@@ -78,8 +96,101 @@ class GPSModule:
         self.last_suburb_update = 0.0
         self.last_broadcast = 0.0
 
+        # Fix tracking
+        self._previous_fix_quality = 0
+        self._last_fix_toast_time = 0.0
+        self._toast_cooldown = 5.0
+
+        logger.info("📍 GPSModule initialized")
+
+    # ==================================================================
+    # Toast Helpers
+    # ==================================================================
+    def _send_fix_lost_toast(self):
+        now = time.time()
+        if now - self._last_fix_toast_time < self._toast_cooldown:
+            return
+
+        _send_gps_toast(
+            "Using last known position",
+            title="GPS Fix Lost",
+            toast_type="warning"
+        )
+        self._last_fix_toast_time = now
+
+    def _send_fix_acquired_toast(self):
+        now = time.time()
+        if now - self._last_fix_toast_time < self._toast_cooldown:
+            return
+
+        _send_gps_toast(
+            "Updating location data",
+            title="GPS Fix Acquired",
+            toast_type="success"
+        )
+        self._last_fix_toast_time = now
+
+    def _send_simulation_toast(self, message: str, title: str, toast_type: str):
+        """Simulation-specific toast (no cooldown)"""
+        try:
+            from modules.toasts import toast_manager
+            if toast_manager is None:
+                return
+            if toast_type == "success":
+                toast_manager.success(message, title=title, duration=4000)
+            elif toast_type == "warning":
+                toast_manager.warning(message, title=title, duration=4000)
+            else:
+                toast_manager.info(message, title=title, duration=4000)
+        except Exception as e:
+            logger.debug(f"Simulation toast failed: {e}")
+
+    # ==================================================================
+    # Simulation Control
+    # ==================================================================
+    def set_no_fix_simulation(self, enabled: bool) -> None:
+        """Force no-fix mode for testing"""
+        was_enabled = self.state.get("force_no_fix", False)
+        if enabled == was_enabled:
+            return
+
+        self.state["force_no_fix"] = bool(enabled)
+        self.socketio.emit('gps_update', self.get_state())
+
+        if enabled:
+            self._send_fix_lost_toast()
+            self._send_simulation_toast(
+                "GPS fix lost (simulation active)",
+                title="GPS Forced",
+                toast_type="warning"
+            )
+        else:
+            self._send_fix_acquired_toast()
+            self._send_simulation_toast(
+                "GPS Fix Acquired (simulation cleared)",
+                title="GPS Force Cleared",
+                toast_type="success"
+            )
+
+        self._previous_fix_quality = 0 if enabled else 1
+        self._last_fix_toast_time = time.time()   # Prevent duplicate from reader loop
+
+    def get_state(self) -> dict:
+        state = self.state.copy()
+        if state.get("force_no_fix"):
+            state.update({
+                "fix_quality": 0,
+                "satellites": 0,
+                "latitude": None,
+                "longitude": None,
+                "speed_kmh": None,
+            })
+        return state
+
+    # ==================================================================
+    # Core Parsing
+    # ==================================================================
     def _parse_lat_lon(self, msg) -> Tuple[Optional[float], Optional[float]]:
-        """Extract latitude and longitude from an NMEA message and normalise for southern hemisphere."""
         try:
             lat = getattr(msg, 'latitude', None)
             lon = getattr(msg, 'longitude', None)
@@ -88,9 +199,7 @@ class GPSModule:
 
             lat = lat if getattr(msg, 'lat_dir', 'N') == 'N' else -lat
             lon = lon if getattr(msg, 'lon_dir', 'E') == 'E' else -lon
-
-            # Melbourne / Victoria safety net - ensure southern hemisphere
-            if lat > 0:
+            if lat > 0:  # Southern hemisphere
                 lat = -lat
 
             return round(lat, 6), round(lon, 6)
@@ -98,7 +207,6 @@ class GPSModule:
             return None, None
 
     def init_gps(self) -> bool:
-        """Attempt to initialise GPS on common serial ports."""
         for port in self.GPS_PORTS:
             if not __import__('os').path.exists(port):
                 continue
@@ -114,7 +222,6 @@ class GPSModule:
         return False
 
     def init_geolocator(self) -> bool:
-        """Initialise Nominatim geolocator (idempotent)."""
         if self.geolocator is not None:
             return True
         try:
@@ -128,33 +235,12 @@ class GPSModule:
             logger.warning(f"Geolocator initialisation failed: {e}")
             return False
 
-    def set_no_fix_simulation(self, enabled: bool) -> None:
-        """Enable or disable 'No GPS Fix' simulation mode for diagnostics."""
-        self.state["force_no_fix"] = bool(enabled)
-        logger.info(f"GPS No-Fix simulation {'ENABLED' if enabled else 'DISABLED'}")
-        self.socketio.emit('gps_update', self.get_state())
-
-    def get_state(self) -> dict:
-        """Return current GPS state, applying no-fix simulation when active."""
-        state = self.state.copy()
-        if state.get("force_no_fix"):
-            state.update({
-                "fix_quality": 0,
-                "satellites": 0,
-                "latitude": None,
-                "longitude": None,
-                "speed_kmh": None,
-            })
-        return state
-
     def start_reader(self) -> None:
-        """Start background GPS reader and sun refresh threads."""
         self.init_geolocator()
         threading.Thread(target=self._reader_loop, daemon=True, name="GPS_Reader").start()
         threading.Thread(target=self._sun_refresh_loop, daemon=True, name="SunRefresh").start()
 
     def _reader_loop(self) -> None:
-        """Main GPS NMEA parsing loop."""
         while True:
             if not self.serial or not getattr(self.serial, 'is_open', False):
                 time.sleep(0.5)
@@ -172,13 +258,12 @@ class GPSModule:
                 if not line or not line.startswith('$'):
                     continue
 
-                # Keep recent sentences for diagnostics
                 self.state["raw_sentences"] = (self.state["raw_sentences"] + [line])[-15:]
 
                 msg = pynmea2.parse(line)
                 position_updated = False
 
-                # No-fix simulation takes precedence
+                # === No-fix simulation mode ===
                 if self.state.get("force_no_fix"):
                     now = time.time()
                     if now - self.last_broadcast > self.BROADCAST_INTERVAL:
@@ -187,7 +272,7 @@ class GPSModule:
                     time.sleep(0.03)
                     continue
 
-                # GGA - Fix quality and position
+                # === Real GPS parsing ===
                 if isinstance(msg, pynmea2.GGA):
                     quality = getattr(msg, 'quality', None) or getattr(msg, 'gps_qual', None) or 0
                     self.state["fix_quality"] = int(quality) if quality is not None else 0
@@ -199,7 +284,6 @@ class GPSModule:
                         self.state["longitude"] = lon
                         position_updated = True
 
-                # RMC - Position, time, speed
                 if isinstance(msg, pynmea2.RMC):
                     lat, lon = self._parse_lat_lon(msg)
                     if lat is not None:
@@ -210,7 +294,6 @@ class GPSModule:
                     if getattr(msg, 'datetime', None):
                         utc_dt = msg.datetime.replace(tzinfo=zoneinfo.ZoneInfo("UTC"))
                         self.state["utc_time"] = utc_dt.isoformat()
-
                         try:
                             local_tz = zoneinfo.ZoneInfo(self.state["timezone"])
                             local_dt = utc_dt.astimezone(local_tz)
@@ -223,14 +306,25 @@ class GPSModule:
                     if getattr(msg, 'spd_over_grnd', None) is not None:
                         self.state["speed_kmh"] = round(float(msg.spd_over_grnd) * 1.852, 1)
 
-                # Broadcast state when position changes
+                # Real fix status change
+                current_quality = self.state.get("fix_quality", 0)
+                if current_quality != self._previous_fix_quality:
+                    if current_quality >= 1:
+                        self._send_fix_acquired_toast()
+                    else:
+                        self._send_fix_lost_toast()
+                    self._previous_fix_quality = current_quality
+
+                # Broadcast
                 now = time.time()
-                if position_updated and (now - self.last_broadcast > self.BROADCAST_INTERVAL):
+                if (position_updated or current_quality != self._previous_fix_quality) and \
+                   (now - self.last_broadcast > self.BROADCAST_INTERVAL):
+
                     self.state["using_fallback"] = False
                     self.socketio.emit('gps_update', self.get_state())
                     self.last_broadcast = now
 
-                    if self.state["fix_quality"] >= 1:
+                    if current_quality >= 1:
                         if not self.state.get("sunrise"):
                             self._update_sun_times()
                         if now - self.last_suburb_update > self.SUBURB_UPDATE_INTERVAL:
@@ -244,20 +338,20 @@ class GPSModule:
 
             time.sleep(0.03)
 
+    # ==================================================================
+    # Background tasks
+    # ==================================================================
     def _sun_refresh_loop(self) -> None:
-        """Periodic sun times refresh."""
         while True:
             time.sleep(self.SUN_UPDATE_INTERVAL)
             if self.state.get("latitude") and self.state.get("fix_quality", 0) >= 1:
                 self._update_sun_times()
 
     def _update_sun_times(self) -> bool:
-        """Calculate sunrise and sunset for current location."""
         lat = self.state.get("latitude")
         lon = self.state.get("longitude")
         if not lat or not lon:
             return False
-
         try:
             location = LocationInfo(latitude=lat, longitude=lon)
             s = sun(location.observer, date=date.today())
@@ -276,29 +370,23 @@ class GPSModule:
             return False
 
     def _haversine_km(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate great-circle distance in kilometres."""
         R = 6371.0
         lat1_rad = math.radians(lat1)
         lon1_rad = math.radians(lon1)
         lat2_rad = math.radians(lat2)
         lon2_rad = math.radians(lon2)
-
         dlat = lat2_rad - lat1_rad
         dlon = lon2_rad - lon1_rad
-
-        a = (math.sin(dlat / 2)**2 +
-             math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2)
+        a = (math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2)
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return R * c
 
     def _update_suburb(self) -> None:
-        """Update suburb name using online Nominatim or offline fallback towns."""
         lat = self.state.get("latitude")
         lon = self.state.get("longitude")
         if not lat or not lon or self.state.get("force_no_fix"):
             return
 
-        # Skip if movement is insignificant
         if self.last_known_lat is not None and self.last_known_lon is not None:
             distance = self._haversine_km(self.last_known_lat, self.last_known_lon, lat, lon)
             if distance < self.MOVEMENT_THRESHOLD_KM:
@@ -309,23 +397,18 @@ class GPSModule:
         self.last_known_lon = lon
 
         try:
-            # Prefer online reverse geocoding
             if self.geolocator:
                 try:
                     location = self.geolocator.reverse(
-                        (lat, lon),
-                        exactly_one=True,
-                        timeout=12,
-                        language='en',
-                        addressdetails=True
+                        (lat, lon), exactly_one=True, timeout=12,
+                        language='en', addressdetails=True
                     )
                     if location and location.raw and location.raw.get('address'):
                         addr = location.raw['address']
                         name_keys = ['suburb', 'town', 'village', 'hamlet', 'locality', 'city', 'place']
                         new_suburb = next((addr[key] for key in name_keys if addr.get(key)), None)
-
                         if new_suburb:
-                            logger.info(f"Location: {new_suburb} (lat: {lat:.6f}, lon: {lon:.6f})")
+                            logger.info(f"Location: {new_suburb}")
                             self.state["suburb"] = new_suburb
                             self.state["using_fallback"] = False
                             self.socketio.emit('gps_update', self.get_state())
@@ -334,7 +417,7 @@ class GPSModule:
                 except Exception as e:
                     logger.debug(f"Nominatim lookup failed: {e}")
 
-            # Offline fallback using major Victorian towns
+            # Offline fallback
             major_towns = [
                 {"name": "Alexandra", "lat": -37.191, "lon": 145.711},
                 {"name": "Mansfield", "lat": -37.052, "lon": 146.083},
@@ -355,10 +438,7 @@ class GPSModule:
                     closest = town
 
             if closest and min_dist < 120:
-                new_suburb = (
-                    closest["name"] if min_dist < 10
-                    else f"{closest['name']} ({min_dist:.0f} km away)"
-                )
+                new_suburb = closest["name"] if min_dist < 10 else f"{closest['name']} ({min_dist:.0f} km away)"
             else:
                 new_suburb = f"{lat:.4f}, {lon:.4f}"
 
