@@ -41,5 +41,4 @@ This project has been built with support for:
 <img src="images/pccs-ipad-landscape.png" alt="The PCCS Desktop/Touchscreen UI" width="100%">
 
  ## Mobile UI
-<img src="images/pccs-iphone-top.png" alt="The PCCS Mobile UI" width="45%">
-<img src="images/pccs-iphone-bottom.png" alt="The PCCS Mobile UI" width="45%">
+<img src="images/pccs-iphone-top.png" alt="The PCCS Mobile UI" width="49%"> <img src="images/pccs-iphone-bottom.png" alt="The PCCS Mobile UI" width="49%">
