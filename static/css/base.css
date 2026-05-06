@@ -27,6 +27,11 @@
 }
 
 /* ====================== CUSTOM PROPERTIES ====================== */
+html {
+    transition: background-color 0.45s ease,
+                color 0.45s ease;
+}
+
 :root {
   /* Core Accent */
   --accent-color: #4FC3F7;

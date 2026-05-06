@@ -9,17 +9,17 @@ from suntime import Sun
 logger = logging.getLogger("pccs")
 
 
-def _send_phase_toast(message: str, title: str = "Phase Change", toast_type: str = "info"):
-    """Safe toast sender"""
+def _send_phase_toast(message: str, toast_type: str = "info"):
+    """Safe toast sender for phase changes - no title, no custom duration"""
     try:
         from modules.toasts import toast_manager
         if toast_manager is None:
             return
 
         if toast_type == "warning":
-            toast_manager.warning(message, title=title, duration=6500)
+            toast_manager.warning(message, title=None)
         else:
-            toast_manager.info(message, title=title, duration=5000)
+            toast_manager.info(message, title=None)
     except Exception as e:
         logger.debug(f"Could not send phase toast: {e}")
 
@@ -124,12 +124,8 @@ class PhaseManager:
             source = "forced" if self.forced_phase else ("fallback" if use_fallback else "GPS")
             logger.info(f"🌗 Phase changed: {self.current_phase} → {new_phase} ({source})")
 
-            if self.forced_phase:
-                toast_message = f"Starting {new_phase} phase"
-                _send_phase_toast(toast_message, title="Phase Forced", toast_type="warning")
-            else:
-                toast_message = f"It is now {new_phase}, applying new lighting levels"
-                _send_phase_toast(toast_message, title="New Phase", toast_type="info")
+            toast_message = f"It is now {new_phase}, applying new lighting levels"
+            _send_phase_toast(toast_message)
 
             self.current_phase = new_phase
             self._broadcast_phase_update()
@@ -273,12 +269,7 @@ class PhaseManager:
 
         if old is not None:
             logger.info(f"🔄 Cleared forced phase (was: {old})")
-            # ← New info toast when clearing force
-            _send_phase_toast(
-                f"Returning to {self.get_phase()} phase",
-                title="Phase Force Cleared",
-                toast_type="info"
-            )
+            # Toast for clearing force has been removed as requested
         else:
             logger.debug("🔄 clear_force called with no active force")
 

@@ -1,0 +1,243 @@
+/* Template Name */
+
+:root {
+  /* ================== GLASS CORE ================== */
+  --glass-bg: ;
+  --glass-bg-light: ;
+  
+  --glass-border: ;
+  --glass-border-light: ;
+  
+  --glass-shadow: ;
+  --glass-blur: ;
+  --glass-frost: ;
+
+  /* Accent Glow */
+  --accent-glow: ;
+  --accent-glow-strong: ;
+}
+
+/* ====================== GLOBAL ====================== */
+body {
+  background: ;
+}
+
+body::before {
+  background: ;
+}
+
+body::after {
+  content: ;
+  position: ;
+  inset: ;
+  background: ;
+  pointer-events: ;
+  z-index: ;
+  mix-blend-mode: ;
+}
+
+/* Light mode global overrides */
+html.light body,
+[data-theme="light"] body {
+  background: ;
+}
+
+/* ====================== ICON GLOW ====================== */
+.icon,
+[class*="icon"],
+i.fa-solid,
+svg {
+  filter:  !important;
+  transition: ;
+}
+
+.icon:hover,
+[class*="icon"]:hover,
+i.fa-solid:hover {
+  filter:  !important;
+}
+
+.active .icon,
+.on .icon,
+.active i.fa-solid {
+  filter:  !important;
+}
+
+/* ====================== NEUMORPHISM BASE ====================== */
+.neumorph,
+.tile,
+.slider-card {
+  background:  !important;
+  border:  !important;
+  border-radius: ;
+  box-shadow: ;
+  backdrop-filter:  ;
+  -webkit-backdrop-filter:  ;
+  transition: ;
+}
+
+.tile:hover,
+.slider-card:hover {
+  background:  !important;
+  transform: ;
+  box-shadow: ;
+}
+
+/* Light mode glass cards */
+html.light .neumorph,
+html.light .tile,
+html.light .slider-card,
+[data-theme="light"] .neumorph,
+[data-theme="light"] .tile,
+[data-theme="light"] .slider-card {
+  --glass-bg: ;
+  --glass-border: ;
+  background:  !important;
+  border-color:  !important;
+  color: ;
+}
+
+/* ====================== SCENE BUTTONS ====================== */
+.scene-btn {
+  background:  !important;
+  border:  !important;
+  backdrop-filter:  ;
+  box-shadow: ;
+  color: ;
+  font-weight: ;
+  border-radius: ;
+  transition: ;
+}
+
+.scene-btn:hover {
+  background:  !important;
+  transform: ;
+  box-shadow: ;
+}
+
+.scene-btn.active {
+  background:  !important;
+  color: ;
+  box-shadow: ;
+}
+
+/* Light mode scene buttons */
+html.light .scene-btn,
+[data-theme="light"] .scene-btn {
+  background:  !important;
+  border:  !important;
+  color:  !important;
+  box-shadow:  !important;
+  backdrop-filter: ;
+}
+
+html.light .scene-btn:hover,
+[data-theme="light"] .scene-btn:hover {
+  background:  !important;
+  transform: ;
+}
+
+html.light .scene-btn.active,
+[data-theme="light"] .scene-btn.active {
+  background:  !important;
+  color:  !important;
+  box-shadow:  !important;
+}
+
+/* ====================== SLIDER CARDS ====================== */
+/* Slider track */
+.slider-track {
+  background:  !important;
+  border: ;
+}
+
+/* Slider fill */
+.slider-fill {
+  background:  !important;
+  box-shadow: ;
+}
+
+.slider-fill.bug-mode {
+  background:  !important;
+  box-shadow: ;
+}
+
+/* Slider thumb */
+.slider-thumb {
+  background: ;
+  border: ;
+  box-shadow: ;
+}
+
+.slider-thumb:hover {
+  box-shadow: ;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background:  !important;
+  border: ;
+  backdrop-filter: ;
+  box-shadow: ;
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background:  !important;
+  box-shadow: ;
+}
+
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  background:  !important;
+  border: ;
+  box-shadow: ;
+}
+
+/* Kitchen & Awning – red “bug mode” */
+.toggle-pill.colour-toggle.bug-mode,
+.relay-toggle.colour-toggle.bug-mode {
+  background:  !important;
+}
+
+.toggle-pill.colour-toggle.bug-mode.on,
+.relay-toggle.colour-toggle.bug-mode.on {
+  box-shadow: ;
+}
+
+/* Light mode toggles */
+html.light .toggle-pill,
+html.light .relay-toggle,
+[data-theme="light"] .toggle-pill,
+[data-theme="light"] .relay-toggle {
+  background:  !important;
+}
+
+html.light .toggle-pill.on,
+html.light .relay-toggle.on,
+[data-theme="light"] .toggle-pill.on,
+[data-theme="light"] .relay-toggle.on {
+  background:  !important;
+  box-shadow: ;
+}
+
+html.light .toggle-pill.colour-toggle.bug-mode.on,
+[data-theme="light"] .toggle-pill.colour-toggle.bug-mode.on {
+  background:  !important;
+  box-shadow: ;
+}
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  opacity: ;
+  pointer-events: ;
+  cursor: ;
+}
+
+/* ====================== OFFLINE BANNER ====================== */
+#offline-banner {
+  background:  !important;
+  backdrop-filter: ;
+  border: ;
+}

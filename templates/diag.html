@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PCCS Diagnostics</title>
   <script src="/static/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
-  <link id="theme-stylesheet" rel="stylesheet" href="">
 <style>
 	@font-face {
 	  font-family: 'Satoshi';
@@ -61,12 +61,8 @@
       gap: 10px;
     }
 
-    /* Sky Blue Accent - matches your main UI */
-    .accent-sky {
-      color: #38bdf8;
-    }
+    .accent-sky { color: #38bdf8; }
 
-    /* === UNIFIED STATUS BOXES === */
     .status {
       font-weight: 700;
       padding: 11px 20px;
@@ -83,17 +79,8 @@
       color: #e0f2fe;
     }
 
-    .closed { 
-      background: #38bdf8; 
-      color: #0f172a; 
-      border-color: #7dd3fc; 
-    }
-    .open { 
-      background: #64748b; 
-      color: #f1f5f9; 
-      border-color: #94a3b8; 
-    }
-    
+    .closed { background: #38bdf8; color: #0f172a; border-color: #7dd3fc; }
+    .open { background: #64748b; color: #f1f5f9; border-color: #94a3b8; }
     .forced { 
       background: #fbbf24 !important; 
       color: #1e2937 !important; 
@@ -101,7 +88,6 @@
       animation: pulse 2s infinite; 
     }
 
-    /* Improved Phase Colors - more cohesive with sky blue */
     .phase-day    { background: #38bdf8; color: #0f172a; border-color: #7dd3fc; }
     .phase-evening{ background: #fb923c; color: #1e2937; border-color: #fdba74; }
     .phase-night  { background: #6366f1; color: #e0e7ff; border-color: #818cf8; }
@@ -113,7 +99,6 @@
       100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); } 
     }
 
-    /* === PHASE FORCE BUTTONS - Better harmony === */
     .diag-btn {
       padding: 11px 20px;
       border-radius: 9999px;
@@ -137,13 +122,6 @@
       background: #475569;
     }
 
-    /* Phase Force Buttons - cohesive sky theme */
-    .diag-btn.bg-sky-600    { background: #0284c8; border-color: #38bdf8; }   /* Day */
-    .diag-btn.bg-orange-600 { background: #ea580c; border-color: #fb923c; }   /* Evening */
-    .diag-btn.bg-indigo-700 { background: #4f46e5; border-color: #818cf8; }   /* Night */
-    .diag-btn.bg-red-600    { background: #b91c1c; }
-    .diag-btn.bg-slate-600  { background: #475569; border-color: #64748b; }
-
     .diag-row-actions {
       display: flex;
       gap: 8px;
@@ -151,36 +129,33 @@
       margin-left: auto;
     }
 
-    /* Mobile stacking */
     @media (max-width: 640px) {
       .diag-row {
         flex-direction: column;
         align-items: stretch;
         padding: 16px 20px;
       }
-      .diag-label {
-        min-width: auto;
-        flex: none;
-        justify-content: flex-start;
-      }
-      .status {
-        min-width: auto;
-        align-self: flex-start;
-      }
-      .diag-row-actions {
-        margin-left: 0;
-        justify-content: flex-start;
-        width: 100%;
-      }
-      .diag-btn {
-        flex: 1;
-      }
+      .diag-label { min-width: auto; flex: none; }
+      .diag-row-actions { margin-left: 0; justify-content: flex-start; width: 100%; }
+      .diag-btn { flex: 1; }
     }
+	
+	.phase-force-buttons {
+	  display: flex;
+	  flex-wrap: wrap;
+	  gap: 12px;
+	}
+
+	.phase-force-buttons button {
+	  flex: 1 1 140px;
+	  min-width: 120px;
+	  white-space: nowrap;
+	}	
   </style>
 </head>
 <body class="bg-zinc-950 text-white min-h-screen">
 
-  <div class="flex-1 p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
+  <div class="flex-1 p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
     
 	<div class="flex items-center justify-between">
 	  <div>
@@ -188,29 +163,35 @@
 		  <i class="fa-solid fa-screwdriver-wrench accent-sky"></i>
 		  Diagnostics
 		</h1>
-		<p class="text-sky-300 mt-1">Reed Switches • GPS • Phases</p>
+		<p class="text-sky-300 mt-1"> Appearance • Reed Switches • GPS • Phases</p>
 	  </div>
 	  
-	  <div class="flex items-center gap-3">
-		<label class="text-sm font-medium text-zinc-400 flex items-center gap-1">
-		  <i class="fa-solid fa-palette"></i>
-		  Theme
-		</label>
-		<select id="theme-selector" 
-				class="bg-zinc-900 text-white border border-zinc-700 rounded-3xl px-4 py-2 text-sm focus:outline-none focus:border-sky-500 cursor-pointer">
-		</select>
-
-		<button id="global-mode-toggle"
-				class="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-3xl px-4 py-2 text-sm transition-colors cursor-pointer active:scale-95">
-		  <i id="mode-icon" class="fa-solid fa-moon text-sky-400"></i>
-		  <span id="mode-label" class="text-zinc-300">Dark Mode</span>
-		</button>
-
-		<div id="lastupdate" class="px-5 py-2 bg-zinc-900 rounded-3xl text-zinc-400">—</div>
-	  </div>
+	  <div id="lastupdate" class="px-5 py-2 bg-zinc-900 rounded-3xl text-zinc-400">—</div>
 	</div>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+    <!-- SINGLE COLUMN LAYOUT -->
+    <div class="space-y-8">
+
+      <!-- THEMES & APPEARANCE -->
+      <div class="diag-card neumorph p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <i class="fa-solid fa-palette text-3xl accent-sky"></i>
+          <h2 class="text-2xl font-semibold">Themes & Appearance</h2>
+        </div>
+        
+        <div class="diag-row">
+          <span class="diag-label">
+            <i class="fa-solid fa-moon accent-sky"></i>
+            Light / Dark Mode
+          </span>
+          
+          <button onclick="toggleGlobalDarkMode()" 
+                  class="diag-btn bg-slate-600 hover:bg-slate-700 flex items-center gap-3 px-8">
+            <i class="fa-solid fa-moon"></i>
+            <span id="diag-theme-text">Switch to Light Mode</span>
+          </button>
+        </div>
+      </div>
 
       <!-- REEDS -->
       <div class="diag-card neumorph p-8">
@@ -226,175 +207,132 @@
         </button>
       </div>
 
-      <!-- GPS + PHASE -->
-      <div class="space-y-6">
-
-        <div class="diag-card neumorph p-8">
-          <div class="flex items-center gap-3 mb-6">
-            <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
-            <h2 class="text-2xl font-semibold">GPS Status</h2>
-          </div>
-          <div class="space-y-4">
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-crosshairs accent-sky"></i> Fix Quality</span>
-              <span id="fix" class="status">0</span>
-              <div class="diag-row-actions">
-                <button onclick="setGPSSim(true)" class="diag-btn bg-red-600 hover:bg-red-700">Force No Fix</button>
-                <button onclick="setGPSSim(false)" class="diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
-              </div>
-            </div>
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-satellite accent-sky"></i> Satellites</span>
-              <span id="sats" class="status">—</span>
-            </div>
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-location-dot accent-sky"></i> Position</span>
-              <span id="pos" class="status">—</span>
-            </div>
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-city accent-sky"></i> Suburb</span>
-              <span id="suburb" class="status">—</span>
-            </div>
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-clock accent-sky"></i> Local Time</span>
-              <span id="time" class="status">—</span>
-            </div>
-            <div class="diag-row">
-              <span class="diag-label"><i class="fa-solid fa-tachometer-alt accent-sky"></i> Speed</span>
-              <span id="speed" class="status">—</span>
-            </div>
-          </div>
+      <!-- GPS -->
+      <div class="diag-card neumorph p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <i class="fa-solid fa-satellite-dish text-3xl accent-sky"></i>
+          <h2 class="text-2xl font-semibold">GPS Status</h2>
         </div>
+        <div class="space-y-4">
+          <div class="diag-row">
+            <span class="diag-label"><i class="fa-solid fa-crosshairs accent-sky"></i> Fix Quality</span>
+            <span id="fix" class="status">0</span>
+            <div class="diag-row-actions">
+              <button onclick="setGPSSim(true)" class="diag-btn bg-red-600 hover:bg-red-700">Force No Fix</button>
+              <button onclick="setGPSSim(false)" class="diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
+            </div>
+          </div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-satellite accent-sky"></i> Satellites</span><span id="sats" class="status">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-location-dot accent-sky"></i> Position</span><span id="pos" class="status">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-city accent-sky"></i> Suburb</span><span id="suburb" class="status">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-clock accent-sky"></i> Local Time</span><span id="time" class="status">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-tachometer-alt accent-sky"></i> Speed</span><span id="speed" class="status">—</span></div>
+        </div>
+      </div>
 
+		<!-- SUN & PHASE -->
 		<div class="diag-card neumorph p-8">
 		  <div class="flex items-center gap-3 mb-6">
 			<i class="fa-solid fa-sun text-3xl accent-sky"></i>
 			<h2 class="text-2xl font-semibold">Sun & Phase</h2>
 		  </div>
-
 		  <div class="space-y-4">
-			<!-- Individual scene transition rows (like sunrise/sunset) -->
-			<div class="diag-row">
-			  <span class="diag-label">
-				<i class="fa-solid fa-sun accent-sky"></i> 
-				Day Starts
-			  </span>
-			  <span id="day_start" class="status sun-time">—</span>
-			</div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-sun accent-sky"></i> Day Starts</span><span id="day_start" class="status sun-time">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-cloud-sun accent-sky"></i> Evening Starts</span><span id="evening_start" class="status sun-time">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-moon accent-sky"></i> Night Starts</span><span id="night_start" class="status sun-time">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-sun accent-sky"></i> Sunrise</span><span id="sunrise" class="status sun-time">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-moon accent-sky"></i> Sunset</span><span id="sunset" class="status sun-time">—</span></div>
+          <div class="diag-row"><span class="diag-label"><i class="fa-solid fa-circle-half-stroke accent-sky"></i> Current Phase</span><span id="current-phase" class="status phase-day">—</span></div>
+        </div>
 
-			<div class="diag-row">
-			  <span class="diag-label">
-				<i class="fa-solid fa-cloud-sun accent-sky"></i> 
-				Evening Starts
-			  </span>
-			  <span id="evening_start" class="status sun-time">—</span>
-			</div>
-
-			<div class="diag-row">
-			  <span class="diag-label">
-				<i class="fa-solid fa-moon accent-sky"></i> 
-				Night Starts
-			  </span>
-			  <span id="night_start" class="status sun-time">—</span>
-			</div>
-
-			<!-- Sunrise / Sunset -->
-			<div class="diag-row">
-			  <span class="diag-label"><i class="fa-solid fa-sun accent-sky"></i> Sunrise</span>
-			  <span id="sunrise" class="status sun-time">—</span>
-			</div>
-
-			<div class="diag-row">
-			  <span class="diag-label"><i class="fa-solid fa-moon accent-sky"></i> Sunset</span>
-			  <span id="sunset" class="status sun-time">—</span>
-			</div>
-
-			<div class="diag-row">
-			  <span class="diag-label"><i class="fa-solid fa-circle-half-stroke accent-sky"></i> Current Phase</span>
-			  <span id="current-phase" class="status phase-day">—</span>
-			</div>
-		  </div>
-
-		  <div class="flex gap-3 mt-8">
-			<button onclick="forcePhase('day')" class="flex-1 diag-btn bg-sky-600 hover:bg-sky-700">Force DAY</button>
-			<button onclick="forcePhase('evening')" class="flex-1 diag-btn bg-orange-600 hover:bg-orange-700">Force EVENING</button>
-			<button onclick="forcePhase('night')" class="flex-1 diag-btn bg-indigo-700 hover:bg-indigo-800">Force NIGHT</button>
-			<button onclick="clearPhaseForce()" class="flex-1 diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
+		<div class="phase-force-buttons flex flex-wrap gap-3 mt-8">
+			<button onclick="forcePhase('day')" 
+					class="flex-1 min-w-[120px] diag-btn bg-sky-600 hover:bg-sky-700">Force DAY</button>
+			<button onclick="forcePhase('evening')" 
+					class="flex-1 min-w-[120px] diag-btn bg-orange-600 hover:bg-orange-700">Force EVENING</button>
+			<button onclick="forcePhase('night')" 
+					class="flex-1 min-w-[120px] diag-btn bg-indigo-700 hover:bg-indigo-800">Force NIGHT</button>
+			<button onclick="clearPhaseForce()" 
+					class="flex-1 min-w-[120px] diag-btn bg-slate-600 hover:bg-slate-700">Clear</button>
 		  </div>
 		</div>
-      </div>
-    </div>
 
-    <!-- TOAST TEST PANEL -->
-    <div class="diag-card neumorph p-8">
-      <div class="flex items-center gap-3 mb-6">
-        <i class="fa-solid fa-bell text-3xl accent-sky"></i>
-        <h2 class="text-2xl font-semibold">Toast Notifications Test</h2>
-      </div>
-      
-      <div class="space-y-6">
-        <div>
-          <label class="block text-sm text-zinc-400 mb-2">Title (optional)</label>
-          <input id="toast-title" 
-                 type="text" 
-                 placeholder="e.g. Rooftop Tent"
-                 class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
+      <!-- TOAST TEST PANEL -->
+      <div class="diag-card neumorph p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <i class="fa-solid fa-bell text-3xl accent-sky"></i>
+          <h2 class="text-2xl font-semibold">Toast Notifications Test</h2>
         </div>
+        
+        <div class="space-y-6">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Title (optional)</label>
+            <input id="toast-title" type="text" placeholder="e.g. Rooftop Tent"
+                   class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
+          </div>
 
-        <div>
-          <label class="block text-sm text-zinc-400 mb-2">Message</label>
-          <input id="toast-message" 
-                 type="text" 
-                 value="Rooftop tent opened — lights activated"
-                 class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
-        </div>
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Message</label>
+            <input id="toast-message" type="text" value="Rooftop tent opened — lights activated"
+                   class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-sky-500">
+          </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <button onclick="sendTestToast('success')" 
-                  class="diag-btn bg-emerald-600 hover:bg-emerald-700 text-white">
-            ✅ Success
-          </button>
-          <button onclick="sendTestToast('info')" 
-                  class="diag-btn bg-sky-600 hover:bg-sky-700 text-white">
-            ℹ️ Info
-          </button>
-          <button onclick="sendTestToast('warning')" 
-                  class="diag-btn bg-amber-600 hover:bg-amber-700 text-white">
-            ⚠️ Warning
-          </button>
-          <button onclick="sendTestToast('error')" 
-                  class="diag-btn bg-red-600 hover:bg-red-700 text-white">
-            ❌ Error
-          </button>
-        </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button onclick="sendTestToast('success')" class="diag-btn bg-emerald-600 hover:bg-emerald-700 text-white">✅ Success</button>
+            <button onclick="sendTestToast('info')" class="diag-btn bg-sky-600 hover:bg-sky-700 text-white">ℹ️ Info</button>
+            <button onclick="sendTestToast('warning')" class="diag-btn bg-amber-600 hover:bg-amber-700 text-white">⚠️ Warning</button>
+            <button onclick="sendTestToast('error')" class="diag-btn bg-red-600 hover:bg-red-700 text-white">❌ Error</button>
+          </div>
 
-        <div class="flex gap-4 text-sm">
-          <label class="flex items-center gap-2">
-            <input type="checkbox" id="toast-persistent" class="w-4 h-4 accent-sky-500">
-            Persistent (no auto-dismiss)
-          </label>
-          <div class="flex items-center gap-2">
-            Duration:
-            <input id="toast-duration" type="number" value="4500" 
-                   class="w-20 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1 text-center">
-            <span class="text-zinc-400">ms</span>
+          <div class="flex gap-4 text-sm">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="toast-persistent" class="w-4 h-4 accent-sky-500">
+              Persistent (no auto-dismiss)
+            </label>
+            <div class="flex items-center gap-2">
+              Duration:
+              <input id="toast-duration" type="number" value="4500" 
+                     class="w-20 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1 text-center">
+              <span class="text-zinc-400">ms</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="diag-card neumorph p-8">
-      <h3 class="text-xl font-semibold mb-4 flex items-center gap-3">
-        <i class="fa-solid fa-code accent-sky"></i> Raw Payload
-      </h3>
-      <pre id="raw" class="bg-zinc-950 p-6 rounded-3xl text-sm overflow-auto font-mono">Waiting for data...</pre>
+      <!-- RAW PAYLOAD -->
+      <div class="diag-card neumorph p-8">
+        <h3 class="text-xl font-semibold mb-4 flex items-center gap-3">
+          <i class="fa-solid fa-code accent-sky"></i> Raw Payload
+        </h3>
+        <pre id="raw" class="bg-zinc-950 p-6 rounded-3xl text-sm overflow-auto font-mono min-h-[300px]">Waiting for data...</pre>
+      </div>
+
     </div>
   </div>
 
 <script src="/static/socket.io.min.js"></script>
 <script>
     const socket = io();
-    
+
+    // ====================== LIVE DARK/LIGHT MODE ======================
+    function applyDarkMode(mode) {
+        const html = document.documentElement;
+        html.classList.remove('dark', 'light');
+        
+        if (mode === 'light') {
+            html.classList.add('light');
+            html.setAttribute('data-theme', 'light');
+        } else {
+            html.classList.add('dark');
+            html.removeAttribute('data-theme');
+        }
+        console.log(`🌗 Diagnostics page switched to ${mode} mode`);
+    }
+
+    socket.on('global_dark_mode_update', function(data) {
+        if (data && data.mode) applyDarkMode(data.mode);
+    });
+
     let lastReedPayload = {};
     let lastGPSPayload = {};
     let lastKnownPhase = "DAY";
@@ -403,109 +341,6 @@
     const REED_ORDER = ["kitchen_panel", "kitchen_bench", "storage_panel", "rear_drawer", "rooftop_tent"];
     const reedRows = new Map();
 
-    // ==================== THEME SYSTEM ====================
-    async function loadThemes() {
-      try {
-        const res = await fetch('/api/themes');
-        const data = await res.json();
-        
-        const select = document.getElementById('theme-selector');
-        select.innerHTML = '';
-        
-        data.themes.forEach(theme => {
-          const option = document.createElement('option');
-          option.value = theme.file;
-          option.textContent = theme.name;
-          select.appendChild(option);
-        });
-
-        // Load current theme and apply it
-        const currentRes = await fetch('/api/current-theme');
-        const current = await currentRes.json();
-        const currentTheme = current.theme || 'stealth';
-        
-        select.value = currentTheme;
-        applyThemeToPage(currentTheme);   // ← Important fix
-      } catch (e) {
-        console.error('Failed to load themes', e);
-      }
-    }
-
-    function applyThemeToPage(filename) {
-      const link = document.getElementById('theme-stylesheet');
-      if (!link) return;
-
-      if (filename === 'base' || filename === 'neumorphism') {
-        link.href = '';
-      } else {
-        link.href = `/static/css/themes/${filename}.css?v=${Date.now()}`;
-      }
-      localStorage.setItem('pccs-active-theme', filename);
-    }
-
-    function applyTheme(filename) {
-      applyThemeToPage(filename);
-      socket.emit('set_global_theme', { theme: filename });
-    }
-
-    // Listen for theme changes from other pages
-    socket.on('global_theme_update', (data) => {
-      if (data?.theme) {
-        const select = document.getElementById('theme-selector');
-        if (select) select.value = data.theme;
-        applyThemeToPage(data.theme);
-      }
-    });
-
-    // ==================== GLOBAL DARK/LIGHT MODE ====================
-    function setGlobalDarkMode(isDark) {
-      const mode = isDark ? 'dark' : 'light';
-      socket.emit('set_global_dark_mode', { mode });
-      updateModeUI(isDark);
-      localStorage.setItem('pccs-dark-mode', mode);
-    }
-
-    function updateModeUI(isDark) {
-      const icon = document.getElementById('mode-icon');
-      const label = document.getElementById('mode-label');
-      
-      if (icon) {
-        icon.className = isDark 
-          ? 'fa-solid fa-moon text-sky-400' 
-          : 'fa-solid fa-sun text-amber-400';
-      }
-      if (label) label.textContent = isDark ? 'Dark' : 'Light';
-    }
-
-    async function loadCurrentDarkModeUI() {
-      try {
-        const res = await fetch('/api/current-dark-mode?' + Date.now());
-        if (!res.ok) throw new Error('Failed');
-        const data = await res.json();
-        updateModeUI(data.mode === 'dark');
-      } catch (e) {
-        console.warn('Could not fetch dark mode from server');
-        const saved = localStorage.getItem('pccs-dark-mode') || 'dark';
-        updateModeUI(saved === 'dark');
-      }
-    }
-
-    // Click handler for the toggle button
-    function initDarkModeToggle() {
-      const toggle = document.getElementById('global-mode-toggle');
-      if (!toggle) return;
-
-      toggle.addEventListener('click', () => {
-        const currentIsDark = localStorage.getItem('pccs-dark-mode') !== 'light';
-        setGlobalDarkMode(!currentIsDark);
-      });
-    }
-
-    socket.on('global_dark_mode_update', (data) => {
-      if (data?.mode) updateModeUI(data.mode === 'dark');
-    });
-
-    // ==================== REED FUNCTIONS ====================
     function createOrUpdateReedRow(name, isClosed, isForced, forcedState) {
       let row = reedRows.get(name);
       if (!row) {
@@ -577,12 +412,8 @@
       if (data.evening_start !== undefined) document.getElementById('evening_start').textContent = data.evening_start || '—';
       if (data.night_start !== undefined) document.getElementById('night_start').textContent = data.night_start || '—';
 
-      if (data.phase && data.phase.toUpperCase() !== 'UNKNOWN') {
-        lastKnownPhase = data.phase.toUpperCase();
-      }
-      if (data.forced !== undefined) {
-        phaseIsForced = !!data.forced;
-      }
+      if (data.phase && data.phase.toUpperCase() !== 'UNKNOWN') lastKnownPhase = data.phase.toUpperCase();
+      if (data.forced !== undefined) phaseIsForced = !!data.forced;
 
       const phaseEl = document.getElementById('current-phase');
       if (phaseIsForced) {
@@ -602,24 +433,21 @@
       socket.emit('force_phase', { phase: null });
       phaseIsForced = false;
     };
-	// ==================== TOAST TEST FUNCTIONS ====================
+
     window.sendTestToast = function(type) {
         const title = document.getElementById('toast-title').value.trim();
         const message = document.getElementById('toast-message').value.trim() || "Test toast message";
         const persistent = document.getElementById('toast-persistent').checked;
-        let duration = parseInt(document.getElementById('toast-duration').value);
+        let duration = parseInt(document.getElementById('toast-duration').value) || 4500;
 
-        if (isNaN(duration) || duration < 500) duration = 4500;
+        socket.emit('toast_test', { title: title || undefined, message, type, duration, persistent });
+    };
 
-        socket.emit('toast_test', {
-            title: title || undefined,        // only send if not empty
-            message: message,
-            type: type,
-            duration: duration,
-            persistent: persistent
-        });
-
-        console.log(`🧪 Test toast sent: ${type} | Title: "${title}"`);
+    window.toggleGlobalDarkMode = function() {
+        const html = document.documentElement;
+        const isCurrentlyLight = html.classList.contains('light');
+        const newMode = isCurrentlyLight ? 'dark' : 'light';
+        socket.emit('set_global_dark_mode', { mode: newMode });
     };
 
     // ==================== INIT ====================
@@ -627,18 +455,9 @@
     socket.on('gps_update', updateGPS);
     socket.on('phase_update', (payload) => updateGPS(payload));
 
-      window.onload = () => {
-      loadThemes();
-      loadCurrentDarkModeUI();
-      initDarkModeToggle();
-      
-      fetch('/reed_json').then(r => r.json()).then(updateReeds);
-      fetch('/gps_json').then(r => r.json()).then(updateGPS);
-
-      const themeSelect = document.getElementById('theme-selector');
-      themeSelect.addEventListener('change', (e) => {
-        applyTheme(e.target.value);
-      });
+    window.onload = () => {
+      fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
+      fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
 
       setInterval(() => {
         fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
