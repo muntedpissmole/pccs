@@ -358,7 +358,7 @@ journalctl -u pccs.service -f
 ```
 Access the UI via the IP address e.g. `http://10.10.10.1` or via the cloudflare tunnel once configured. Access the diagnostics page via `/diag` e.g. `http://10.10.10.1/diag`.
 
-Access the log files at `\\10.10.10.1\pccs\log`.
+Access the log files at `\\10.10.10.1\pccs\logs`.
 
 ### Updating the PCCS
 1.  SSH into the Pi and git pull the newest version:
