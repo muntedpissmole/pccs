@@ -133,7 +133,7 @@ dtoverlay=disable-bt
 dtparam=spi=on
 ```
 
-4.  Save and eject card, install into RPI and login via SSH using the account name and password set during image creation e.g. `ssh pi@192.168.0.1`.
+4.  Save and eject card, install into RPI and login via SSH using the account name and password set during image creation e.g. `ssh pi@192.168.0.78`.
 
 5.  Set a static IP address for the wired ethernet port, modify details to suit:
 ```
@@ -154,7 +154,7 @@ The above assumes that the ethernet name is `netplan-eth0`, run `nmcli connectio
 6.   Install dependencies:
 ```
 sudo apt update && sudo apt upgrade -y
-sudo apt install nginx samba samba-common-bin python3-lgpio git usbmuxd libimobiledevice-utils -y
+sudo apt install nginx samba samba-common-bin python3-lgpio git usbmuxd libimobiledevice-utils ipheth-utils -y
 ```
 
 ---
