@@ -27,11 +27,6 @@
 }
 
 /* ====================== CUSTOM PROPERTIES ====================== */
-html {
-    transition: background-color 0.45s ease,
-                color 0.45s ease;
-}
-
 :root {
   /* Core Accent */
   --accent-color: #4FC3F7;
@@ -419,94 +414,129 @@ body::before {
 }
 
 /* ====================== TOASTS ====================== */
-#toast-container .toast {
-    background-color: var(--glass-bg) !important;
-    background-image: none !important;
-    border: 1px solid var(--glass-border) !important;
-    border-radius: 22px;
-    box-shadow: 
-        var(--glass-shadow),
-        inset 0 1px 0 var(--glass-frost),
-        inset 0 -3px 0 rgba(0,0,0,0.35) !important;
-    backdrop-filter: var(--glass-blur) saturate(180%);
-    padding: 18px 20px;
-    width: 100%;
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
+#toast-container {
+    position: fixed;
+    bottom: max(48px, env(safe-area-inset-bottom) + 32px);
+    left: 50%;
+    transform: translateX(-50%);
+    -webkit-transform: translateX(-50%);
+    z-index: 99999;
     
-    transform: translateY(30px);
-    opacity: 0;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    
+    width: 90%;
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 0 16px;
+    box-sizing: border-box;
+    pointer-events: none;
+    
+    will-change: transform, opacity;
 }
 
-#toast-container .toast.show {
-    transform: translateY(0);
+/* ====================== TOAST BASE ====================== */
+#toast-container .toast {
+    border-radius: 24px;
+    padding: 20px 24px;
+    
+    opacity: 0;
+    transform: translateY(12px);           /* Slight lift for smoother feel */
+    transition: 
+        opacity 0.95s cubic-bezier(0.25, 0.1, 0.25, 1),
+        transform 0.95s cubic-bezier(0.25, 0.1, 0.25, 1);
+    
+    pointer-events: auto;
+    width: 100%;
+    box-sizing: border-box;
+    
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    transform: translateZ(0);              /* Force GPU on Safari */
+}
+
+/* Show state */
+#toast-container .toast.show,
+.toast.show,
+.toast.opacity-100 {
     opacity: 1;
+    transform: translateY(0);
+}
+
+/* ====================== ICON + CONTENT ====================== */
+#toast-container .toast i.fa-solid {
+    font-size: 1.75rem;
+    flex-shrink: 0;
+}
+
+#toast-container .toast .toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+#toast-container .toast-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+#toast-container .toast-message {
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+#toast-container .toast button {
+    color: #ffffff !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-left: auto;
+    align-self: center;
 }
 
 /* ====================== SOLID COLORED TOASTS ====================== */
 #toast-container .toast-success {
     background-color: rgb(16, 185, 129) !important;
-    border-color: rgb(5, 150, 105) !important;
-    backdrop-filter: none !important;
+    border: 1px solid rgb(5, 150, 105) !important;
+    color: white !important;
 }
 
 #toast-container .toast-error {
     background-color: rgb(244, 63, 94) !important;
-    border-color: rgb(190, 18, 60) !important;
-    backdrop-filter: none !important;
+    border: 1px solid rgb(190, 18, 60) !important;
+    color: white !important;
 }
 
 #toast-container .toast-warning {
     background-color: rgb(251, 191, 36) !important;
-    border-color: rgb(194, 120, 3) !important;
-    backdrop-filter: none !important;
+    border: 1px solid rgb(194, 120, 3) !important;
+    color: white !important;
 }
 
 #toast-container .toast-info {
     background-color: rgb(56, 189, 248) !important;
-    border-color: rgb(14, 116, 144) !important;
-    backdrop-filter: none !important;
+    border: 1px solid rgb(14, 116, 144) !important;
+    color: white !important;
 }
 
-/* Force solid + clean shadow */
-#toast-container .toast.toast-success,
-#toast-container .toast.toast-error,
-#toast-container .toast.toast-warning,
-#toast-container .toast.toast-info {
+#toast-container .toast-success,
+#toast-container .toast-error,
+#toast-container .toast-warning,
+#toast-container .toast-info {
     background-image: none !important;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6) !important;
-}
-
-/* ====================== ICONS & CLOSE BUTTON ====================== */
-#toast-container .toast .fa-solid {
-    color: #ffffff !important;
-}
-
-#toast-container .toast button {
-    color: #ffffff !important;
-    cursor: pointer !important;           /* Hand cursor on hover */
-    transition: all 0.2s ease;
-}
-
-#toast-container .toast button:hover {
-    color: #e2e8f0 !important;
-    opacity: 0.9;
-    transform: scale(1.1);
-}
-
-/* ====================== TEXT COLORS ====================== */
-#toast-container .toast-title,
-#toast-container .toast-message {
-    color: #ffffff !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 /* ====================== LIGHT MODE ====================== */
 html.light #toast-container .toast,
 [data-theme="light"] #toast-container .toast {
     background-color: rgba(255, 255, 255, 0.98) !important;
+    border-color: #e2e8f0 !important;
 }
 
 html.light #toast-container .toast-success { background-color: rgb(16, 185, 129) !important; }
@@ -514,28 +544,24 @@ html.light #toast-container .toast-error   { background-color: rgb(244, 63, 94) 
 html.light #toast-container .toast-warning { background-color: rgb(251, 191, 36) !important; }
 html.light #toast-container .toast-info    { background-color: rgb(56, 189, 248) !important; }
 
-/* Light mode icons & button stay white */
-html.light #toast-container .toast .fa-solid,
-html.light #toast-container .toast button {
+html.light .toast-title,
+html.light .toast-message,
+[data-theme="light"] .toast-title,
+[data-theme="light"] .toast-message {
+    color: #1e2937 !important;
+}
+
+/* White icons/button on colored toasts */
+html.light #toast-container .toast-success i,
+html.light #toast-container .toast-error i,
+html.light #toast-container .toast-warning i,
+html.light #toast-container .toast-info i,
+html.light #toast-container .toast-success button,
+html.light #toast-container .toast-error button,
+html.light #toast-container .toast-warning button,
+html.light #toast-container .toast-info button {
     color: #ffffff !important;
 }
-
-/* ====================== LIGHT MODE ====================== */
-html.light .toast,
-[data-theme="light"] .toast {
-    background: rgba(255, 255, 255, 0.94) !important;
-}
-
-html.light .toast-title,
-[data-theme="light"] .toast-title { color: #1e2937 !important; }
-html.light .toast-message,
-[data-theme="light"] .toast-message { color: #334155 !important; }
-
-/* Light mode solid colors */
-html.light .toast-success { background: rgba(16, 185, 129, 0.88) !important; }
-html.light .toast-error   { background: rgba(244, 63, 94, 0.88) !important; }
-html.light .toast-warning { background: rgba(251, 191, 36, 0.88) !important; }
-html.light .toast-info    { background: rgba(56, 189, 248, 0.88) !important; }
 
 /* ================== COLORED BACKGROUND VARIANTS ================== */
 .toast-success {

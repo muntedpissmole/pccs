@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/css/themes/glassmorphism.css">
   <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 </head>
 <body class="bg-zinc-950 text-white min-h-screen">
 
@@ -16,8 +20,7 @@
   
     <!-- OFFLINE OVERLAY -->
 	<div id="offline-overlay" 
-		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none
-				min-h-[100dvh] h-[100dvh]">
+		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
 			<div id="offline-banner" 
            class="text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
            style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
@@ -170,11 +173,9 @@
     </div>
 
   </div>
-
-	<div id="toast-container" 
-		 class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] 
-				flex flex-col gap-3 max-w-xl w-full px-4 pointer-events-none">
-	</div>
+  
+  <!-- ====================== TOAST CONTAINER ====================== -->
+  <div id="toast-container"></div>
 
 <script src="/static/socket.io.min.js"></script>
 <script>
@@ -201,10 +202,6 @@
 		if (data && data.mode) {
 			applyDarkMode(data.mode);
 		}
-	});
-
-	socket.on('connect', function() {
-		console.log('✅ Connected - requesting initial dark mode');
 	});
 
     let currentState = {};
@@ -378,9 +375,7 @@
 
 			if (name === 'kitchen_panel' || name === 'awning') {
 				const isRed = currentModes[name] === 'red';
-				
 				wrapper.classList.toggle('bug-mode', isRed);
-				
 				if (fill) fill.classList.toggle('bug-mode', isRed);
 			}
 		}
@@ -421,7 +416,7 @@
         updateRooftopTentControls();
     }
 
-	// ==================== DRAG LOGIC (Mobile Scroll Fixed v2) ====================
+	// ==================== DRAG LOGIC (Fixed multi-slider) ====================
 	function makeDraggable(wrapper) {
 		const inner = wrapper.querySelector('.slider-inner');
 		const fill = wrapper.querySelector('.slider-fill');
@@ -429,11 +424,8 @@
 		const name = wrapper.dataset.name;
 		const valueEl = document.getElementById(`val-${name}`);
 
-		let lastSent = 0;
 		let isDragging = false;
-		let startX = 0;
-		let startY = 0;
-		let hasMoved = false;
+		let lastSent = 0;
 
 		function updatePosition(clientX) {
 			const rect = inner.getBoundingClientRect();
@@ -456,12 +448,14 @@
 		}
 
 		function startDrag() {
+			if (isDragging) return;
 			isDragging = true;
 			wrapper.classList.add('dragging');
 			currentlyDragging.add(name);
 			userJustSet.delete(name);
-			fill.style.transition = 'none';
-			thumb.style.transition = 'none';
+
+			if (fill) fill.style.transition = 'none';
+			if (thumb) thumb.style.transition = 'none';
 		}
 
 		function endDrag() {
@@ -477,20 +471,15 @@
 			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
 		}
 
-		// ───── TOUCH (mobile) ─────
+		// === TOUCH EVENTS ===
 		wrapper.addEventListener('touchstart', e => {
-			startX = e.touches[0].clientX;
-			startY = e.touches[0].clientY;
+			// Force reset any previous drag state
 			isDragging = false;
-			hasMoved = false;
 		}, { passive: true });
 
 		wrapper.addEventListener('touchmove', e => {
+			if (e.touches.length === 0) return;
 			const touch = e.touches[0];
-			const deltaX = Math.abs(touch.clientX - startX);
-			const deltaY = Math.abs(touch.clientY - startY);
-
-			hasMoved = hasMoved || (deltaX > 8 || deltaY > 8);
 
 			if (isDragging) {
 				e.preventDefault();
@@ -498,46 +487,39 @@
 				return;
 			}
 
-			if (deltaX > 15 && deltaX > deltaY * 1.2) {
+			// Only start drag on this wrapper if we're already touching it
+			// (no global tracking needed)
+			const rect = wrapper.getBoundingClientRect();
+			if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+				touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+				
 				e.preventDefault();
 				startDrag();
 				updatePosition(touch.clientX);
 			}
 		}, { passive: false });
 
-		wrapper.addEventListener('touchend', e => {
-			const touch = e.changedTouches[0];
-			const totalDeltaX = Math.abs(touch.clientX - startX);
-			const totalDeltaY = Math.abs(touch.clientY - startY);
-
-			if (!isDragging && !hasMoved && totalDeltaX < 12 && totalDeltaY < 12) {
-				const rect = inner.getBoundingClientRect();
-				const tapX = touch.clientX;
-				const percent = Math.max(0, Math.min(100, Math.round(((tapX - rect.left) / rect.width) * 100)));
-				
-				wrapper.dataset.value = percent;
-				updatePosition(tapX);
-			}
-
+		wrapper.addEventListener('touchend', () => {
 			endDrag();
 		}, { passive: true });
 
-		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
+		wrapper.addEventListener('touchcancel', () => {
+			endDrag();
+		}, { passive: true });
 
-		// ───── MOUSE (desktop) ─────
+		// === MOUSE EVENTS ===
 		wrapper.addEventListener('mousedown', e => {
-			startX = e.clientX;
-			startY = e.clientY;
 			startDrag();
 			updatePosition(e.clientX);
 
-			const move = ev => updatePosition(ev.clientX);
-			const up = () => {
-				document.removeEventListener('mousemove', move);
+			const onMove = ev => updatePosition(ev.clientX);
+			const onUp = () => {
+				document.removeEventListener('mousemove', onMove);
 				endDrag();
 			};
-			document.addEventListener('mousemove', move);
-			document.addEventListener('mouseup', up, { once: true });
+
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp, { once: true });
 		});
 	}
 
@@ -709,85 +691,6 @@
 
         socket.emit('set_scene', { scene });
     }
-	
-	// ==================== TOAST SYSTEM ====================
-	function showToast(toast) {
-		const container = document.getElementById('toast-container');
-		if (!container) return;
-
-		const { id, message, type = 'info', title, duration = 4500, persistent = false } = toast;
-
-		const toastEl = document.createElement('div');
-		toastEl.id = id || `toast-${Date.now()}`;
-		toastEl.className = `toast toast-${type} pointer-events-auto`;
-
-		const hasTitle = title && title.trim() !== '';
-
-		let html = `
-			<div class="flex items-center gap-3 w-full">   <!-- Main flex with items-center -->
-				
-				<!-- Icon -->
-				<div class="flex-shrink-0 text-2xl ${hasTitle ? 'mt-0.5' : 'mt-0'}">
-					<i class="fa-solid ${getToastIcon(type)}"></i>
-				</div>
-
-				<!-- Content -->
-				<div class="flex-1 min-w-0 flex flex-col justify-center ${hasTitle ? '' : 'py-0.5'}">
-		`;
-
-		if (hasTitle) {
-			html += `<div class="toast-title font-semibold leading-tight">${title}</div>`;
-		}
-
-		html += `
-					<div class="toast-message text-sm leading-tight">${message}</div>
-				</div>
-
-				<!-- Close button -->
-				<button onclick="dismissToast('${toastEl.id}')" 
-						class="flex-shrink-0 text-zinc-400 hover:text-white ml-1 transition-colors self-center">
-					<i class="fa-solid fa-xmark"></i>
-				</button>
-			</div>
-		`;
-
-		toastEl.innerHTML = html;
-		container.appendChild(toastEl);
-
-		setTimeout(() => toastEl.classList.add('show'), 10);
-
-		if (!persistent && duration > 0) {
-			toastEl.timeoutId = setTimeout(() => {
-				dismissToast(toastEl.id);
-			}, duration);
-		}
-	}
-
-	function getToastIcon(type) {
-		const icons = {
-			success: 'fa-check-circle',
-			error:   'fa-circle-exclamation',
-			warning: 'fa-triangle-exclamation',
-			info:    'fa-circle-info'
-		};
-		return icons[type] || icons.info;
-	}
-
-	function dismissToast(id) {
-		const toastEl = document.getElementById(id);
-		if (!toastEl) return;
-
-		if (toastEl.timeoutId) clearTimeout(toastEl.timeoutId);
-
-		toastEl.style.transition = 'all 0.35s cubic-bezier(0.4, 0, 1, 1)';
-		toastEl.style.opacity = '0';
-		toastEl.style.transform = 'translateX(120%)';
-
-		setTimeout(() => toastEl.remove(), 400);
-	}
-
-    // Socket listener
-    socket.on('toast', showToast);
 
     // ==================== INIT ====================
     window.onload = function() {
@@ -795,14 +698,6 @@
         
         updateClock();
         setInterval(updateClock, 10000);
-		
-		const themeBtn = document.getElementById('theme-toggle');
-		if (themeBtn) {
-			themeBtn.addEventListener('click', () => {
-				const current = document.documentElement.classList.contains('light') ? 'dark' : 'light';
-				socket.emit('set_global_dark_mode', { mode: current });
-			});
-		}
 		
         setTimeout(() => {
             if (Object.keys(currentState).length) updateUIFromState();
@@ -814,6 +709,82 @@
 
         console.log("🚀 PCCS Frontend Ready to go");
     };
+
+    // ====================== TOAST SYSTEM ======================
+	function createToast(data) {
+		const { id, message, type = "info", duration = 5000, title, persistent = false } = data;
+
+		const container = document.getElementById('toast-container');
+		if (!container) return;
+
+		let icon = 'fa-info-circle';
+		if (type === 'success') icon = 'fa-check-circle';
+		else if (type === 'warning') icon = 'fa-exclamation-triangle';
+		else if (type === 'error') icon = 'fa-circle-xmark';
+
+		const toast = document.createElement('div');
+		toast.className = `toast toast-${type}`;
+		toast.id = id || 'toast-' + Date.now();
+
+		toast.innerHTML = `
+			<i class="fa-solid ${icon} text-2xl flex-shrink-0"></i>
+			<div class="toast-content flex-1 min-w-0">
+				${title ? `<div class="toast-title">${title}</div>` : ''}
+				<div class="toast-message">${message}</div>
+			</div>
+			<button class="text-xl leading-none" aria-label="Close">
+				<i class="fa-solid fa-xmark"></i>
+			</button>
+		`;
+
+		container.appendChild(toast);
+
+		// Better fade-in for Safari + Firefox
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				toast.classList.add('show');
+			});
+		});
+
+		// Close button
+		const closeBtn = toast.querySelector('button');
+		closeBtn.addEventListener('click', () => dismissToast(toast));
+
+		// Click anywhere on toast to dismiss
+		toast.addEventListener('click', (e) => {
+			if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+				dismissToast(toast);
+			}
+		});
+
+		// Auto dismiss
+		if (!persistent && duration > 0) {
+			setTimeout(() => {
+				dismissToast(toast);
+			}, duration);
+		}
+
+		return toast;
+	}
+
+	function dismissToast(toast) {
+		if (!toast || !toast.parentNode) return;
+		
+		toast.style.transition = 'opacity 0.95s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.95s cubic-bezier(0.25, 0.1, 0.25, 1)';
+		toast.style.opacity = '0';
+		toast.style.transform = 'translateY(12px)';
+
+		toast.addEventListener('transitionend', () => {
+			if (toast.parentNode) toast.parentNode.removeChild(toast);
+		}, { once: true });
+	}
+
+    // ====================== SOCKET LISTENER ======================
+    socket.on('toast', function(data) {
+        console.log('🧪 Toast received:', data.type, '-', data.message?.substring(0, 80));
+        createToast(data);
+    });
+
 </script>
 </body>
 </html>

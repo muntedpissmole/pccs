@@ -315,19 +315,31 @@
     const socket = io();
 
     // ====================== LIVE DARK/LIGHT MODE ======================
-    function applyDarkMode(mode) {
-        const html = document.documentElement;
-        html.classList.remove('dark', 'light');
-        
-        if (mode === 'light') {
-            html.classList.add('light');
-            html.setAttribute('data-theme', 'light');
-        } else {
-            html.classList.add('dark');
-            html.removeAttribute('data-theme');
-        }
-        console.log(`🌗 Diagnostics page switched to ${mode} mode`);
-    }
+	function applyDarkMode(mode) {
+		const html = document.documentElement;
+		html.classList.remove('dark', 'light');
+		
+		const themeText = document.getElementById('diag-theme-text');
+		const icon = document.querySelector('#diag-theme-text').parentElement.querySelector('i');
+
+		if (mode === 'light') {
+			html.classList.add('light');
+			html.setAttribute('data-theme', 'light');
+			
+			themeText.textContent = 'Switch to Dark Mode';
+			icon.classList.remove('fa-moon');
+			icon.classList.add('fa-sun');
+		} else {
+			html.classList.add('dark');
+			html.removeAttribute('data-theme');
+			
+			themeText.textContent = 'Switch to Light Mode';
+			icon.classList.remove('fa-sun');
+			icon.classList.add('fa-moon');
+		}
+		
+		console.log(`🌗 Diagnostics page switched to ${mode} mode`);
+	}
 
     socket.on('global_dark_mode_update', function(data) {
         if (data && data.mode) applyDarkMode(data.mode);
@@ -443,12 +455,15 @@
         socket.emit('toast_test', { title: title || undefined, message, type, duration, persistent });
     };
 
-    window.toggleGlobalDarkMode = function() {
-        const html = document.documentElement;
-        const isCurrentlyLight = html.classList.contains('light');
-        const newMode = isCurrentlyLight ? 'dark' : 'light';
-        socket.emit('set_global_dark_mode', { mode: newMode });
-    };
+	window.toggleGlobalDarkMode = function() {
+		const html = document.documentElement;
+		const isCurrentlyLight = html.classList.contains('light');
+		const newMode = isCurrentlyLight ? 'dark' : 'light';
+		
+		applyDarkMode(newMode);
+		
+		socket.emit('set_global_dark_mode', { mode: newMode });
+	};
 
     // ==================== INIT ====================
     socket.on('reed_update', updateReeds);
