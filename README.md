@@ -369,7 +369,7 @@ git pull
 
 Update the Pi OS at the same time:
 ```
-sudo apt update && sudo apt install -y
+sudo apt update && sudo apt upgrade -y
 ```
 
 Reboot if asked, otherwise restart the PCCS service:
