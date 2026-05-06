@@ -339,8 +339,9 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 ```
 Press Ctrl+S to save and then Ctrl+x to exit.
-Reload the systemctl, enable and autostart the PCCS:
+Create a symlink, reload the systemctl, enable and autostart the PCCS:
 ```
+sudo systemctl link /home/pi/pccs.service
 sudo systemctl daemon-reload
 sudo systemctl enable pccs.service
 sudo systemctl start pccs.service
