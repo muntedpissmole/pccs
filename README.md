@@ -72,7 +72,7 @@ This project has been built with support for:
 
 **Notes**
 <small>
-- Serial port for GPS communications needs to be enabled in raspi-config
+- 1-Wire needs to be enabled in raspi-config (see instructions below)
 - 5V for peripherals (GPS/relay module etc.) not included in above table
 </small>
 
@@ -115,12 +115,12 @@ This project has been built with support for:
 ## Software Installation & Configuration
 These instructions are based on the following settings:
 ```
-Hostname: control-pi
 Username: pi
 Installation folder: /home/pi/pccs (or just ~pccs)
 RPI IP: 10.10.10.1
 DHCP range: 10.10.10.50-10.10.10.200
 Internet connection: USB hotspot or WiFi (for when system is in the workshop)
+Network: Wired ethernet connection is connected to other devices (touchscreen RPI's, WAPS) in the installation and not bridged to the upstream internet connection
 ```
 
 1.  Format an SD card with Debian Trixie 64-bit. Enable SSH during installation and edit all customisation options to suit.
