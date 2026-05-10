@@ -1,0 +1,15 @@
+Flask
+Flask-Cors
+Flask-SocketIO
+gpiozero
+python-socketio
+python-engineio
+pyserial
+geopy
+requests
+Pillow
+PyYAML
+pynmea2
+suntime
+markdown
+colorzero

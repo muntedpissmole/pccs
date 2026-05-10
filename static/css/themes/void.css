@@ -1,0 +1,290 @@
+/* Void */
+
+:root {
+  /* ================== GLASS CORE ================== */
+  --glass-bg: rgba(8, 6, 18, 0.94);
+  --glass-bg-light: rgba(18, 14, 32, 0.96);
+  
+  --glass-border: rgba(180, 80, 255, 0.12);
+  --glass-border-light: rgba(200, 120, 255, 0.22);
+  
+  --glass-shadow: none;
+  --glass-blur: blur(6px);
+  --glass-frost: rgba(140, 60, 255, 0.03);
+
+  /* Purple Text Palette */
+  --text-accent: #c070ff;
+  --text-accent-light: #e0b0ff;
+  --text-heading: #a060f0;
+}
+
+/* ====================== KILL ALL GLOWS ====================== */
+* {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+/* Restore transitions */
+.neumorph,
+.tile,
+.slider-card,
+.data-tile,
+.scene-btn,
+.toggle-pill,
+.relay-toggle,
+.slider-thumb {
+  transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+/* ====================== ICONS ====================== */
+.icon,
+[class*="icon"],
+i.fa-solid,
+svg,
+.data-tile i.fa-solid,
+.tile i.fa-solid {
+  color: #c070ff !important;
+}
+
+.icon:hover,
+[class*="icon"]:hover,
+i.fa-solid:hover {
+  color: #f0c0ff !important;
+}
+
+/* ====================== TEXT COLORS ====================== */
+/* Headings / Labels */
+.tile-label,
+p.tile-label,
+.status-tile p,
+.data-tile p:first-child,
+.tile p:first-child,
+div[class*="label"] {
+  color: #a060f0 !important;
+}
+
+/* Values / Numbers (including min/max) */
+.tile-value,
+.value-display,
+.status-tile .tile-value,
+.data-tile .tile-value,
+.data-tile .value,
+.slider-card .value-display,
+#temp-range,
+.tile-value.text-lg,
+p.tile-value,
+.tile-value *,
+#temp-range .value,
+.temp-range-value {
+  color: #e0b0ff !important;
+}
+
+/* Kill any blue */
+.accent-sky,
+.text-primary,
+[class*="accent"] {
+  color: #e0b0ff !important;
+}
+
+/* ====================== LIGHT MODE - CLEAN WHITE ====================== */
+html.light body,
+[data-theme="light"] body {
+  background: #f8f9fc !important;
+}
+
+/* Cards */
+html.light .neumorph,
+html.light .tile,
+html.light .slider-card,
+html.light .data-tile,
+[data-theme="light"] .neumorph,
+[data-theme="light"] .tile,
+[data-theme="light"] .slider-card,
+[data-theme="light"] .data-tile {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(160, 80, 220, 0.25) !important;
+  color: #1f1f2e !important;
+}
+
+/* Scene Buttons */
+html.light .scene-btn,
+[data-theme="light"] .scene-btn {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(160, 80, 220, 0.3) !important;
+  color: #2c2c3e !important;
+}
+
+html.light .scene-btn:hover,
+[data-theme="light"] .scene-btn:hover {
+  background: rgba(245, 245, 250, 0.98) !important;
+}
+
+html.light .scene-btn.active,
+[data-theme="light"] .scene-btn.active {
+  background: rgba(159, 94, 255, 0.12) !important;
+  color: #7a4cc0 !important;
+}
+
+/* Sliders */
+html.light .slider-track,
+[data-theme="light"] .slider-track {
+  background: rgba(230, 230, 235, 0.9) !important;
+}
+
+html.light .slider-fill,
+[data-theme="light"] .slider-fill {
+  background: linear-gradient(90deg, #b450ff, #c080ff) !important;
+}
+
+html.light .slider-thumb,
+[data-theme="light"] .slider-thumb {
+  background: #ffffff !important;
+  border: 2px solid #9f5eff !important;
+}
+
+/* Toggles */
+html.light .toggle-pill,
+html.light .relay-toggle,
+[data-theme="light"] .toggle-pill,
+[data-theme="light"] .relay-toggle {
+  background: rgba(230, 230, 235, 0.9) !important;
+  border: 1px solid rgba(160, 80, 220, 0.25) !important;
+}
+
+html.light .toggle-pill.on,
+html.light .relay-toggle.on,
+[data-theme="light"] .toggle-pill.on,
+[data-theme="light"] .relay-toggle.on {
+  background: #9f5eff !important;
+}
+
+html.light .toggle-pill .toggle-knob,
+[data-theme="light"] .toggle-pill .toggle-knob {
+  background: #ffffff !important;
+}
+
+/* Light Mode Text - Force min/max to match other values */
+html.light .tile-value,
+html.light .value-display,
+html.light #temp-range,
+html.light .temp-range-value,
+[data-theme="light"] .tile-value,
+[data-theme="light"] .value-display,
+[data-theme="light"] #temp-range,
+[data-theme="light"] .temp-range-value {
+  color: #9f5eff !important;
+}
+
+html.light .tile-label,
+[data-theme="light"] .tile-label {
+  color: #7a4cc0 !important;
+}
+
+html.light i.fa-solid,
+[data-theme="light"] i.fa-solid {
+  color: #9f5eff !important;
+}
+
+/* ====================== GLOBAL (Dark) ====================== */
+body {
+  background: #020104;
+}
+
+body::before {
+  background: radial-gradient(circle at 30% 70%, rgba(160, 60, 255, 0.07), transparent 55%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    linear-gradient(180deg, transparent 70%, rgba(80, 30, 140, 0.2)),
+    repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(140, 80, 255, 0.018) 41px);
+  pointer-events: none;
+  z-index: -1;
+  mix-blend-mode: screen;
+}
+
+/* ====================== CARDS (Dark) ====================== */
+.neumorph,
+.tile,
+.slider-card,
+.data-tile {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 8px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.tile:hover,
+.slider-card:hover,
+.data-tile:hover {
+  background: var(--glass-bg-light) !important;
+  transform: scale(1.02);
+}
+
+/* ====================== SLIDERS (Dark) ====================== */
+.slider-track {
+  background: rgba(25, 20, 45, 0.75) !important;
+}
+
+.slider-fill {
+  background: linear-gradient(90deg, #b450ff, #e0a0ff) !important;
+}
+
+.slider-thumb {
+  background: #f0d0ff !important;
+  border: 2px solid #c060ff !important;
+}
+
+/* ====================== TOGGLES (Dark) ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: rgba(18, 14, 32, 0.9) !important;
+  border: 1px solid var(--glass-border);
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: #c060ff !important;
+}
+
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  background: #ffffff !important;
+}
+
+/* ====================== SCENE BUTTONS (Dark) ====================== */
+.scene-btn {
+  background: rgba(15, 12, 28, 0.9) !important;
+  border: 1px solid rgba(140, 60, 255, 0.2) !important;
+  color: #ccc;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.scene-btn:hover {
+  background: rgba(50, 30, 80, 0.95) !important;
+  transform: scale(1.04);
+}
+
+.scene-btn.active {
+  background: rgba(160, 60, 255, 0.18) !important;
+  color: #e0b0ff;
+}
+
+/* ====================== DISABLED & OFFLINE ====================== */
+.slider-card.rooftop-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+#offline-banner {
+  background: rgba(30, 15, 45, 0.98) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(200, 80, 255, 0.3);
+}

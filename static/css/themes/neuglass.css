@@ -1,0 +1,251 @@
+/* Neumorphism */
+
+:root {
+  --accent-color: #4FC3F7;
+  --accent-hover: #67e8f9;
+  --accent-light: #a5f3fc;
+  --accent-glow: rgba(34, 211, 238, 0.6);
+
+  /* Gentler Glass Backgrounds */
+  --background: #121212;
+  --card-bg: rgba(35, 35, 35, 0.88);
+  --control-bg: rgba(30, 30, 30, 0.86);
+  --slider-bg: rgba(45, 45, 45, 0.90);
+
+  /* Glass Borders & Highlights */
+  --glass-border: rgba(68, 68, 68, 0.55);
+  --glass-highlight: rgba(255, 255, 255, 0.10);
+  --glass-highlight-2: rgba(255, 255, 255, 0.05);
+
+  /* Softer Shadows */
+  --shadow-dark: rgba(0, 0, 0, 0.55);
+  --shadow-light: rgba(255, 255, 255, 0.08);
+  --inner-shadow-light: rgba(255, 255, 255, 0.10);
+  --inner-shadow-dark: rgba(0, 0, 0, 0.45);
+}
+
+/* ====================== LIGHT MODE ====================== */
+html.light, .light {
+  --background: #f5f5f5;
+  --card-bg: rgba(255, 255, 255, 0.90);
+  --control-bg: rgba(248, 248, 248, 0.88);
+  --slider-bg: rgba(230, 230, 230, 0.92);
+  
+  --glass-border: rgba(203, 213, 225, 0.65);
+  --glass-highlight: rgba(255, 255, 255, 0.45);
+  --glass-highlight-2: rgba(0, 0, 0, 0.04);
+
+  --shadow-dark: rgba(0, 0, 0, 0.14);
+  --shadow-light: rgba(255, 255, 255, 0.75);
+  --inner-shadow-light: rgba(255, 255, 255, 0.85);
+  --inner-shadow-dark: rgba(0, 0, 0, 0.09);
+}
+
+/* ====================== PAGE BACKGROUND - Enhanced Depth ====================== */
+body {
+  background: var(--background) !important;
+  color: var(--text-primary);
+  position: relative;
+}
+
+/* Richer layered background with subtle accent influence */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 30% 20%, rgba(79, 195, 247, 0.08) 0%, transparent 55%),
+    radial-gradient(circle at 80% 70%, rgba(79, 195, 247, 0.06) 0%, transparent 65%),
+    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 80px 80px, 80px 80px;
+  z-index: -2;
+  opacity: 0.9;
+}
+
+/* Soft vignette focus layer */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(18,18,18,0.65) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ====================== CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+  
+  box-shadow: 
+    0 8px 28px -8px var(--shadow-dark),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -2px 0 var(--inner-shadow-dark) !important;
+  
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle shine layer */
+.neumorph::before,
+.tile::before,
+.slider-card::before,
+.scene-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
+}
+
+/* Light edge highlight */
+.neumorph::after,
+.tile::after,
+.slider-card::after,
+.scene-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  border: 1px solid var(--glass-highlight-2);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ====================== ACTIVE STATES ====================== */
+.scene-btn.active,
+.slider-card.on,
+.tile.on {
+  background: var(--accent-color) !important;
+  box-shadow: 
+    0 8px 28px -8px var(--shadow-dark),
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 22px rgba(79, 195, 247, 0.18) !important;
+}
+
+.slider-fill {
+  box-shadow: 0 0 10px var(--accent-glow); !important;
+}
+
+
+
+/* ====================== SLIDER THUMBS ====================== */
+input[type="range"]::-webkit-slider-thumb {
+  background: white !important;
+  border-radius: 50% !important;
+  box-shadow: 
+    0 4px 10px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.9),
+    inset 0 -2px 3px rgba(0,0,0,0.3) !important;
+  border: 1px solid var(--accent-light);
+  width: 26px;
+  height: 26px;
+  margin-top: -11px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  background: white !important;
+  border-radius: 50% !important;
+  box-shadow: 
+    0 4px 10px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.9),
+    inset 0 -2px 3px rgba(0,0,0,0.3) !important;
+  border: 1px solid var(--accent-light);
+  width: 26px;
+  height: 26px;
+}
+
+/* ====================== ICONS ====================== */
+.tile i.fa-solid,
+.scene-btn i,
+.slider-card-title i,
+.tile i,
+.scene-btn i {
+  color: var(--accent-color) !important;
+  filter: none !important;
+  text-shadow: none !important;
+  opacity: 1;
+}
+
+/* ====================== HOVER ====================== */
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 
+    0 14px 38px -8px var(--shadow-dark),
+    inset 0 1px 0 var(--glass-highlight) !important;
+  transition: all 0.25s ease;
+}
+
+/* ====================== TOGGLES ====================== */
+
+/* OFF State - Match Lighting Tracker Slider Exactly */
+.toggle-pill,
+.relay-toggle {
+  position: relative;
+  width: 88px;
+  height: 48px;
+  background: var(--slider-bg) !important;           /* Same as slider-track */
+  border-radius: 9999px;
+  cursor: pointer;
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur) saturate(160%);
+  transition: background 0.4s ease;
+  
+  /* Exact same inset shadow as .slider-track */
+  box-shadow: 
+    inset 6px 6px 12px var(--shadow-dark), 
+    inset -6px -6px 12px var(--shadow-light) !important;
+}
+
+/* ON State */
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, var(--toggle-checked-color), var(--accent-hover)) !important;
+  box-shadow: 
+    inset 6px 6px 12px rgba(0,0,0,0.35),
+    inset -6px -6px 12px rgba(255,255,255,0.15),
+}
+
+/* Knob */
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 38px;
+  height: 38px;
+  background: var(--toggle-handle);
+  border-radius: 9999px;
+  transform: translateY(-50%);
+  box-shadow: 
+    3px 3px 8px rgba(0,0,0,0.4), 
+    -2px -2px 6px rgba(255,255,255,0.7);
+  border: 2px solid var(--toggle-knob-border);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-pill.on .toggle-knob,
+.relay-toggle.on .relay-knob {
+  transform: translate(39px, -50%);
+}
+
+/* Colour-mode variants */
+.toggle-pill.colour-toggle.bug-mode {
+  background: linear-gradient(90deg, var(--bug-color), #f43f5e) !important;
+}
+
+.toggle-pill.colour-toggle.bug-mode .toggle-knob {
+  background: #ffffff;
+  border-color: #fda4af;
+}

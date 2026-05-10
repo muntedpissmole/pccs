@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="glassmorphism">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The Pissmole Camper Control System</title>
+  
+  <script src="/static/tailwind.min.js"></script>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+	<style>
+	  html { opacity: 0; transition: opacity 0.3s ease-in-out; }
+	  html[data-theme-loaded="true"] { opacity: 1; }
+	</style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <div class="flex-1 p-4 md:p-4 xl:p-4 space-y-4">
+  
+    <!-- OFFLINE OVERLAY -->
+	<div id="offline-overlay" 
+		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
+			<div id="offline-banner" 
+           class="text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
+           style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
+        <i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
+        <div class="flex-1 text-left">
+          System Offline
+          <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
+        </div>
+        <div class="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0"></div>
+      </div>
+    </div>
+
+    <!-- STATUS TILES -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Date</p>
+            <p class="tile-value" id="tile-date">—</p>
+          </div>
+          <i class="fa-solid fa-calendar-days text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Time</p>
+              <p class="tile-value" id="tile-time">—</p>
+            </div>
+            <i class="fa-solid fa-clock text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Water</p>
+            <p class="tile-value" id="water-level">—</p>
+          </div>
+          <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Solar</p>
+              <p class="tile-value" id="solar-input">—</p>
+            </div>
+            <i class="fa-solid fa-sun text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Battery</p>
+            <p class="tile-value" id="battery-voltage">—</p>
+          </div>
+          <i class="fa-solid fa-battery-three-quarters text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Charge</p>
+              <p class="tile-value" id="battery-charge">—</p>
+            </div>
+            <i class="fa-solid fa-bolt text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Sunrise</p>
+            <p class="tile-value" id="sunrise">—</p>
+          </div>
+          <i class="fa-solid fa-sun text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Sunset</p>
+              <p class="tile-value" id="sunset">—</p>
+            </div>
+            <i class="fa-solid fa-moon text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Current Temp</p>
+            <p class="tile-value" id="outside-temp">—°C</p>
+          </div>
+          <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Min/Max</p>
+              <div class="flex items-center gap-3">
+                <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+              </div>
+            </div>
+            <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile glass p-5">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="tile-label">Satellites</p>
+            <p class="tile-value" id="satellites">— / —</p>
+          </div>
+          <i class="fa-solid fa-satellite-dish text-2xl accent-sky"></i>
+        </div>
+        <div class="mt-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="tile-label">Location</p>
+              <p class="tile-value" id="location">---</p>
+            </div>
+            <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+	
+    <!-- LIGHTING SCENES -->
+    <div class="grid grid-cols-3 gap-4">
+      <button data-scene="bedtime" class="scene-btn">
+        <i class="fa-solid fa-bed"></i>
+        <span>Bedtime</span>
+      </button>
+      <button data-scene="ensuite" class="scene-btn">
+        <i class="fa-solid fa-bath"></i>
+        <span>Bathroom</span>
+      </button>
+      <button data-scene="all_off" class="scene-btn">
+        <i class="fa-solid fa-power-off"></i>
+        <span>All Off</span>
+      </button>
+    </div>
+
+    <!-- ALL LIGHTING CONTROLS -->
+    <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+    </div>
+
+  </div>
+  
+  <!-- ====================== TOAST CONTAINER ====================== -->
+  <div id="toast-container"></div>
+
+<script src="/static/socket.io.min.js"></script>
+<script>
+    const socket = io();
+
+    // ====================== LIVE DARK/LIGHT MODE ======================
+    function applyDarkMode(data) {
+        const mode = data.mode;
+        const isForced = data.forced === true;
+        
+        console.log('🌗 Applying dark mode:', mode, '(forced:', isForced, ')');
+
+        const html = document.documentElement;
+        html.classList.remove('dark', 'light');
+        html.classList.add(mode);
+
+        const themeText = document.getElementById('diag-theme-text');
+        const icon = document.getElementById('mode-icon');
+
+        if (themeText && icon) {
+            if (mode === 'light') {
+                themeText.textContent = isForced ? 'Force Dark Mode' : 'Switch to Dark Mode';
+                icon.classList.remove('fa-moon');
+                icon.classList.add('fa-sun');
+            } else {
+                themeText.textContent = isForced ? 'Force Light Mode' : 'Switch to Light Mode';
+                icon.classList.remove('fa-sun');
+                icon.classList.add('fa-moon');
+            }
+        }
+    }
+	
+	// Request initial dark mode on page load
+    function requestInitialDarkMode() {
+        if (socket.connected) {
+            socket.emit('get_current_dark_mode');
+        } else {
+            setTimeout(requestInitialDarkMode, 300);
+        }
+    }
+
+	window.toggleGlobalDarkMode = function() {
+		const html = document.documentElement;
+		const isCurrentlyLight = html.classList.contains('light');
+		const newMode = isCurrentlyLight ? 'dark' : 'light';
+		socket.emit('set_global_dark_mode', { mode: newMode });
+	};
+
+    // ====================== GLOBAL THEME SWITCHING ======================
+    let currentThemeFile = null;
+
+	function applyTheme(themeFile) {
+		if (!themeFile) themeFile = 'base';
+		currentThemeFile = themeFile;
+		document.documentElement.setAttribute('data-theme', themeFile);
+
+		document.querySelectorAll('link[data-theme-link]').forEach(link => link.remove());
+
+		if (themeFile === 'base') {
+			document.documentElement.setAttribute('data-theme-loaded', 'true');
+			return;
+		}
+
+		const cssPath = `/static/css/themes/${themeFile}.css?v=${Date.now()}`;
+		const link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = cssPath;
+		link.dataset.themeLink = 'true';
+
+		link.onload = () => document.documentElement.setAttribute('data-theme-loaded', 'true');
+		link.onerror = () => document.documentElement.setAttribute('data-theme-loaded', 'true');
+
+		document.head.appendChild(link);
+	}
+
+    function registerThemeListener() {
+        socket.off('global_theme_update');
+        socket.on('global_theme_update', function(data) {
+            if (data && data.theme) applyTheme(data.theme);
+        });
+    }
+
+    async function loadCurrentTheme() {
+        try {
+            const res = await fetch('/api/current-theme');
+            const data = await res.json();
+            applyTheme(data.theme || 'base');
+        } catch (e) {
+            console.error('Failed to load current theme', e);
+            applyTheme('base');
+        }
+    }
+	
+	// Detects the current number of columns the grid is actually using
+	function getCurrentColumns() {
+		const container = document.getElementById('lighting-controls');
+		if (!container) return 1;
+
+		const style = window.getComputedStyle(container);
+		const gridTemplate = style.gridTemplateColumns || style.getPropertyValue('grid-template-columns');
+
+		if (gridTemplate.includes('repeat(1') || gridTemplate.split(' ').length === 1) return 1;
+		if (gridTemplate.includes('repeat(2') || gridTemplate.split(' ').length === 2) return 2;
+		if (gridTemplate.includes('repeat(3') || gridTemplate.split(' ').length === 3) return 3;
+
+		const children = container.children.length;
+		if (children > 0) {
+			const firstChild = container.children[0];
+			const containerRect = container.getBoundingClientRect();
+			const childRect = firstChild.getBoundingClientRect();
+			
+			if (containerRect.width > 0) {
+				const approxCols = Math.round(containerRect.width / (childRect.width + 16)); // + gap
+				return Math.max(1, Math.min(3, approxCols));
+			}
+		}
+
+		return 1;
+	}
+
+    // ====================== CORE STATE ======================
+    let currentState = {};
+    let currentModes = {};
+    let currentReeds = {};
+    let lightsConfig = [];
+	let lastRenderConfigHash = '';
+
+    const currentlyDragging = new Set();
+    const userJustSet = new Set();
+    const JUST_SET_DURATION = 2800;
+
+    // ==================== OFFLINE HANDLER ====================
+    let offlineTimeout = null;
+
+    function showOfflineBanner() {
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        offlineTimeout = setTimeout(() => {
+            const overlay = document.getElementById('offline-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.style.pointerEvents = 'auto';
+            }
+            const mainContent = document.querySelector('.flex-1');
+            if (mainContent) mainContent.style.pointerEvents = 'none';
+        }, 800);
+    }
+
+    function hideOfflineBanner() {
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        offlineTimeout = null;
+        const overlay = document.getElementById('offline-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        const mainContent = document.querySelector('.flex-1');
+        if (mainContent) mainContent.style.pointerEvents = 'auto';
+    }
+
+	// ==================== LIGHTING RENDERING ====================
+	function renderLightingControls() {
+		const container = document.getElementById('lighting-controls');
+		
+		const currentHash = JSON.stringify(lightsConfig.map(l => l.name + l.type));
+		if (currentHash === lastRenderConfigHash && lightsConfig.length > 0) {
+			console.log('🔄 Config unchanged → only updating UI values');
+			updateUIFromState();
+			return;
+		}
+		
+		lastRenderConfigHash = currentHash;
+
+		console.log('🎨 Full re-render of lighting controls | Columns:', getCurrentColumns(), '| Lights:', lightsConfig.length);
+
+		container.innerHTML = '';
+
+		const columns = getCurrentColumns();
+		
+		let i = 0;
+		while (i < lightsConfig.length) {
+			const light = lightsConfig[i];
+
+			const canPair = light.type === 'relay' &&
+							i + 1 < lightsConfig.length &&
+							lightsConfig[i + 1].type === 'relay';
+
+			let shouldPair = canPair;
+
+			if (canPair) {
+				if (columns === 1) {
+					shouldPair = false;
+				} else if (columns === 2) {
+					const isLastPair = (i + 2 === lightsConfig.length);
+					shouldPair = !isLastPair;
+				}
+			}
+
+			if (shouldPair) {
+				const relay1 = light;
+				const relay2 = lightsConfig[i + 1];
+
+				const html = `
+					<div class="slider-card glass paired-relay-card">
+						<div class="paired-relay-inner">
+							<!-- First relay -->
+							<div class="paired-relay-row">
+								<div class="slider-card-left">
+									<div class="slider-card-title">
+										<i class="fa-solid ${relay1.icon}"></i>
+										<span class="slider-label">${relay1.label}</span>
+									</div>
+								</div>
+								<div class="slider-card-right">
+									<div class="value-display" id="val-${relay1.name}">${(currentState[relay1.name] ? 'On' : 'Off')}</div>
+									<div class="relay-toggle ${currentState[relay1.name] ? 'on' : ''}" 
+										 data-name="${relay1.name}" 
+										 data-state="${currentState[relay1.name] ? 'on' : 'off'}">
+										<div class="relay-knob"></div>
+									</div>
+								</div>
+							</div>
+
+							<div class="paired-relay-divider"></div>
+
+							<!-- Second relay -->
+							<div class="paired-relay-row">
+								<div class="slider-card-left">
+									<div class="slider-card-title">
+										<i class="fa-solid ${relay2.icon}"></i>
+										<span class="slider-label">${relay2.label}</span>
+									</div>
+								</div>
+								<div class="slider-card-right">
+									<div class="value-display" id="val-${relay2.name}">${(currentState[relay2.name] ? 'On' : 'Off')}</div>
+									<div class="relay-toggle ${currentState[relay2.name] ? 'on' : ''}" 
+										 data-name="${relay2.name}" 
+										 data-state="${currentState[relay2.name] ? 'on' : 'off'}">
+										<div class="relay-knob"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>`;
+
+				container.innerHTML += html;
+				i += 2;
+				continue;
+			}
+
+			const isRelay = light.type === 'relay';
+			const currentVal = currentState[light.name] || 0;
+			const isOn = isRelay ? !!currentVal : false;
+
+			let html = `
+				<div class="slider-card glass">
+					<div class="slider-card-header">
+						<div class="slider-card-left">
+							<div class="slider-card-title">
+								<i class="fa-solid ${light.icon}"></i>
+								<span class="slider-label">${light.label}</span>
+							</div>
+						</div>
+						<div class="slider-card-right">
+							<div class="value-display" id="val-${light.name}">
+								${isRelay ? (isOn ? 'On' : 'Off') : '0%'}
+							</div>`;
+
+			if (isRelay) {
+				html += `
+							<div class="relay-toggle ${isOn ? 'on' : ''}" 
+								 data-name="${light.name}" 
+								 data-state="${isOn ? 'on' : 'off'}">
+								<div class="relay-knob"></div>
+							</div>`;
+			} else {
+				const extraClass = light.has_mode ? 'colour-toggle' : '';
+				html += `
+							<div class="toggle-pill ${extraClass}" data-name="${light.name}" data-state="off">
+								<div class="toggle-knob"></div>
+							</div>`;
+			}
+
+			html += `</div></div>`;
+
+			if (!isRelay) {
+				html += `
+					<div class="slider-wrapper" data-name="${light.name}" data-value="0" data-last-brightness="100">
+						<div class="slider-inner">
+							<div class="slider-track"></div>
+							<div class="slider-fill" style="width: 0%"></div>
+							<div class="slider-thumb" style="left: 0%"></div>
+						</div>
+					</div>`;
+			}
+
+			html += `</div>`;
+			container.innerHTML += html;
+			i++;
+		}
+
+		initUnifiedToggleListeners();
+		initSliders();
+
+		setTimeout(updateUIFromState, 100);
+	}
+
+	function toggleControl(el) {
+		const name = el.dataset.name;
+		const light = lightsConfig.find(l => l.name === name);
+		if (!light) return;
+
+		userJustSet.add(name);
+		setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+
+		if (light.type === 'relay') {
+			const isCurrentlyOn = el.dataset.state === 'on';
+			const newState = !isCurrentlyOn;
+
+			updateLightUI(name, newState ? 1 : 0);
+			socket.emit('relay_change', { name: name, on: newState });
+			
+			setTimeout(() => updateLightUI(name, newState ? 1 : 0), 50);
+			return;
+		}
+
+		if (light.has_mode) {
+			const currentMode = currentModes[name] || 'white';
+			const newMode = currentMode === 'white' ? 'red' : 'white';
+			currentModes[name] = newMode;
+
+			const currentBrightness = currentState[name] || 0;
+			
+			socket.emit('light_change', { 
+				name, 
+				brightness: currentBrightness, 
+				mode: newMode 
+			});
+			
+			setTimeout(() => updateLightUI(name, currentBrightness), 10);
+			return;
+		}
+
+		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+		const currentBrightness = wrapper ? parseInt(wrapper.dataset.value) || 0 : 0;
+		const isOn = el.dataset.state === 'on';
+		const newBrightness = isOn ? 0 : (parseInt(wrapper?.dataset.lastBrightness) || 100);
+
+		updateLightUI(name, newBrightness);
+		socket.emit('light_change', { name, brightness: newBrightness });
+	}
+
+	function initUnifiedToggleListeners() {
+		const container = document.getElementById('lighting-controls');
+		
+		container.removeEventListener('click', handleLightingClick);
+		
+		function handleLightingClick(e) {
+			const toggle = e.target.closest('.relay-toggle, .toggle-pill');
+			if (!toggle) return;
+			
+			if (toggle.dataset.justClicked === 'true') return;
+			toggle.dataset.justClicked = 'true';
+			setTimeout(() => delete toggle.dataset.justClicked, 350);
+			
+			toggleControl(toggle);
+		}
+		
+		container.addEventListener('click', handleLightingClick);
+		console.log('✅ Unified toggle listener attached');
+	}
+
+	function updateLightUI(name, value) {
+		const light = lightsConfig.find(l => l.name === name);
+		if (!light) return;
+
+		const toggles = document.querySelectorAll(`[data-name="${name}"]`);
+		const valueEl = document.getElementById(`val-${name}`);
+
+		if (light.type === 'relay') {
+			const isOn = !!value;
+
+			toggles.forEach(toggle => {
+				toggle.classList.toggle('on', isOn);
+				toggle.dataset.state = isOn ? 'on' : 'off';
+			});
+
+			if (valueEl) {
+				valueEl.textContent = isOn ? 'On' : 'Off';
+			}
+			return;
+		}
+
+		// ====================== DIMMERS / BUG MODE ======================
+		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+		const fill = wrapper ? wrapper.querySelector('.slider-fill') : null;
+		const thumb = wrapper ? wrapper.querySelector('.slider-thumb') : null;
+		const brightness = Math.max(0, Math.min(100, value || 0));
+
+		if (wrapper) {
+			wrapper.dataset.value = brightness;
+			if (brightness > 0) wrapper.dataset.lastBrightness = brightness;
+
+			if (fill) fill.style.width = `${brightness}%`;
+			if (thumb) thumb.style.left = `${brightness}%`;
+			if (valueEl) valueEl.textContent = `${brightness}%`;
+		}
+
+		let isBugMode = false;
+		if (light.has_mode) {
+			isBugMode = (currentModes[name] || 'white') === 'red';
+		}
+
+		// Toggle pill
+		toggles.forEach(toggle => {
+			const shouldBeOn = light.has_mode ? isBugMode : (brightness > 0);
+			
+			toggle.classList.toggle('on', shouldBeOn);
+			toggle.classList.toggle('bug-mode', isBugMode);
+			toggle.dataset.state = shouldBeOn ? 'on' : 'off';
+
+			const card = toggle.closest('.slider-card');
+			if (card) card.classList.toggle('bug-mode', isBugMode);
+		});
+
+		// Slider visuals
+		if (wrapper) {
+			const card = wrapper.closest('.slider-card');
+			wrapper.classList.toggle('bug-mode', isBugMode);
+			if (fill) fill.classList.toggle('bug-mode', isBugMode);
+			if (thumb) thumb.classList.toggle('bug-mode', isBugMode);
+			if (card) card.classList.toggle('bug-mode', isBugMode);
+		}
+	}
+
+	// ==================== UPDATE UI FROM STATE ====================
+	function updateUIFromState() {
+		lightsConfig.forEach(light => {
+			if (currentlyDragging.has(light.name) || userJustSet.has(light.name)) {
+				return;
+			}
+
+			const val = currentState[light.name];
+			if (val === undefined) return;
+
+			// Always pass boolean for relays
+			updateLightUI(light.name, light.type === 'relay' ? !!val : (val || 0));
+		});
+
+		updateRooftopTentControls();
+	}
+
+    // ==================== DRAG LOGIC ====================
+	function makeDraggable(wrapper) {
+		const inner = wrapper.querySelector('.slider-inner');
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const name = wrapper.dataset.name;
+		const valueEl = document.getElementById(`val-${name}`);
+
+		let isDragging = false;
+		let startX = 0;
+		let startY = 0;
+		let lastSent = 0;
+
+		function updatePosition(clientX) {
+			const rect = inner.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, 
+				Math.round(((clientX - rect.left) / rect.width) * 100)
+			));
+
+			wrapper.dataset.value = percent;
+			if (fill) fill.style.width = `${percent}%`;
+			if (thumb) thumb.style.left = `${percent}%`;
+			if (valueEl) valueEl.textContent = `${percent}%`;
+
+			const now = Date.now();
+			if (now - lastSent > 50) {
+				lastSent = now;
+				const light = lightsConfig.find(l => l.name === name);
+				const payload = { name, brightness: percent };
+				if (light?.has_mode && currentModes[name]) {
+					payload.mode = currentModes[name];
+				}
+				socket.emit('light_change', payload);
+			}
+		}
+
+		function startDrag() {
+			if (isDragging) return;
+			isDragging = true;
+			wrapper.classList.add('dragging');
+			currentlyDragging.add(name);
+			userJustSet.delete(name);
+
+			if (fill) fill.style.transition = 'none';
+			if (thumb) thumb.style.transition = 'none';
+		}
+
+		function endDrag() {
+			if (!isDragging) return;
+			isDragging = false;
+			wrapper.classList.remove('dragging');
+			currentlyDragging.delete(name);
+
+			const final = parseInt(wrapper.dataset.value) || 0;
+			updateLightUI(name, final);
+
+			userJustSet.add(name);
+			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+		}
+
+		wrapper.addEventListener('touchstart', e => {
+			if (e.touches.length === 0) return;
+			const touch = e.touches[0];
+			startX = touch.clientX;
+			startY = touch.clientY;
+			isDragging = false;
+		}, { passive: true });
+
+		wrapper.addEventListener('touchmove', e => {
+			if (e.touches.length === 0) return;
+			const touch = e.touches[0];
+
+			const deltaX = Math.abs(touch.clientX - startX);
+			const deltaY = Math.abs(touch.clientY - startY);
+
+			if (!isDragging) {
+				if (deltaX > 12 && deltaX > deltaY * 1.5) {
+					e.preventDefault();
+					startDrag();
+				} else if (deltaY > 8) {
+					return;
+				}
+			}
+
+			if (isDragging) {
+				e.preventDefault();
+				updatePosition(touch.clientX);
+			}
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', endDrag, { passive: true });
+		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
+
+		wrapper.addEventListener('mousedown', e => {
+			startX = e.clientX;
+			startDrag();
+			updatePosition(e.clientX);
+
+			const onMove = ev => updatePosition(ev.clientX);
+			const onUp = () => {
+				document.removeEventListener('mousemove', onMove);
+				endDrag();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp, { once: true });
+		});
+	}
+
+    function initSliders() {
+        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+    }
+
+    // ==================== ROOFTOP TENT ====================
+    function updateRooftopTentControls() {
+        const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
+        if (!tentCard) return;
+        
+        const isClosed = !!currentReeds.rooftop_tent;
+        
+        if (isClosed) {
+            tentCard.classList.add('rooftop-disabled');
+            updateLightUI('rooftop_tent', 0);
+        } else {
+            tentCard.classList.remove('rooftop-disabled');
+        }
+    }
+
+    // ==================== GPS, SENSORS, WEATHER ====================
+    let hasValidGPSFix = false;
+
+	function updateGPS(data) { 
+		if (!data) return;
+
+		const fixQuality = parseInt(data.fix_quality || 0);
+		hasValidGPSFix = fixQuality >= 1;
+
+		if (data.satellites !== undefined) {
+			document.getElementById('satellites').textContent = `${data.satellites || 0} / ${fixQuality}`;
+		}
+
+		const locationEl = document.getElementById('location');
+		if (locationEl) {
+			const suburb = (data.suburb || "").trim();
+			locationEl.textContent = suburb || (hasValidGPSFix ? "Acquiring position..." : "No GPS Fix");
+		}
+
+		if (hasValidGPSFix) {
+			if (data.date) {
+				const dateObj = new Date(data.date);
+				if (!isNaN(dateObj.getTime())) {
+					const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
+					const day = dateObj.getDate();
+					const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+					document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}`;
+				}
+			}
+
+			if (data.local_time) {
+				const dateObj = new Date(`1970-01-01 ${data.local_time}`);
+				if (!isNaN(dateObj.getTime())) {
+					let hours = dateObj.getHours();
+					const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+					const ampm = hours >= 12 ? 'PM' : 'AM';
+					hours = hours % 12 || 12;
+					document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}`;
+				}
+			}
+
+			if (data.sunrise) document.getElementById('sunrise').textContent = stripLeadingZero(data.sunrise);
+			if (data.sunset)  document.getElementById('sunset').textContent  = stripLeadingZero(data.sunset);
+		}
+
+		document.getElementById('tile-date').classList.toggle('text-amber-400', !hasValidGPSFix);
+		document.getElementById('tile-time').classList.toggle('text-amber-400', !hasValidGPSFix);
+
+		if (hasValidGPSFix && data.latitude && data.longitude) {
+			const now = Date.now();
+			if (now - lastWeatherUpdate > WEATHER_INTERVAL_MS) {
+				lastWeatherUpdate = now;
+				fetchWeatherForecast(data.latitude, data.longitude);
+			}
+		}
+	}
+
+    function stripLeadingZero(timeStr) {
+        return timeStr ? timeStr.replace(/^0(\d):/, '$1:') : "";
+    }
+
+	let lastWeatherUpdate = 0;
+    const WEATHER_INTERVAL_MS = 3600 * 1000;
+
+	function updateClock() {
+		if (hasValidGPSFix) return;
+
+		const now = new Date();
+		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
+		const day = now.getDate();
+		const month = now.toLocaleDateString('en-AU', { month: 'short' });
+		
+		document.getElementById('tile-date').textContent = `${dayName} ${day} ${month} *`;
+		
+		let hours = now.getHours();
+		let minutes = now.getMinutes().toString().padStart(2, '0');
+		const ampm = hours >= 12 ? 'PM' : 'AM';
+		hours = hours % 12 || 12;
+		
+		document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm} *`;
+	}
+
+    function updateSensors(data) {
+        if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
+        if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
+        if (data.battery_voltage !== undefined) document.getElementById('battery-voltage').textContent = `${parseFloat(data.battery_voltage).toFixed(1)}V`;
+        if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
+        if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
+    }
+
+    async function fetchWeatherForecast(lat, lon) {
+        try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
+            const res = await fetch(url, { cache: 'no-store' });
+            const data = await res.json();
+
+            if (data.daily) {
+                const max = Math.round(data.daily.temperature_2m_max[0]);
+                const min = Math.round(data.daily.temperature_2m_min[0]);
+                document.getElementById('temp-range').textContent = `${min}° / ${max}°`;
+            }
+
+            const weatherIcon = document.getElementById('weather-icon');
+            if (data.current_weather && weatherIcon) {
+                const code = data.current_weather.weathercode;
+                const isDay = data.current_weather.is_day === 1;
+                weatherIcon.className = `fa-solid ${getWeatherIcon(code, isDay)} text-2xl accent-sky`;
+            }
+        } catch (e) {
+            console.warn('Weather fetch failed:', e);
+        }
+    }
+
+    function getWeatherIcon(code, isDay) {
+        const icons = {
+            0: isDay ? 'fa-sun' : 'fa-moon',
+            1: isDay ? 'fa-sun' : 'fa-moon',
+            2: 'fa-cloud', 3: 'fa-cloud',
+            45: 'fa-smog', 48: 'fa-smog',
+            51: 'fa-cloud-rain', 53: 'fa-cloud-rain', 55: 'fa-cloud-rain',
+            61: 'fa-cloud-showers-heavy', 63: 'fa-cloud-showers-heavy', 65: 'fa-cloud-showers-heavy',
+            71: 'fa-snowflake', 73: 'fa-snowflake', 75: 'fa-snowflake',
+            80: 'fa-cloud-showers-heavy', 81: 'fa-cloud-showers-heavy', 82: 'fa-cloud-showers-heavy',
+            95: 'fa-bolt', 96: 'fa-bolt', 99: 'fa-bolt'
+        };
+        return icons[code] || 'fa-cloud';
+    }
+
+    // ==================== SCENES ====================
+    function setScene(scene) {
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.scene === scene);
+        });
+
+        setTimeout(() => {
+            document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+        }, 750);
+
+        socket.emit('set_scene', { scene });
+    }
+
+    // ==================== SOCKET LISTENERS ====================
+	socket.on('lights_config', (config) => {
+		console.log('📋 Received lights config from backend:', config);
+		lightsConfig = config || [];
+		renderLightingControls();
+		if (Object.keys(currentState).length > 0) updateUIFromState();
+	});
+
+    socket.on('state_update', (newState) => {
+        currentState = newState;
+        
+        lightsConfig.forEach(light => {
+            if (light.has_mode && newState[`${light.name}_mode`]) {
+                currentModes[light.name] = newState[`${light.name}_mode`];
+            }
+        });
+
+        updateUIFromState();
+    });
+
+    socket.on('reed_update', (payload) => {
+        currentReeds = { ...(payload.states || {}), ...(payload.forced || {}) };
+        updateRooftopTentControls();
+    });
+
+    socket.on('sensor_update', updateSensors);
+    socket.on('gps_update', updateGPS);
+
+    // ====================== DARK MODE ======================
+    socket.on('global_dark_mode_update', function(data) {
+        applyDarkMode(data);
+    });
+
+    // ==================== SOCKET CONNECTION ====================
+    socket.on('connect', () => {
+        console.log('✅ Backend connected');
+        hideOfflineBanner();
+        registerThemeListener();
+        loadCurrentTheme();
+
+        socket.emit('get_current_dark_mode');
+    });
+
+    socket.on('disconnect', () => showOfflineBanner());
+    socket.on('connect_error', () => showOfflineBanner());
+
+    // ==================== INIT ====================
+    window.onload = function() {
+        updateClock();
+        setInterval(updateClock, 10000);
+
+        registerThemeListener();
+        loadCurrentTheme();
+
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.addEventListener('click', () => setScene(btn.dataset.scene));
+        });
+
+        // ====================== RESIZE HANDLER FOR RELAY LAYOUT ======================
+        let lastColumnCount = getCurrentColumns();
+
+		function handleResizeForLighting() {
+			const newCols = getCurrentColumns();
+			if (newCols !== lastColumnCount && lightsConfig.length > 0) {
+				console.log(`🔄 Column layout changed (${lastColumnCount} → ${newCols}) → re-rendering`);
+				lastColumnCount = newCols;
+				renderLightingControls();
+			}
+		}
+
+        window.addEventListener('resize', handleResizeForLighting);
+
+        setTimeout(() => {
+            lastColumnCount = getCurrentColumns();
+        }, 300);
+
+        console.log("🚀 PCCS Frontend Ready – waiting for lights_config from backend");
+    };
+
+    // ====================== TOAST SYSTEM ======================
+    function createToast(data) {
+        const { id, message, type = "info", duration = 5000, title, persistent = false } = data || {};
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        let icon = 'fa-info-circle';
+        if (type === 'success') icon = 'fa-check-circle';
+        else if (type === 'warning') icon = 'fa-exclamation-triangle';
+        else if (type === 'error') icon = 'fa-circle-xmark';
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.id = id || 'toast-' + Date.now();
+
+        toast.innerHTML = `
+            <i class="fa-solid ${icon} text-2xl flex-shrink-0"></i>
+            <div class="toast-content flex-1 min-w-0">
+                ${title ? `<div class="toast-title">${title}</div>` : ''}
+                <div class="toast-message">${message}</div>
+            </div>
+            <button class="text-xl leading-none" aria-label="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        `;
+
+        container.appendChild(toast);
+
+        requestAnimationFrame(() => toast.classList.add('show'));
+
+        const closeBtn = toast.querySelector('button');
+        closeBtn.addEventListener('click', () => dismissToast(toast));
+
+        toast.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) dismissToast(toast);
+        });
+
+        if (!persistent && duration > 0) {
+            setTimeout(() => dismissToast(toast), duration);
+        }
+    }
+
+    function dismissToast(toast) {
+        if (!toast || !toast.parentNode) return;
+        toast.style.transition = 'opacity 0.95s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.95s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+
+        toast.addEventListener('transitionend', () => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, { once: true });
+    }
+
+    socket.on('toast', function(data) {
+        createToast(data);
+    });
+</script>
+</body>
+</html>
