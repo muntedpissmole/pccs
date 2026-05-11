@@ -117,6 +117,15 @@ html.light,
 }
 
 /* ====================== GLOBAL ====================== */
+html {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+html[data-theme-loaded="true"] {
+  opacity: 1;
+}
+
 body {
   font-family: 'Satoshi', system-ui, sans-serif;
   background: var(--background);
@@ -175,7 +184,6 @@ body::after {
 }
 
 /* Light mode cards */
-.light,
 .light .tile,
 .light .slider-card {
   background: var(--glass-bg);
@@ -184,12 +192,11 @@ body::after {
 }
 
 /* ====================== PAIRED RELAY CARDS ====================== */
-/* Two consecutive relays stacked vertically inside one card */
 .paired-relay-card {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px 20px 24px 20px;   /* Slightly more bottom padding */
+  padding: 20px 20px 24px 20px;
 }
 
 .paired-relay-inner {
@@ -197,7 +204,7 @@ body::after {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 16px;                       /* Consistent vertical spacing */
+  gap: 16px;
 }
 
 .paired-relay-row {
@@ -205,7 +212,7 @@ body::after {
   align-items: center;
   justify-content: space-between;
   flex: 1;
-  min-height: 48px;                /* Ensures each row has good presence */
+  min-height: 48px;
 }
 
 .paired-relay-divider {
@@ -214,7 +221,6 @@ body::after {
   margin: 8px 0;
 }
 
-/* Light mode divider */
 .light .paired-relay-divider {
   background: rgba(0,0,0,0.12);
 }
@@ -239,15 +245,21 @@ body::after {
   color: var(--text-primary);
 }
 
-/* ====================== SCENE BUTTONS ====================== */
+/* ====================== SCENES GRID & BUTTONS ====================== */
+#scenes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
 .scene-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 20px 16px;
-  font-size: 0.85rem;
+  padding: 24px 12px;
+  font-size: 0.875rem;
   font-weight: 600;
   background: var(--glass-bg);
   border-radius: 20px;
@@ -257,10 +269,21 @@ body::after {
   backdrop-filter: var(--glass-blur) saturate(170%);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--text-primary);
+  min-height: 130px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .scene-btn:hover {
-  box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+  box-shadow: 4px 4px 8px var(--shadow-dark), 
+              -4px -4px 8px var(--shadow-light);
+  transform: translateY(-3px);
+  background: rgba(255,255,255,0.08);
+}
+
+#scenes-grid .scene-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3);
 }
 
 .scene-btn.active {
@@ -279,6 +302,16 @@ body::after {
 
 .scene-btn.active i {
   color: var(--text-on-accent);
+}
+
+#scenes-grid .last-row {
+  display: flex;
+  gap: 16px;
+  grid-column: 1 / -1;
+}
+
+#scenes-grid .last-row .scene-btn {
+  flex: 1;
 }
 
 /* ====================== SLIDER CARDS ====================== */
@@ -367,16 +400,6 @@ body::after {
   box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 30px var(--bug-fill-glow)
 }
 
-.slider-thumb.bug-mode {
-    border-color: var(--bug-color) !important;
-    box-shadow: 
-        4px 4px 8px var(--shadow-dark),
-        -4px -4px 8px var(--shadow-light),
-        inset 3px 3px 8px rgba(255,255,255,0.55),
-        inset -3px -3px 8px rgba(0,0,0,0.6),
-        0 0 0 4px rgba(225, 29, 72, 0.25) !important;
-}
-
 .slider-thumb {
   position: absolute;
   top: 50%;
@@ -394,6 +417,16 @@ body::after {
     inset -3px -3px 8px rgba(0,0,0,0.6) !important;
   transition: all 0.25s ease;
   will-change: left;
+}
+
+.slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px rgba(255,255,255,0.55),
+    inset -3px -3px 8px rgba(0,0,0,0.6),
+    0 0 0 4px rgba(225, 29, 72, 0.25) !important;
 }
 
 /* ====================== TOGGLES ====================== */

@@ -46,6 +46,9 @@ class ReedManager:
 
         self.ambient_locked = False
         self.current_ambient_phase = None
+        self.ambient_active = False
+        self.last_all_closed_state = True
+        self.startup_ambient_done = False
 
         self.on_reed_change: Dict[str, Callable] = {}
 
@@ -61,6 +64,7 @@ class ReedManager:
 
         self.REED_DEBOUNCE_MS = self.config.getint('reed_monitor', 'reed_debounce_ms', fallback=50)
         
+        # ====================== AMBIENT & PHASE SETTINGS ======================
         self.ambient_lights: list[str] = []
         self.all_closed_action: str = "off"
         self.phase_settings: Dict[str, Dict[str, Tuple[int, str]]] = {}
@@ -79,22 +83,26 @@ class ReedManager:
 
         try:
             if self.config.has_section('ambient'):
-                lights_str = self.config.get('ambient', 'lights', fallback='accent, awning').strip()
-                self.ambient_lights = [l.strip() for l in lights_str.split(',') if l.strip()]
-                self.all_closed_action = self.config.get('ambient', 'all_closed_action', fallback='off').strip().lower()
-                logger.debug(f"🌟 Loaded ambient lights: {self.ambient_lights} | all_closed_action={self.all_closed_action}")
+                self.all_closed_action = self.config.get('ambient', 'all_closed_action', 
+                                                       fallback='off').strip().lower()
+                
+                try:
+                    lights_value = self.config.get('ambient', 'lights')
+                    if lights_value and lights_value.strip():
+                        logger.warning("⚠️ [ambient] 'lights =' is deprecated and ignored. "
+                                      "Ambient lights are now auto-detected from [ambient.*] sections.")
+                except Exception:
+                    pass
             else:
                 logger.warning("⚠️ No [ambient] section found")
-        except Exception as e:
-            logger.warning(f"Failed to load [ambient]: {e}")
 
-        try:
-            loaded_count = 0
+            ambient_count = 0
             for section in self.config.sections():
-                if not section.startswith('reed_phases.'):
+                if not section.startswith('ambient.'):
                     continue
 
                 light_name = section.split('.', 1)[1].strip()
+                self.ambient_lights.append(light_name)
                 self.phase_settings[light_name] = {}
 
                 for phase in ['day', 'evening', 'night']:
@@ -107,27 +115,51 @@ class ReedManager:
                                 self.phase_settings[light_name][phase] = (int(b_str), mode.lower())
                             else:
                                 self.phase_settings[light_name][phase] = (int(val), 'white')
-                            logger.debug(f"Loaded {phase}={self.phase_settings[light_name][phase]} for '{light_name}'")
+                        elif phase == 'day':
+                            self.phase_settings[light_name]['day'] = (0, 'white')
+                    except Exception:
+                        if phase == 'day':
+                            self.phase_settings[light_name]['day'] = (0, 'white')
+                        continue
+
+                ambient_count += 1
+                logger.debug(f"✅ Loaded ambient light '{light_name}' with phases: "
+                            f"{list(self.phase_settings[light_name].keys())}")
+
+            reed_only_count = 0
+            for section in self.config.sections():
+                if not section.startswith('reed_phases.'):
+                    continue
+
+                light_name = section.split('.', 1)[1].strip()
+
+                if light_name in self.phase_settings:
+                    continue
+
+                self.phase_settings[light_name] = {}
+                for phase in ['day', 'evening', 'night']:
+                    try:
+                        val = self.config.get(section, phase, fallback=None)
+                        if val is not None:
+                            val = str(val).strip()
+                            if ',' in val:
+                                b_str, mode = [x.strip() for x in val.split(',', 1)]
+                                self.phase_settings[light_name][phase] = (int(b_str), mode.lower())
+                            else:
+                                self.phase_settings[light_name][phase] = (int(val), 'white')
                     except Exception:
                         continue
 
                 if self.phase_settings[light_name]:
-                    logger.debug(f"✅ Loaded reed phases for light '{light_name}': {list(self.phase_settings[light_name].keys())}")
-                    loaded_count += 1
+                    reed_only_count += 1
 
-            if loaded_count == 0:
-                logger.warning("⚠️ No reed_phases.* sections were loaded! Check your pccs.conf")
-            else:
-                ambient_set = set(self.ambient_lights)
-                reed_only_count = len([name for name in self.phase_settings.keys() 
-                                     if name not in ambient_set])
+            logger.info(
+                f"💡 Loaded {ambient_count} ambient lights "
+                f"and {reed_only_count} reed-controlled lights"
+            )
 
-                logger.info(
-                    f"💡 Loaded {len(self.ambient_lights)} ambient lights "
-                    f"and {reed_only_count} reed-controlled lights"
-                )
         except Exception as e:
-            logger.error(f"Failed to load reed_phases: {e}", exc_info=True)
+            logger.error(f"Failed to load ambient/reed phases: {e}", exc_info=True)
             
         # ====================== REED INTERLOCKS ======================
         self.interlocks: Dict[str, list[str]] = {}
@@ -165,8 +197,6 @@ class ReedManager:
 
         logger.info("🚪 ReedManager initialized")
 
-    # ====================== (rest of the file unchanged) ======================
-
     def get_light_settings(self, phase: str, light_name: str) -> Optional[Tuple[int, str]]:
         phase = str(phase).strip().lower()
         if light_name not in self.phase_settings:
@@ -193,50 +223,64 @@ class ReedManager:
             )
 
     # ====================== AMBIENT LIGHTS ======================
-    def update_ambient_lights(self):
+    def update_ambient_lights(self, force=False):
         now = time.time() * 1000
-        if now - self.last_ambient_update < self.AMBIENT_THROTTLE_MS:
+        if not force and now - self.last_ambient_update < self.AMBIENT_THROTTLE_MS:
             return
         self.last_ambient_update = now
 
-        if not hasattr(self, 'phase_manager') or self.phase_manager is None:
-            return
-
-        phase = self.phase_manager.get_phase().lower()
         all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
 
-        if self.current_ambient_phase != phase:
-            self.ambient_locked = False
-            self.current_ambient_phase = phase
+        just_opened = not all_closed and self.last_all_closed_state
+        just_closed = all_closed and not self.last_all_closed_state
 
-        if phase == "day":
+        self.last_all_closed_state = all_closed
+
+        if all_closed:
+            self.ambient_active = False
+            logger.info("🌙 All reeds closed → Applying all_closed_action")
+
             for light_name in self.ambient_lights:
-                settings = self.get_light_settings(phase, light_name)
-                if settings is not None:
-                    b, m = settings
+                if self.all_closed_action == "off":
+                    self._set_ambient_light(light_name, 0, "white", source="ambient")
+                elif self.all_closed_action == "dim":
+                    settings = self.get_light_settings("night", light_name)
+                    b, m = settings if settings else (0, "white")
                     self._set_ambient_light(light_name, b, m, source="ambient")
+
+        elif just_opened:
+            self.ramp_ambient_lights(source="reed")
+
+
+    def ramp_ambient_lights(self, phase: str = None, source: str = "auto"):
+        """Single source of truth for ramping ambient lights when reeds open."""
+        if phase is None:
+            if not hasattr(self, 'phase_manager') or self.phase_manager is None:
+                phase = "evening"
+            else:
+                phase = self.phase_manager.get_phase().lower()
+
+        now = time.time() * 1000
+        is_forced = source in ("startup", "phase_change")
+
+        if not is_forced and now - self.last_ambient_update < self.AMBIENT_THROTTLE_MS * 1.5:
+            logger.debug(f"⏭️ Ambient ramp throttled ({source})")
             return
 
-        if not all_closed:
-            for light_name in self.ambient_lights:
-                settings = self.get_light_settings(phase, light_name)
-                if settings is not None:
-                    b, m = settings
-                    self._set_ambient_light(light_name, b, m, source="ambient")
-        else:
-            if self.all_closed_action == "off":
-                for light_name in self.ambient_lights:
-                    self._set_ambient_light(light_name, 0, "white", source="ambient")
-            elif self.all_closed_action == "dim":
-                for light_name in self.ambient_lights:
-                    night_settings = self.get_light_settings("night", light_name)
-                    if night_settings is not None:
-                        b, m = night_settings
-                        self._set_ambient_light(light_name, b, m, source="ambient")
-                    else:
-                        self._set_ambient_light(light_name, 0, "white", source="ambient")
-            else:
-                logger.warning(f"Unknown all_closed_action '{self.all_closed_action}' – treating as off")
+        self.last_ambient_update = now
+        self.ambient_active = True
+
+        logger.info(f"🌟 Ramping ambient lights to {phase} [{source}]")
+
+        for light_name in self.ambient_lights:
+            settings = self.get_light_settings(phase, light_name)
+            b, m = settings if settings else (0, "white")
+            self._set_ambient_light(light_name, b, m, source=source)
+
+        # Handle open reed-controlled lights
+        for reed_name in list(self.gpio.reed_states.keys()):
+            if not self.get_effective_state(reed_name):
+                self._apply_light_for_reed(reed_name, is_phase_change=True)
 
     # ====================== CENTRAL LIGHT APPLICATION ======================
     def _apply_light_for_reed(self, reed_name: str, is_phase_change: bool = False):
@@ -254,18 +298,53 @@ class ReedManager:
                 logger.error(f"Failed to apply light for {reed_name}: {e}", exc_info=True)
 
     # ====================== PHASE CHANGE HANDLER ======================
-    def reapply_all_open_lights(self, phase_manager):
-        current_phase = phase_manager.get_phase()
-        emoji = {"Day": "🌞", "Evening": "🌅", "Night": "🌙"}.get(current_phase, "🌗")
+    def apply_initial_ambient_state(self, timeout=6.0):
+        """Run once at startup."""
+        if getattr(self, 'startup_ambient_done', False):
+            return
 
-        logger.info(f"{emoji} {current_phase.title()} starts → updating light levels for open reeds")
+        if not hasattr(self, 'phase_manager') or self.phase_manager is None:
+            logger.warning("⚠️ PhaseManager not attached")
+            return
+
+        logger.debug("🚪 Waiting for valid phase from PhaseManager...")
+
+        start_time = time.time()
+        phase = None
+
+        while time.time() - start_time < timeout:
+            phase = self.phase_manager.get_phase()
+            if phase and phase.lower() in ("day", "evening", "night"):
+                break
+            time.sleep(0.25)
+
+        if not phase or phase.lower() not in ("day", "evening", "night"):
+            phase = "evening"
+            logger.warning(f"⚠️ No valid phase after {timeout}s → using fallback '{phase}'")
+
+        all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
+
+        self.last_all_closed_state = all_closed
+        self.startup_ambient_done = True
+
+        if not all_closed:
+            self.ramp_ambient_lights(phase=phase, source="startup")
+        else:
+            self.ambient_active = False
+            logger.info("🌙 All closed at startup")
+            self.update_ambient_lights(force=True)
+            
+    def reapply_all_open_lights(self, phase_manager):
+        """Called by PhaseManager on every phase change."""
+        if not self.startup_ambient_done:
+            return
+
+        logger.info(f"🌗 Phase changed → reapplying levels for open reeds")
+        self.ramp_ambient_lights(source="phase change")
         
         for name in list(self.gpio.reed_states.keys()):
-            if self.get_effective_state(name):
-                continue
-            self._apply_light_for_reed(name, is_phase_change=True)
-        
-        self.update_ambient_lights()
+            if not self.get_effective_state(name):   # if open
+                self._apply_light_for_reed(name, is_phase_change=True)
 
     # ====================== FORCE CONTROL ======================
     def force_state(self, reed_name: str, forced_closed: bool) -> bool:
@@ -449,7 +528,13 @@ class ReedManager:
         self.last_broadcast = now
 
         self.broadcast_update()
-        self.update_ambient_lights()
+
+        all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
+
+        if not all_closed and not self.ambient_active:
+            self.ramp_ambient_lights(source="throttled")
+        elif all_closed:
+            self.update_ambient_lights(force=True)
 
     def get_states(self) -> Dict:
         return self.gpio.reed_states.copy()

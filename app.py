@@ -134,7 +134,6 @@ from modules.reeds import ReedManager
 from modules.phases import PhaseManager
 from modules.sensors import SensorManager
 from modules.arduino import ArduinoManager
-from modules.scenes import activate_scene
 from modules.toasts import ToastManager, toast_manager
 
 app = Flask(__name__)
@@ -623,9 +622,11 @@ def handle_set_scene(data):
     scene = data.get('scene')
     if not scene:
         return
-    logger.info(f"🎬 Scene activated: {scene}")
+
+    from modules.scenes import activate_scene
+
     success = activate_scene(
-        config,
+        main_config=config,
         scene_name=scene,
         ramp_and_broadcast=ramp_and_broadcast,
         set_rgb_bug_light=set_rgb_bug_light,
@@ -635,8 +636,27 @@ def handle_set_scene(data):
         RGB_LIGHTS=RGB_LIGHTS,
         reed_manager=reed_manager
     )
+
     if success:
         socketio.emit('state_update', state.copy())
+        
+        
+@app.route('/api/scenes')
+def get_scenes():
+    from modules.scenes import get_all_scenes
+    scenes = get_all_scenes(config)
+    
+    scene_list = [
+        {
+            "key": key,
+            "name": data["name"],
+            "icon": data["icon"],
+            "description": data["description"],
+            "all_off": data["all_off"]
+        }
+        for key, data in scenes.items()
+    ]
+    return {"scenes": scene_list}
 
 
 @socketio.on('set_gps_simulation')
@@ -746,6 +766,8 @@ if __name__ == "__main__":
     phase_manager.reed_manager = reed_manager
     reed_manager.phase_manager = phase_manager
     phase_manager.start()
+    
+    reed_manager.apply_initial_ambient_state()
 
     if getattr(gps, 'serial', None):
         gps.start_reader()

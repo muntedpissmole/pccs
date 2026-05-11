@@ -142,7 +142,7 @@ class PhaseManager:
             }
             emoji = emoji_map.get(new_phase, "🌗")
 
-            logger.info(f"{emoji} Phase changed: {self.current_phase or '—'} → {new_phase}")
+            logger.info(f"{emoji} Phase changed: {self.current_phase or 'null'} → {new_phase}")
 
             toast_message = f"{emoji} It is now {new_phase}"
             _send_phase_toast(toast_message)
