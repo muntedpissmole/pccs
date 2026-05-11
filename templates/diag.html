@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pissmole • Diagnostics</title>
+    <title>PCCS Settings & Diagnostics</title>
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
@@ -261,12 +261,13 @@
 </head>
 <body>
     <div class="diag-container">
-        <div class="header">
-            <div class="header-left">
-                <h1>🔧 Diagnostics</h1>
-                <p style="margin:4px 0 0 0; opacity:0.7;">Pissmole Camper Control System</p>
-            </div>
-        </div>
+<div class="header">
+			<div class="header-left">
+				<h1>🔧 Diagnostics</h1>
+				<p style="margin:4px 0 0 0; opacity:0.7;">
+					Pissmole Camper Control System <span id="app-version"></span>.
+			</div>
+		</div>
 
         <div class="tab-bar">
             <div class="tab active" data-tab="appearance">Appearance</div>
@@ -603,12 +604,31 @@
             document.documentElement.classList.toggle('light', data.mode === 'light');
         });
 
-        window.onload = () => {
-            loadThemes();
-            fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
-            fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
-            socket.emit('connect');
-        };
+		window.onload = () => {
+			fetch('/api/version')
+				.then(r => {
+					if (!r.ok) throw new Error(`HTTP ${r.status}`);
+					return r.json();
+				})
+				.then(v => {
+					const verEl = document.getElementById('app-version');
+					if (verEl && v.version) {
+						verEl.textContent = `v${v.version}`;
+						verEl.title = `Built: ${v.built || 'Unknown'}`;
+						console.log(`✅ Version loaded: v${v.version}`);
+					}
+				})
+				.catch(err => {
+					console.warn('⚠️ Could not load version:', err);
+					const verEl = document.getElementById('app-version');
+					if (verEl) verEl.textContent = '(version unavailable)';
+				});
+
+			loadThemes();
+			fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
+			fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
+			socket.emit('connect');
+		};
     </script>
 </body>
 </html>
