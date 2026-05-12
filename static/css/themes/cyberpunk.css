@@ -1,0 +1,168 @@
+/* Cyberpunk 2077 */
+/* Static V wallpaper - Full Height + Blur + Rajdhani Font */
+
+:root {
+  /* Core Accent - Iconic Magenta + Cyan */
+  --accent-color: #ff00ff;
+  --accent-hover: #00f0ff;
+  --accent-light: #a5f3fc;
+  --accent-glow: rgba(255, 0, 255, 0.85);
+  --accent-glow-strong: rgba(0, 240, 255, 0.95);
+
+  /* Backgrounds & Surfaces */
+  --background: #0a0a0f;
+  --glass-bg: rgba(15, 15, 35, 0.72);
+  --glass-border: rgba(0, 240, 255, 0.32);
+  --control-bg: rgba(20, 20, 45, 0.88);
+  --slider-bg: rgba(255, 0, 255, 0.20);
+
+  /* Shadows */
+  --shadow-dark: #000000;
+  --shadow-light: #22d3ee;
+
+  /* Text */
+  --text-primary: #e0f2fe;
+  --text-secondary: #67e8f9;
+  --text-muted: #a5f3fc;
+  --text-on-accent: #0a0a0f;
+
+  /* Toggles */
+  --toggle-bg-off: rgba(20, 20, 45, 0.85);
+  --toggle-handle: #e0f2fe;
+  --toggle-checked-color: #ff00ff;
+  --toggle-knob-border: #67e8f9;
+
+  /* Bug Mode */
+  --bug-color: #ff0044;
+  --bug-fill-glow: rgba(255, 0, 68, 0.9);
+
+  /* Toast */
+  --toast-success: #22ff88;
+  --toast-error: #ff3366;
+  --toast-warning: #ffcc00;
+  --toast-info: #00f0ff;
+}
+
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
+  --background: #cbd5e1;
+  --glass-bg: rgba(241, 245, 255, 0.92);
+  --glass-border: rgba(103, 232, 249, 0.7);
+  --shadow-dark: #334155;
+  --shadow-light: #67e8f9;
+  --text-primary: #0f172a;
+  --text-secondary: #0369a1;
+  --text-on-accent: #ffffff;
+
+  --control-bg: rgba(241, 245, 255, 0.92);
+  --toggle-bg-off: #e2e8f0;
+  --toggle-handle: linear-gradient(to bottom, #e0f2fe, #67e8f9);
+  --toggle-checked-color: #c026d3;
+  --toggle-knob-border: var(--accent-color);
+}
+
+/* ====================== GLOBAL ====================== */
+body {
+  background: var(--background) !important;
+  position: relative;
+  overflow: hidden;
+  font-family: "Rajdhani", "Orbitron", "Exo 2", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Full Height Wallpaper (shrunk to show complete vertical image) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: url('images/cyberpunk.jpeg') center / auto 100% no-repeat;
+  filter: brightness(0.70) contrast(1.18) saturate(1.40) blur(6px);
+}
+
+/* ====================== MAIN CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 
+    0 10px 35px -10px var(--shadow-dark),
+    0 0 25px -8px var(--accent-glow),
+    inset 0 0 22px -12px rgba(0, 240, 255, 0.35);
+  backdrop-filter: blur(18px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.tile::before,
+.slider-card::before,
+.scene-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  transform: translateX(-150%);
+  animation: neon-sweep 3.5s linear infinite;
+  opacity: 0.2;
+}
+
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  transform: translateY(-8px);
+  box-shadow: 
+    0 25px 50px -12px var(--shadow-dark),
+    0 0 40px var(--accent-glow-strong);
+  border-color: var(--accent-hover);
+}
+
+@keyframes neon-sweep {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ====================== SCENES GRID ====================== */
+.scene-btn.active {
+  background: rgba(255, 0, 255, 0.22) !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 35px var(--accent-glow-strong);
+}
+
+/* ====================== SLIDERS ====================== */
+.slider-fill {
+  background: linear-gradient(90deg, #ff00ff, #00f0ff) !important;
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.slider-thumb {
+  background: #111118;
+  border: 2.5px solid #00f0ff;
+  box-shadow: 0 0 18px #ff00ff, 0 0 30px #00f0ff;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: var(--toggle-bg-off) !important;
+  border: 1px solid rgba(0, 240, 255, 0.45);
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, #ff00ff, #00f0ff) !important;
+  box-shadow: 0 0 30px var(--accent-glow-strong);
+}
+
+/* ====================== STATUS TILES ====================== */
+.tile i.fa-solid {
+  color: var(--accent-light);
+  filter: drop-shadow(0 0 15px var(--accent-glow));
+}
+
+.tile-value {
+  text-shadow: 0 0 12px var(--accent-glow-strong);
+}

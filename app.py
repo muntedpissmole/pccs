@@ -126,6 +126,7 @@ BACKGROUND_SYNC_INTERVAL = config.getint('background_sync', 'sync_interval', 45)
 REED_MONITOR_INTERVAL = config.getfloat('reed_monitor', 'monitor_interval', 0.25)
 
 first_state_read_done = False
+shutdown_event = threading.Event()
 
 # ====================== MODULES ======================
 from modules.gps import GPSModule
@@ -387,13 +388,16 @@ sensor_manager = None
 
 # ====================== BACKGROUND SYNC ======================
 def background_state_sync():
-    while True:
+    while not shutdown_event.is_set():
         time.sleep(BACKGROUND_SYNC_INTERVAL)
         try:
-            if arduino.ser and arduino.ser.is_open:
+            if arduino.ser and arduino.ser.is_open and not shutdown_event.is_set():
                 read_all_states()
         except Exception as e:
-            logger.debug(f"Background sync skipped: {e}")
+            if not shutdown_event.is_set():
+                logger.debug(f"Background sync skipped: {e}")
+            else:
+                break
 
 
 # ====================== ROUTES ======================
@@ -544,6 +548,15 @@ def handle_connect(sid=None):
     logger.debug(f"🔌 Client connected from {request.remote_addr or 'unknown'} (SID: {sid})")
     
     emit('lights_config', arduino.get_frontend_config())
+    emit('screens_init', {
+        'screens': {
+            name: {
+                'on': reed_manager.screen_states.get(name, False),
+                'config': conf
+            }
+            for name, conf in reed_manager.screens.items()
+        }
+    })
     
     if not first_state_read_done:
         logger.debug("🔄 First connection — reading full state from hardware")
@@ -719,6 +732,25 @@ def handle_toast_test(data):
         logger.warning("Toast test received but toast_manager is not available")
         
         
+@socketio.on('screen_manual_toggle')
+def handle_screen_manual_toggle(data):
+    """Manual test button for turning screens on/off from diagnostics page"""
+    name = data.get('name')
+    force_on = data.get('on')  # True = wake, False = sleep, None = toggle
+
+    if name not in reed_manager.screens:
+        logger.warning(f"❌ Unknown screen: {name}")
+        return
+
+    if force_on is None:
+        force_on = not reed_manager.screen_states.get(name, False)
+
+    if force_on:
+        reed_manager._wake_screen(name)
+    else:
+        reed_manager._sleep_screen(name)
+        
+        
 @app.route('/api/version')
 def get_version_route():
     return {
@@ -727,11 +759,29 @@ def get_version_route():
         "full": APP_VERSION,
         "built": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
+    
+    
+@app.route('/screen_json')
+def screen_json():
+    screens_data = {}
+    for name, conf in reed_manager.screens.items():
+        screens_data[name] = {
+            'on': reed_manager.screen_states.get(name, False),
+            'config': {
+                'friendly': conf.get('friendly', name),
+                'host': conf.get('host'),
+                'icon': conf.get('icon', 'fa-display')
+            }
+        }
+    return {'screens': screens_data}
 
 
 # ====================== CLEANUP ======================
 def cleanup():
     logger.info("🧹 Cleaning up...")
+    shutdown_event.set()
+    
+    time.sleep(0.5)
     for name in list(active_ramps.keys()):
         cancel_ramp(name)
     try:
@@ -768,6 +818,7 @@ if __name__ == "__main__":
     phase_manager.start()
     
     reed_manager.apply_initial_ambient_state()
+    reed_manager.apply_initial_screen_states()
 
     if getattr(gps, 'serial', None):
         gps.start_reader()

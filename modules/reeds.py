@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Callable, Dict, Optional, Tuple, List, DefaultDict
 from collections import defaultdict
+import subprocess   # Added for touchscreen control
 
 from flask_socketio import SocketIO
 from gpiozero import Button
@@ -50,7 +51,8 @@ class ReedManager:
         self.last_all_closed_state = True
         self.startup_ambient_done = False
 
-        self.on_reed_change: Dict[str, Callable] = {}
+        # CHANGED: Now supports multiple callbacks per reed (lights + screens)
+        self.on_reed_change: DefaultDict[str, List[Callable]] = defaultdict(list)
 
         # Force states
         self.forced_states: Dict[str, dict] = {}
@@ -192,6 +194,42 @@ class ReedManager:
         except Exception as e:
             logger.error(f"Failed to load [reeds.interlocks]: {e}", exc_info=True)
 
+        # ====================== TOUCHSCREENS (on/off only) ======================
+        self.screens: Dict[str, dict] = {}
+        self.screen_states: Dict[str, bool] = {}   # True = on, False = off
+
+        try:
+            if self.config.has_section('screens'):
+                for key, value in self.config.items('screens'):
+                    parts = [p.strip() for p in value.split('|')]
+                    if len(parts) < 5:
+                        logger.warning(f"⚠️ Invalid screen line: {key}")
+                        continue
+
+                    name = key.strip()
+                    friendly = parts[0]
+                    linked_reed = parts[1]
+                    host = parts[2]
+                    username = parts[3]
+                    brightness_path = parts[4]
+                    icon = parts[5] if len(parts) > 5 else 'fa-display'
+
+                    self.screens[name] = {
+                        'friendly': friendly,
+                        'linked_reed': linked_reed,
+                        'host': host,
+                        'username': username,
+                        'brightness_path': brightness_path,
+                        'icon': icon
+                    }
+                    self.screen_states[name] = False
+
+                    self.register_trigger(linked_reed, self._make_screen_trigger(linked_reed))
+
+                    logger.info(f"🖥️ Screen '{friendly}' linked to reed '{linked_reed}' @ {host}")
+        except Exception as e:
+            logger.error(f"Failed to load [screens] section: {e}", exc_info=True)
+
         self.registered = False
         self.last_change_time: Dict[str, float] = {}
 
@@ -291,11 +329,13 @@ class ReedManager:
                 logger.debug(f"🔒 Interlock blocked {reed_name}")
             effective_closed = True
 
+        # UPDATED: Call ALL callbacks (light + screen)
         if reed_name in self.on_reed_change:
-            try:
-                self.on_reed_change[reed_name](effective_closed, is_phase_change=is_phase_change)
-            except Exception as e:
-                logger.error(f"Failed to apply light for {reed_name}: {e}", exc_info=True)
+            for callback in self.on_reed_change[reed_name]:
+                try:
+                    callback(effective_closed, is_phase_change=is_phase_change)
+                except Exception as e:
+                    logger.error(f"Failed to apply callback for {reed_name}: {e}", exc_info=True)
 
     # ====================== PHASE CHANGE HANDLER ======================
     def apply_initial_ambient_state(self, timeout=6.0):
@@ -345,6 +385,48 @@ class ReedManager:
         for name in list(self.gpio.reed_states.keys()):
             if not self.get_effective_state(name):   # if open
                 self._apply_light_for_reed(name, is_phase_change=True)
+                
+    def apply_initial_screen_states(self):
+        """Evaluate current reed states and set all linked touchscreens accordingly at startup."""
+        if not self.screens:
+            logger.debug("🖥️ No touchscreens configured")
+            return
+
+        logger.debug("🖥️ Applying initial touchscreen states based on reeds...")
+
+        success = 0
+        unreachable = 0
+        failed = 0
+
+        for screen_name, conf in self.screens.items():
+            reed_name = conf['linked_reed']
+            effective_closed = self.get_effective_state(reed_name)
+            friendly = conf.get('friendly', screen_name)
+
+            action = "sleep" if effective_closed else "wake"
+
+            ok = self._set_screen_state(screen_name, sleep=effective_closed)
+
+            if ok:
+                success += 1
+                logger.debug(f"🖥️ Initial {action} → {friendly}")
+            elif effective_closed and self._was_unreachable(screen_name):
+                unreachable += 1
+                logger.debug(f"🖥️ {friendly} unreachable (expected if off)")
+            else:
+                failed += 1
+                logger.warning(f"🖥️ Failed to {action} {friendly} during initial setup")
+
+            time.sleep(0.15)
+
+        total = len(self.screens)
+        if failed == 0:
+            if unreachable > 0:
+                logger.info(f"🖥️ {success} touchscreen(s) initialized ({unreachable} unreachable)")
+            else:
+                logger.info(f"✅ All {success} touchscreen(s) initialized")
+        else:
+            logger.warning(f"🖥️ Initial screen setup: {success} OK, {unreachable} unreachable, {failed} failed")
 
     # ====================== FORCE CONTROL ======================
     def force_state(self, reed_name: str, forced_closed: bool) -> bool:
@@ -510,7 +592,7 @@ class ReedManager:
             self.monitor_thread.join(timeout=1.5)
 
     def register_trigger(self, reed_name: str, callback: Callable):
-        self.on_reed_change[reed_name] = callback
+        self.on_reed_change[reed_name].append(callback)
 
     def broadcast_update(self):
         try:
@@ -541,3 +623,111 @@ class ReedManager:
 
     def get_reed_ramp_time(self) -> int:
         return self.reed_ramp_time_ms
+
+    # ====================== TOUCHSCREEN CONTROL ======================
+    def _make_screen_trigger(self, reed_name: str):
+        """Create callback for screen control when linked reed changes."""
+        def screen_trigger(is_closed: bool, is_phase_change: bool = False):
+            for screen_name, conf in self.screens.items():
+                if conf['linked_reed'] == reed_name:
+                    if is_closed:
+                        self._sleep_screen(screen_name)
+                    else:
+                        self._wake_screen(screen_name)
+        return screen_trigger
+
+    def _sleep_screen(self, screen_name: str):
+        """Turn screen completely off."""
+        conf = self.screens[screen_name]
+        friendly = conf.get('friendly', screen_name)
+
+        cmd = f"ssh {conf['username']}@{conf['host']} \"echo 0 > {conf['brightness_path']}\""
+
+        try:
+            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                logger.info(f"🖥️ Slept screen: {friendly}")
+                self.screen_states[screen_name] = False
+                self.socketio.emit('screen_update', {'name': screen_name, 'on': False})
+            else:
+                stderr = (result.stderr or "").strip()
+                if "No route to host" in stderr or "Connection refused" in stderr or "Host is down" in stderr:
+                    logger.debug(f"🖥️ {friendly} unreachable (normal at boot if powered off)")
+                else:
+                    logger.warning(f"🖥️ Failed to sleep {friendly} (code {result.returncode}) - {stderr}")
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"🖥️ Timeout while trying to sleep screen {friendly}")
+        except Exception as e:
+            logger.warning(f"🖥️ SSH error sleeping screen {friendly}: {e}")
+
+        self.screen_states[screen_name] = False
+        self.socketio.emit('screen_update', {'name': screen_name, 'on': False})
+
+    def _wake_screen(self, screen_name: str):
+        """Turn screen on to full brightness."""
+        conf = self.screens[screen_name]
+        friendly = conf.get('friendly', screen_name)
+
+        cmd = f"ssh {conf['username']}@{conf['host']} \"echo 255 > {conf['brightness_path']}\""
+
+        try:
+            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                logger.info(f"🖥️ Woke screen: {friendly}")
+                self.screen_states[screen_name] = True
+                self.socketio.emit('screen_update', {'name': screen_name, 'on': True})
+            else:
+                stderr = (result.stderr or "").strip()
+                if "No route to host" in stderr or "Connection refused" in stderr or "Host is down" in stderr:
+                    logger.debug(f"🖥️ {friendly} unreachable (normal at boot if powered off)")
+                else:
+                    logger.warning(f"🖥️ Failed to wake {friendly} (code {result.returncode}) - {stderr}")
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"🖥️ Timeout while trying to wake screen {friendly}")
+        except Exception as e:
+            logger.warning(f"🖥️ SSH error waking screen {friendly}: {e}")
+
+        self.screen_states[screen_name] = True
+        self.socketio.emit('screen_update', {'name': screen_name, 'on': True})
+        
+    def _set_screen_state(self, screen_name: str, sleep: bool) -> bool:
+        """Internal helper that returns True if SSH command succeeded."""
+        conf = self.screens[screen_name]
+        friendly = conf.get('friendly', screen_name)
+        value = "0" if sleep else "255"
+        action_word = "sleep" if sleep else "wake"
+
+        cmd = f"ssh {conf['username']}@{conf['host']} \"echo {value} > {conf['brightness_path']}\""
+
+        try:
+            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                logger.debug(f"🖥️ {action_word.capitalize()} command succeeded for {friendly}")
+                self.screen_states[screen_name] = not sleep
+                self.socketio.emit('screen_update', {'name': screen_name, 'on': not sleep})
+                return True
+            else:
+                stderr = (result.stderr or "").strip()
+                if any(x in stderr for x in ["No route to host", "Connection refused", "Host is down"]):
+                    self.screen_states[screen_name] = not sleep  # still update local state
+                    self.socketio.emit('screen_update', {'name': screen_name, 'on': not sleep})
+                    return False  # unreachable, but not a "failure"
+                else:
+                    logger.warning(f"🖥️ Failed to {action_word} {friendly} (code {result.returncode}) - {stderr}")
+                    return False
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"🖥️ Timeout {action_word}ing screen {friendly}")
+            return False
+        except Exception as e:
+            logger.warning(f"🖥️ SSH error {action_word}ing screen {friendly}: {e}")
+            return False
+
+    def _was_unreachable(self, screen_name: str) -> bool:
+        """Optional helper if you want extra checks later."""
+        return True

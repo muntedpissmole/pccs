@@ -1,0 +1,131 @@
+/* Aurora Borealis */
+/* Authentic Northern Lights Photo Background + Subtle Frost Cards */
+
+:root {
+  --accent-color: #22d3ee;
+  --accent-hover: #67e8f9;
+  --accent-light: #a5f3fc;
+  --accent-glow: rgba(34, 211, 238, 0.85);
+  --accent-glow-strong: rgba(103, 232, 249, 0.95);
+
+  --background: #05070f;
+  --glass-bg: rgba(15, 23, 42, 0.72);
+  --glass-border: rgba(103, 232, 249, 0.35);
+  --control-bg: rgba(15, 23, 42, 0.78);
+  --slider-bg: rgba(103, 232, 249, 0.15);
+
+  --shadow-dark: #02040a;
+  --shadow-light: #1e3a5f;
+
+  --text-primary: #e0f2fe;
+  --text-secondary: #bae6fd;
+  --text-muted: #7dd3fc;
+  --text-on-accent: #0f172a;
+
+  --toggle-bg-off: rgba(15, 23, 42, 0.8);
+  --toggle-handle: #e0f2fe;
+  --toggle-checked-color: #22d3ee;
+  --toggle-knob-border: #bae6fd;
+
+  --bug-color: #f43f5e;
+  --bug-fill-glow: rgba(244, 63, 94, 0.9);
+
+  --toast-success: rgb(134, 239, 172);
+  --toast-error: rgb(251, 113, 133);
+  --toast-warning: rgb(253, 186, 116);
+  --toast-info: rgb(103, 232, 249);
+}
+
+/* ====================== REAL AURORA BOREALIS WALLPAPER ====================== */
+body {
+  background: var(--background) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Real high-quality aurora photograph */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: 
+    linear-gradient(rgba(5, 7, 15, 0.45), rgba(5, 7, 15, 0.65)), /* Dark overlay for readability */
+    url('images/aurora_borealis.jpeg') center/cover no-repeat;
+  filter: contrast(1.15) brightness(0.85) saturate(1.2);
+}
+
+/* Optional soft moving aurora glow overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(ellipse at 40% 35%, rgba(52, 211, 153, 0.25) 0%, transparent 50%);
+  animation: aurora-glow 40s infinite linear;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+@keyframes aurora-glow {
+  0%   { opacity: 0.7; transform: translateX(-5%); }
+  100% { opacity: 0.95; transform: translateX(5%); }
+}
+
+/* ====================== SUBTLE FROST PATTERN CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    0 10px 30px -6px var(--shadow-dark),
+    0 0 25px -5px var(--accent-glow),
+    inset 0 1px 0 rgba(224, 242, 254, 0.18);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Delicate ice crystal / frost pattern */
+.tile::before,
+.slider-card::before,
+.scene-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 18% 25%, rgba(224, 242, 254, 0.4) 1px, transparent 2.5px),
+    radial-gradient(circle at 82% 28%, rgba(224, 242, 254, 0.35) 1px, transparent 2.5px),
+    radial-gradient(circle at 25% 75%, rgba(224, 242, 254, 0.35) 1px, transparent 2.5px),
+    radial-gradient(circle at 75% 80%, rgba(224, 242, 254, 0.3) 1px, transparent 2.5px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.3;
+}
+
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  box-shadow: 
+    0 16px 40px -8px var(--shadow-dark),
+    0 0 35px 10px var(--accent-glow);
+  transform: translateY(-3px);
+  border-color: #67e8f9;
+}
+
+.scene-btn.active {
+  box-shadow: 0 0 40px 14px var(--accent-glow-strong);
+  background: rgba(21, 30, 55, 0.85);
+}
+
+/* Strong neon accents */
+.slider-fill {
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  box-shadow: 0 0 26px 9px var(--accent-glow-strong);
+}

@@ -1,0 +1,204 @@
+/* Campfire Glow */
+/* Warm flickering campfire with real night-forest atmosphere */
+
+:root {
+  /* Core Accent - Fiery Orange/Amber */
+  --accent-color: #f97316;
+  --accent-hover: #fb923c;
+  --accent-light: #fed7aa;
+  --accent-glow: rgba(249, 115, 22, 0.75);
+  --accent-glow-strong: rgba(251, 146, 60, 0.95);
+
+  /* Backgrounds & Surfaces */
+  --background: #0f0a05;                    /* Deep night forest black */
+  --glass-bg: rgba(45, 25, 15, 0.72);      /* Warm wooden/glass cards */
+  --glass-border: rgba(251, 146, 60, 0.28);
+  --control-bg: rgba(55, 30, 18, 0.88);
+  --slider-bg: rgba(251, 191, 36, 0.22);
+
+  /* Shadows */
+  --shadow-dark: #0a0603;
+  --shadow-light: #b45309;
+
+  /* Text */
+  --text-primary: #fef3c7;
+  --text-secondary: #fed7aa;
+  --text-muted: #f5c07a;
+  --text-on-accent: #431407;
+
+  /* Toggles */
+  --toggle-bg-off: rgba(55, 30, 18, 0.88);
+  --toggle-handle: #fef3c7;
+  --toggle-checked-color: #f97316;
+  --toggle-knob-border: #fed7aa;
+
+  /* Bug Mode (Red special mode) */
+  --bug-color: #e11d48;
+  --bug-fill-glow: rgba(225, 29, 72, 0.9);
+
+  /* Toast */
+  --toast-success: rgb(163, 230, 187);
+  --toast-error: rgb(251, 113, 133);
+  --toast-warning: #fbbf24;
+  --toast-info: #fb923c;
+}
+
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
+  --background: #f5e8c7;
+  --glass-bg: rgba(255, 245, 220, 0.94);
+  --glass-border: rgba(245, 158, 11, 0.5);
+  --shadow-dark: #b45309;
+  --shadow-light: #fef3c7;
+  --text-primary: #451a03;
+  --text-secondary: #9c4400;
+  --text-on-accent: #ffffff;
+
+  --control-bg: rgba(255, 245, 220, 0.94);
+  --toggle-bg-off: #f5e8c7;
+  --toggle-handle: linear-gradient(to bottom, #fef3c7, #fcd34d);
+  --toggle-checked-color: #f59e0b;
+  --toggle-knob-border: var(--accent-color);
+}
+
+/* ====================== GLOBAL ====================== */
+body {
+  background: var(--background) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Real Campfire Background - Forest night + fire glow */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: 
+    radial-gradient(circle at 50% 85%, rgba(249, 115, 22, 0.55) 0%, transparent 45%),
+    radial-gradient(circle at 35% 92%, rgba(234, 88, 12, 0.45) 0%, transparent 50%),
+    radial-gradient(circle at 70% 90%, rgba(251, 146, 60, 0.4) 0%, transparent 40%),
+    #0f0a05;
+  background-size: 200% 200%;
+  animation: fire-flicker 9s ease-in-out infinite alternate;
+}
+
+/* Subtle forest floor / wood texture overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: 
+    linear-gradient(transparent 70%, rgba(120, 53, 15, 0.15) 100%),
+    radial-gradient(circle, rgba(180, 83, 9, 0.08) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Gentle ember particles */
+body .embers {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: transparent;
+  pointer-events: none;
+  animation: embers-rise 25s linear infinite;
+}
+
+@keyframes fire-flicker {
+  0%   { background-position: 50% 60%; filter: brightness(1) saturate(1.1); }
+  50%  { background-position: 48% 65%; filter: brightness(1.15) saturate(1.3); }
+  100% { background-position: 52% 58%; filter: brightness(1.05) saturate(1.15); }
+}
+
+@keyframes embers-rise {
+  0%   { background-position: 0 100%; opacity: 0.7; }
+  100% { background-position: 0 -200%; opacity: 0.3; }
+}
+
+/* ====================== MAIN CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 
+    0 12px 35px -12px var(--shadow-dark),
+    inset 0 2px 20px -8px var(--accent-glow),
+    0 0 25px -15px rgba(249, 115, 22, 0.4);
+  backdrop-filter: blur(14px);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: 
+    0 20px 45px -10px var(--shadow-dark),
+    inset 0 4px 30px -10px var(--accent-glow-strong);
+  border-color: rgba(251, 146, 60, 0.45);
+}
+
+/* ====================== SCENES GRID ====================== */
+.scene-btn.active {
+  background: rgba(249, 115, 22, 0.28) !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 30px var(--accent-glow-strong);
+}
+
+/* ====================== SLIDERS ====================== */
+.slider-fill {
+  background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.slider-thumb {
+  background: #fef3c7;
+  box-shadow: 
+    0 0 18px var(--accent-glow-strong),
+    0 0 28px #f59e0b;
+}
+
+/* Bug mode remains red but warm */
+.slider-fill.bug-mode,
+.slider-thumb.bug-mode {
+  box-shadow: 0 0 18px var(--bug-fill-glow) !important;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: var(--toggle-bg-off) !important;
+  border: 1px solid rgba(251, 146, 60, 0.35);
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, #f97316, #fb923c) !important;
+  box-shadow: 0 0 25px var(--accent-glow-strong);
+}
+
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+/* ====================== STATUS TILES ====================== */
+.tile i.fa-solid {
+  color: var(--accent-light);
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+}
+
+.tile-value {
+  color: var(--text-primary);
+  text-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  filter: saturate(0.5) brightness(0.9);
+}

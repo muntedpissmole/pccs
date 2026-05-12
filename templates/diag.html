@@ -87,7 +87,7 @@
         .tile:hover {
             background: var(--control-bg) !important;
             transform: none !important;
-            box-shadow: var(--glass-shadow) !important; /* Preserve shadow in light mode */
+            box-shadow: var(--glass-shadow) !important;
         }
 
         /* ==================== GPS LIVE DATA ==================== */
@@ -144,24 +144,37 @@
             color: var(--text-primary);
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.2s;
+            transition: all 0.25s ease;
         }
         .btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-1px);
         }
         .btn.danger {
             background: rgba(244, 63, 94, 0.2);
             color: #f87171;
+            border-color: rgba(244, 63, 94, 0.3);
+        }
+        .btn.danger:hover {
+            background: rgba(244, 63, 94, 0.4);
+            color: #ff7171;
+            border-color: #f87171;
+            box-shadow: 0 4px 15px rgba(244, 63, 94, 0.3);
         }
         .btn.success {
             background: rgba(16, 185, 129, 0.2);
             color: #4ade80;
         }
+        .btn.success:hover {
+            background: rgba(16, 185, 129, 0.35);
+            color: #34d399;
+        }
         .btn.active-force {
-            animation: forcePulse 1.8s infinite;
-            background: rgba(251, 191, 36, 0.3) !important;
+            animation: forcePulse 2s infinite;
+            background: rgba(251, 191, 36, 0.35) !important;
             border-color: #fbbf24;
             color: #fbbf24;
+            box-shadow: 0 0 18px rgba(251, 191, 36, 0.5);
         }
         @keyframes forcePulse {
             0%, 100% { transform: scale(1); }
@@ -192,87 +205,24 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-
-        @media (max-width: 640px) {
-            body { padding: 12px; }
-            .header { flex-direction: column; align-items: flex-start; gap: 12px; }
-            .header-left h1 { font-size: 1.85rem; }
-            .grid-2 { grid-template-columns: 1fr; gap: 16px; }
-            .tab-bar { width: 100%; justify-content: center; }
-            input, textarea, select { font-size: 16px !important; }
-            #gps-raw { font-size: 0.75rem; }
-
-            .status-row {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 4px;
-            }
-            .status-row span:first-child { min-width: auto; font-weight: 500; }
-            .status-row span:last-child { text-align: left; width: 100%; }
-        }
-		
-		.btn {
-			padding: 10px 18px;
-			border-radius: 9999px;
-			background: rgba(255,255,255,0.1);
-			border: 1px solid var(--glass-border);
-			color: var(--text-primary);
-			cursor: pointer;
-			font-weight: 600;
-			transition: all 0.25s ease;
-		}
-
-		.btn:hover {
-			background: rgba(255,255,255,0.25);
-			transform: translateY(-1px);
-		}
-
-		.btn.danger {
-			background: rgba(244, 63, 94, 0.2);
-			color: #f87171;
-			border-color: rgba(244, 63, 94, 0.3);
-		}
-
-		.btn.danger:hover {
-			background: rgba(244, 63, 94, 0.4);
-			color: #ff7171;
-			border-color: #f87171;
-			box-shadow: 0 4px 15px rgba(244, 63, 94, 0.3);
-		}
-
-		.btn.success {
-			background: rgba(16, 185, 129, 0.2);
-			color: #4ade80;
-		}
-
-		.btn.success:hover {
-			background: rgba(16, 185, 129, 0.35);
-			color: #34d399;
-		}
-
-		.btn.active-force {
-			animation: forcePulse 2s infinite;
-			background: rgba(251, 191, 36, 0.35) !important;
-			border-color: #fbbf24;
-			color: #fbbf24;
-			box-shadow: 0 0 18px rgba(251, 191, 36, 0.5);
-		}
     </style>
 </head>
 <body>
     <div class="diag-container">
-<div class="header">
-			<div class="header-left">
-				<h1>🔧 Diagnostics</h1>
-				<p style="margin:4px 0 0 0; opacity:0.7;">
-					Pissmole Camper Control System <span id="app-version"></span>.
-			</div>
-		</div>
+        <div class="header">
+            <div class="header-left">
+                <h1>🔧 Diagnostics</h1>
+                <p style="margin:4px 0 0 0; opacity:0.7;">
+                    Pissmole Camper Control System <span id="app-version"></span>.
+                </p>
+            </div>
+        </div>
 
         <div class="tab-bar">
             <div class="tab active" data-tab="appearance">Appearance</div>
             <div class="tab" data-tab="gps">GPS</div>
             <div class="tab" data-tab="reeds">Reed Switches</div>
+            <div class="tab" data-tab="screens">Touchscreens</div>
             <div class="tab" data-tab="phases">Phases</div>
             <div class="tab" data-tab="toasts">Toasts</div>
         </div>
@@ -319,6 +269,12 @@
         <div id="reeds" class="section">
             <h2><i class="fas fa-door-open"></i> Reed Switches</h2>
             <div id="reeds-list" class="grid-2"></div>
+        </div>
+
+        <!-- TOUCHSCREENS -->
+        <div id="screens" class="section">
+            <h2><i class="fas fa-display"></i> Remote Touchscreens</h2>
+            <div id="screens-list" class="grid-2"></div>
         </div>
 
         <!-- PHASES -->
@@ -426,95 +382,87 @@
             socket.emit('set_gps_simulation', { no_fix: enabled }); 
         }
 
-        // ==================== REED SWITCHES - FIXED ====================
+        // ==================== REED SWITCHES ====================
         let reedsStateCache = {};
 
-		function updateReeds(data) {
-			reedsStateCache = data;
-			
-			const states = data.states || {};
-			const forced = data.forced || {};
+        function updateReeds(data) {
+            reedsStateCache = data;
+            const states = data.states || {};
+            const forced = data.forced || {};
 
-			Object.keys(states).forEach(name => {
-				const card = document.querySelector(`.tile[data-name="${CSS.escape(name)}"]`);
-				if (!card) {
-					// New reed appeared → full render (rare)
-					return renderReeds(data);
-				}
+            // Update existing cards
+            Object.keys(states).forEach(name => {
+                const card = document.querySelector(`.tile[data-name="${CSS.escape(name)}"]`);
+                if (!card) return;
 
-				const isForced = name in forced;
-				const forcedClosed = isForced ? forced[name] : null;
-				const realClosed = states[name];
+                const isForced = name in forced;
+                const forcedClosed = isForced ? forced[name] : null;
+                const realClosed = states[name];
 
-				const displayState = isForced 
-					? (forcedClosed ? 'FORCED CLOSED' : 'FORCED OPEN')
-					: (realClosed ? 'CLOSED' : 'OPEN');
-				
-				const color = (isForced ? forcedClosed : realClosed) ? '#4ade80' : '#f87171';
+                const displayState = isForced 
+                    ? (forcedClosed ? 'FORCED CLOSED' : 'FORCED OPEN')
+                    : (realClosed ? 'CLOSED' : 'OPEN');
+                
+                const color = (isForced ? forcedClosed : realClosed) ? '#4ade80' : '#f87171';
 
-				const stateEl = card.querySelector(`#state-${CSS.escape(name)}`);
-				if (stateEl) {
-					stateEl.textContent = displayState;
-					stateEl.style.color = color;
-				}
+                const stateEl = card.querySelector(`#state-${CSS.escape(name)}`);
+                if (stateEl) {
+                    stateEl.textContent = displayState;
+                    stateEl.style.color = color;
+                }
 
-				// Update button states
-				const btns = card.querySelectorAll('button');
-				if (btns.length >= 2) {
-					btns[0].classList.toggle('active-force', isForced && forcedClosed);
-					btns[1].classList.toggle('active-force', isForced && !forcedClosed);
-				}
-			});
-		}
+                const btns = card.querySelectorAll('button');
+                if (btns.length >= 2) {
+                    btns[0].classList.toggle('active-force', isForced && forcedClosed);
+                    btns[1].classList.toggle('active-force', isForced && !forcedClosed);
+                }
+            });
+        }
 
-		function renderReeds(data) {
-			const container = document.getElementById('reeds-list');
-			container.innerHTML = '';
-			
-			const states = data.states || {};
-			const forced = data.forced || {};
+        function renderReeds(data) {
+            const container = document.getElementById('reeds-list');
+            container.innerHTML = '';
+            
+            const states = data.states || {};
+            const forced = data.forced || {};
 
-			// === STABLE ORDER ===
-			const sortedNames = Object.keys(states).sort((a, b) => a.localeCompare(b));
-			// Alternative: define your own order
-			// const sortedNames = ['door_main', 'door_side', 'window_left', ...];
+            const sortedNames = Object.keys(states).sort((a, b) => a.localeCompare(b));
 
-			sortedNames.forEach(name => {
-				const isForced = name in forced;
-				const forcedClosed = isForced ? forced[name] : null;
-				const realClosed = states[name];
-				
-				let displayState = isForced 
-					? (forcedClosed ? 'FORCED CLOSED' : 'FORCED OPEN')
-					: (realClosed ? 'CLOSED' : 'OPEN');
-				
-				let color = (isForced ? forcedClosed : realClosed) ? '#4ade80' : '#f87171';
+            sortedNames.forEach(name => {
+                const isForced = name in forced;
+                const forcedClosed = isForced ? forced[name] : null;
+                const realClosed = states[name];
+                
+                let displayState = isForced 
+                    ? (forcedClosed ? 'FORCED CLOSED' : 'FORCED OPEN')
+                    : (realClosed ? 'CLOSED' : 'OPEN');
+                
+                let color = (isForced ? forcedClosed : realClosed) ? '#4ade80' : '#f87171';
 
-				const card = document.createElement('div');
-				card.className = 'tile';
-				card.dataset.name = name;
-				
-				card.innerHTML = `
-					<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-						<strong>${name.replace(/_/g, ' ').toUpperCase()}</strong>
-						<div id="state-${name}" style="font-size:1.4rem; font-weight:700; color:${color};">${displayState}</div>
-					</div>
-					<div style="display:flex; gap:8px; flex-wrap:wrap;">
-						<button class="btn ${isForced && forcedClosed ? 'active-force' : ''}">Force Closed</button>
-						<button class="btn ${isForced && !forcedClosed ? 'active-force' : ''}">Force Open</button>
-						<button class="btn danger">Clear Force</button>
-					</div>
-				`;
+                const card = document.createElement('div');
+                card.className = 'tile';
+                card.dataset.name = name;
+                
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <strong>${name.replace(/_/g, ' ').toUpperCase()}</strong>
+                        <div id="state-${name}" style="font-size:1.4rem; font-weight:700; color:${color};">${displayState}</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn ${isForced && forcedClosed ? 'active-force' : ''}">Force Closed</button>
+                        <button class="btn ${isForced && !forcedClosed ? 'active-force' : ''}">Force Open</button>
+                        <button class="btn danger">Clear Force</button>
+                    </div>
+                `;
 
-				// Attach listeners
-				const buttons = card.querySelectorAll('button');
-				buttons[0].addEventListener('click', () => forceReedOptimistic(name, true));
-				buttons[1].addEventListener('click', () => forceReedOptimistic(name, false));
-				buttons[2].addEventListener('click', () => clearReedForceOptimistic(name));
+                const buttons = card.querySelectorAll('button');
+                buttons[0].addEventListener('click', () => forceReedOptimistic(name, true));
+                buttons[1].addEventListener('click', () => forceReedOptimistic(name, false));
+                buttons[2].addEventListener('click', () => clearReedForceOptimistic(name));
 
-				container.appendChild(card);
-			});
-		}
+                container.appendChild(card);
+            });
+        }
 
         function forceReedOptimistic(name, closed) {
             const card = document.querySelector(`.tile[data-name="${CSS.escape(name)}"]`);
@@ -551,7 +499,52 @@
             socket.emit('force_reed', { name, closed: null });
         }
 
-        // Phase
+        // ==================== TOUCHSCREENS ====================
+        let screenData = {};
+
+        function renderScreens() {
+            const container = document.getElementById('screens-list');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.keys(screenData).forEach(name => {
+                const item = screenData[name];
+                const on = item.on;
+                const conf = item.config || {};
+
+                const card = document.createElement('div');
+                card.className = 'tile';
+                card.dataset.name = name;
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <strong><i class="fas ${conf.icon || 'fa-display'}"></i> ${conf.friendly || name}</strong>
+                        <div id="screen-state-${name}" 
+                             style="font-size:1.4rem; font-weight:700; color:${on ? '#4ade80' : '#f87171'}">
+                            ${on ? 'ON' : 'OFF'}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn success">Wake / Turn ON</button>
+                        <button class="btn danger">Sleep / Turn OFF</button>
+                        <button class="btn">Toggle</button>
+                    </div>
+                `;
+
+                const btns = card.querySelectorAll('button');
+                btns[0].onclick = () => toggleScreen(name, true);
+                btns[1].onclick = () => toggleScreen(name, false);
+                btns[2].onclick = () => toggleScreen(name, null);
+
+                container.appendChild(card);
+            });
+        }
+
+        function toggleScreen(name, forceOn) {
+            socket.emit('screen_manual_toggle', { name, on: forceOn });
+        }
+
+        // Phase, Toasts, etc. (unchanged)
         function updatePhase(data) {
             document.getElementById('current-phase').innerHTML = `
                 ${data.phase === 'Day' ? '🌞' : data.phase === 'Evening' ? '🌅' : '🌙'} 
@@ -582,7 +575,6 @@
             socket.emit('force_phase', { phase: null });
         }
 
-        // Toasts
         function sendCustomToast(type) {
             const title = document.getElementById('toast-title').value.trim() || "Diagnostics Test";
             const message = document.getElementById('toast-message').value.trim() || "Test toast from diagnostics page.";
@@ -599,36 +591,48 @@
         socket.on('gps_update', updateGPS);
         socket.on('reed_update', updateReeds);
         socket.on('phase_update', updatePhase);
+        socket.on('screen_update', (data) => {
+            if (data.name) {
+                screenData[data.name] = { on: data.on, config: data.config || {} };
+                renderScreens();
+            }
+        });
         socket.on('global_theme_update', (data) => document.documentElement.setAttribute('data-theme', data.theme));
         socket.on('global_dark_mode_update', (data) => {
             document.documentElement.classList.toggle('light', data.mode === 'light');
         });
 
-		window.onload = () => {
-			fetch('/api/version')
-				.then(r => {
-					if (!r.ok) throw new Error(`HTTP ${r.status}`);
-					return r.json();
-				})
-				.then(v => {
-					const verEl = document.getElementById('app-version');
-					if (verEl && v.version) {
-						verEl.textContent = `v${v.version}`;
-						verEl.title = `Built: ${v.built || 'Unknown'}`;
-						console.log(`✅ Version loaded: v${v.version}`);
-					}
-				})
-				.catch(err => {
-					console.warn('⚠️ Could not load version:', err);
-					const verEl = document.getElementById('app-version');
-					if (verEl) verEl.textContent = '(version unavailable)';
-				});
+        window.onload = () => {
+            fetch('/api/version')
+                .then(r => r.json())
+                .then(v => {
+                    const verEl = document.getElementById('app-version');
+                    if (verEl && v.version) verEl.textContent = `v${v.version}`;
+                })
+                .catch(() => {});
 
-			loadThemes();
-			fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
-			fetch('/reed_json').then(r => r.json()).then(updateReeds).catch(() => {});
-			socket.emit('connect');
-		};
+            loadThemes();
+
+            // Load Reed Switches (this was missing the render call)
+            fetch('/reed_json')
+                .then(r => r.json())
+                .then(data => {
+                    renderReeds(data);     // ← This was the fix
+                    updateReeds(data);
+                })
+                .catch(err => console.error("Failed to load reeds:", err));
+
+            fetch('/gps_json').then(r => r.json()).then(updateGPS).catch(() => {});
+
+            // Load screens
+            fetch('/screen_json')
+                .then(r => r.json())
+                .then(data => {
+                    screenData = data.screens || {};
+                    renderScreens();
+                })
+                .catch(err => console.warn("Could not load screens:", err));
+        };
     </script>
 </body>
 </html>

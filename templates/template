@@ -1,0 +1,262 @@
+/* [THEME NAME] */
+/* Example: Neumorphism, Cyberpunk, Minimal Flat, Warm Retro, etc. This name will be used to populate the theme dropdown list */
+
+/* 
+   THEME CREATION INSTRUCTIONS (FOR LLM OR DEVELOPER):
+   
+   1. Replace [THEME NAME] with your theme name - this is what will be used to populate the theme dropdown list
+2. Define your custom look primarily through the :root variables and the active sections below.
+   3. Only override what is necessary — base.css already provides good defaults.
+   4. Keep the theme file as minimal as possible for best maintainability.
+
+   IMPORTANT RULES:
+   - BUG MODE (Red special mode): Keep bug mode styling consistent unless you have a strong reason to change it.
+     → Do NOT remove or heavily alter --bug-color, --bug-fill-glow, or any .bug-mode classes.
+     → Bug mode is used for special lighting modes (e.g. red "bug" lights). Changing it can break user expectations.
+     → You may adjust intensity/glow if needed, but preserve the red theme identity.
+
+   5. At the bottom is a full neutral reference of all base.css styles for advanced customization.
+   6. Only uncomment blocks in the FALLBACK section when you need deep overrides.
+*/
+
+ /* ====================== CUSTOM PROPERTIES ====================== */
+:root {
+  /* Core Accent */
+  --accent-color: #4fc3f7;
+  --accent-hover: #38bdf8;
+  --accent-light: #4fc3f7;
+  --accent-glow: rgba(79, 195, 247, 0.75);
+  --accent-glow-strong: rgba(79, 195, 247, 0.9);
+
+  /* Backgrounds & Surfaces */
+  --background: #05050a;
+  --glass-bg: rgba(20, 20, 35, 0.68);     /* Main card background */
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --control-bg: rgba(28, 28, 44, 0.85);
+  --slider-bg: rgba(148, 163, 184, 0.25);
+
+  /* Shadows */
+  --shadow-dark: #080808;
+  --shadow-light: #404040;
+
+  /* Text */
+  --text-primary: #e0e0e0;
+  --text-secondary: #bae6fd;
+  --text-muted: #94a3b8;
+  --text-on-accent: #0f172a;
+
+  /* Toggles */
+  --toggle-bg-off: rgba(28, 28, 44, 0.85);
+  --toggle-handle: rgba(241, 245, 249, 0.98);
+  --toggle-checked-color: #0ea5e9;
+  --toggle-knob-border: #e2e8f0;
+
+  /* Bug Mode (Red special mode) */
+  --bug-color: #e11d48;
+  --bug-fill-glow: rgba(225, 29, 72, 0.9);
+
+  /* Toast */
+  --toast-success: rgb(16, 185, 129);
+  --toast-error: rgb(244, 63, 94);
+  --toast-warning: rgb(251, 191, 36);
+  --toast-info: rgb(56, 189, 248);
+}
+
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
+  --background: #e0f2fe;
+  --glass-bg: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(148, 163, 184, 0.7);
+  --shadow-dark: #94a3b8;
+  --shadow-light: #f1f5f9;
+  --text-primary: #1e2937;
+  --text-secondary: #0369a1;
+  --text-on-accent: #ffffff;
+
+  --control-bg: rgba(255, 255, 255, 0.88);
+  --toggle-bg-off: #e2e8f0;
+  --toggle-handle: linear-gradient(to bottom, #f1f5f9, #cbd5e1);
+  --toggle-checked-color: #0284c8;
+  --toggle-knob-border: var(--accent-color);
+}
+
+/* ====================== GLOBAL ====================== */
+body {
+  background: var(--background) !important;
+}
+
+body::before { /* Optional: custom background layer */ }
+body::after  { /* Optional: custom overlay */ }
+
+/* ====================== MAIN CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn { /* Main card / button styling */ }
+
+/* ====================== SCENES GRID ====================== */
+.scene-btn.active { /* Active scene button */ }
+
+/* ====================== SLIDERS ====================== */
+.slider-fill { /* ... */ }
+.slider-thumb { /* ... */ }
+.slider-fill.bug-mode { /* ... */ }
+.slider-thumb.bug-mode { /* ... */ }
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle { /* ... */ }
+
+.toggle-pill.on,
+.relay-toggle.on { /* ... */ }
+
+.toggle-pill.bug-mode.on,
+.relay-toggle.bug-mode.on { /* ... */ }
+
+/* ====================== TOGGLE KNOB ====================== */
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob { /* ... */ }
+
+.toggle-pill.on .toggle-knob,
+.relay-toggle.on .relay-knob { /* ... */ }
+
+/* ====================== PAIRED RELAY CARDS ====================== */
+.paired-relay-divider { /* ... */ }
+
+/* ====================== STATUS TILES ====================== */
+.tile i.fa-solid { /* ... */ }
+.tile-label { /* ... */ }
+.tile-value { /* ... */ }
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled { /* ... */ }
+
+
+/* ===================================================================
+   FULL BASE.CSS FALLBACK REFERENCE (NEUTRAL)
+   ===================================================================
+
+   INSTRUCTIONS FOR LLM:
+   - Only uncomment blocks you want to fully override.
+   - Replace /* ... */ with your own CSS.
+   - This section exists purely for reference and advanced customization.
+   - Keep it commented unless needed.
+*/
+
+ /*
+/* ====================== MOBILE SCROLL PROTECTION ====================== */
+.slider-card,
+.slider-wrapper { /* ... */ }
+
+.slider-inner,
+.slider-track,
+.slider-fill { /* ... */ }
+
+.slider-thumb { /* ... */ }
+
+.slider-wrapper { /* ... */ }
+
+
+/* ====================== GLOBAL ====================== */
+html { /* ... */ }
+
+html[data-theme-loaded="true"] { /* ... */ }
+
+body { /* ... */ }
+
+body::before { /* ... */ }
+
+.light body::before { /* ... */ }
+
+body::after { /* ... */ }
+
+
+/* ====================== MAIN CARDS ====================== */
+.tile,
+.slider-card { /* ... */ }
+
+.tile:hover,
+.slider-card:hover { /* ... */ }
+
+.light .tile,
+.light .slider-card { /* ... */ }
+
+
+/* ====================== PAIRED RELAY CARDS ====================== */
+.paired-relay-card { /* ... */ }
+.paired-relay-inner { /* ... */ }
+.paired-relay-row { /* ... */ }
+.paired-relay-divider { /* ... */ }
+.light .paired-relay-divider { /* ... */ }
+
+
+/* ====================== STATUS TILES ====================== */
+.tile i.fa-solid { /* ... */ }
+.tile-label { /* ... */ }
+.tile-value { /* ... */ }
+
+
+/* ====================== SCENES GRID & BUTTONS ====================== */
+#scenes-grid { /* ... */ }
+.scene-btn { /* ... */ }
+.scene-btn:hover { /* ... */ }
+#scenes-grid .scene-btn:hover { /* ... */ }
+.scene-btn.active { /* ... */ }
+.scene-btn i { /* ... */ }
+.scene-btn.active i { /* ... */ }
+#scenes-grid .last-row { /* ... */ }
+#scenes-grid .last-row .scene-btn { /* ... */ }
+
+
+/* ====================== SLIDER CARDS ====================== */
+.slider-card-header { /* ... */ }
+.slider-card-left { /* ... */ }
+.slider-card-title { /* ... */ }
+.slider-card-title i { /* ... */ }
+.slider-card-right { /* ... */ }
+.value-display { /* ... */ }
+.slider-wrapper { /* ... */ }
+.slider-inner { /* ... */ }
+.slider-track { /* ... */ }
+.slider-fill { /* ... */ }
+.slider-fill.bug-mode { /* ... */ }
+.slider-thumb { /* ... */ }
+.slider-thumb.bug-mode { /* ... */ }
+
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle { /* ... */ }
+.toggle-pill.on,
+.relay-toggle.on { /* ... */ }
+.toggle-pill.bug-mode.on,
+.relay-toggle.bug-mode.on { /* ... */ }
+
+
+/* ====================== TOGGLE KNOB ====================== */
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob { /* ... */ }
+.toggle-pill.bug-mode .toggle-knob,
+.relay-toggle.bug-mode .relay-knob { /* ... */ }
+.toggle-pill.on .toggle-knob,
+.relay-toggle.on .relay-knob { /* ... */ }
+.toggle-pill.bug-mode.on .toggle-knob,
+.relay-toggle.bug-mode.on .relay-knob { /* ... */ }
+
+
+/* ====================== TOASTS ====================== */
+#toast-container { /* ... */ }
+#toast-container .toast { /* ... */ }
+#toast-container .toast.show { /* ... */ }
+#toast-container .toast-success { /* ... */ }
+#toast-container .toast-error   { /* ... */ }
+#toast-container .toast-warning { /* ... */ }
+#toast-container .toast-info    { /* ... */ }
+html.light .toast-title,
+html.light .toast-message { /* ... */ }
+
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled { /* ... */ }
+#offline-banner { /* ... */ }
+*/

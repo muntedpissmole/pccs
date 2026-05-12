@@ -1,0 +1,193 @@
+/* Nebula Drift */
+/* Rich purple/magenta nebulae with deep space starfield + cosmic glows */
+
+:root {
+  /* Core Accent - Vibrant Magenta-Purple */
+  --accent-color: #c026d3;
+  --accent-hover: #db2777;
+  --accent-light: #e879f9;
+  --accent-glow: rgba(192, 38, 211, 0.75);
+  --accent-glow-strong: rgba(219, 39, 119, 0.9);
+
+  /* Backgrounds & Surfaces */
+  --background: #0a0718;                    /* Deep cosmic black-purple */
+  --glass-bg: rgba(30, 20, 55, 0.65);      /* Semi-transparent nebula glass */
+  --glass-border: rgba(192, 38, 211, 0.25);
+  --control-bg: rgba(35, 25, 65, 0.85);
+  --slider-bg: rgba(167, 139, 250, 0.18);
+
+  /* Shadows */
+  --shadow-dark: #0f0a1f;
+  --shadow-light: #6b21a8;
+
+  /* Text */
+  --text-primary: #f3e8ff;
+  --text-secondary: #e0bbff;
+  --text-muted: #c4b5fd;
+  --text-on-accent: #ffffff;
+
+  /* Toggles */
+  --toggle-bg-off: rgba(35, 25, 65, 0.85);
+  --toggle-handle: #f3e8ff;
+  --toggle-checked-color: #c026d3;
+  --toggle-knob-border: #e0bbff;
+
+  /* Bug Mode (Red special mode) - kept consistent but slightly cosmic-tinted */
+  --bug-color: #e11d48;
+  --bug-fill-glow: rgba(225, 29, 72, 0.9);
+
+  /* Toast */
+  --toast-success: rgb(134, 239, 172);
+  --toast-error: rgb(251, 113, 133);
+  --toast-warning: rgb(251, 191, 36);
+  --toast-info: #c026d3;
+}
+
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
+  --background: #e0d4ff;
+  --glass-bg: rgba(255, 250, 255, 0.92);
+  --glass-border: rgba(167, 139, 250, 0.6);
+  --shadow-dark: #7c3aed;
+  --shadow-light: #e0d4ff;
+  --text-primary: #3b0764;
+  --text-secondary: #6b21a8;
+  --text-on-accent: #ffffff;
+
+  --control-bg: rgba(255, 250, 255, 0.92);
+  --toggle-bg-off: #e0d4ff;
+  --toggle-handle: linear-gradient(to bottom, #f3e8ff, #c4b5fd);
+  --toggle-checked-color: #a855f7;
+  --toggle-knob-border: var(--accent-color);
+}
+
+/* ====================== GLOBAL ====================== */
+body {
+  background: var(--background) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Rich Nebula + Starfield Background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: 
+    url('images/nebula.jpg') center/cover no-repeat;
+  background-size: 180% 180%;
+  animation: nebula-drift 120s linear infinite;
+  filter: blur(1px);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: 
+    radial-gradient(white 1px, transparent 1px),
+    radial-gradient(white 1px, transparent 1px);
+  background-position: 0 0, 25px 25px;
+  background-size: 50px 50px;
+  opacity: 0.07;
+  pointer-events: none;
+  animation: star-twinkle 8s ease-in-out infinite alternate;
+}
+
+/* Gentle nebula drift animation */
+@keyframes nebula-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes star-twinkle {
+  0% { opacity: 0.06; }
+  100% { opacity: 0.11; }
+}
+
+/* ====================== MAIN CARDS ====================== */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 
+    0 10px 30px -10px var(--shadow-dark),
+    inset 0 0 25px -15px var(--accent-glow);
+  backdrop-filter: blur(12px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 20px 40px -15px var(--shadow-dark),
+    inset 0 0 35px -15px var(--accent-glow-strong);
+  border-color: rgba(192, 38, 211, 0.4);
+}
+
+/* ====================== SCENES GRID ====================== */
+.scene-btn.active {
+  background: rgba(192, 38, 211, 0.25) !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 25px var(--accent-glow-strong);
+}
+
+/* ====================== SLIDERS ====================== */
+.slider-fill {
+  background: linear-gradient(90deg, var(--accent-color), #e879f9) !important;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.slider-thumb {
+  background: white;
+  box-shadow: 
+    0 0 15px var(--accent-glow-strong),
+    0 0 25px var(--accent-color);
+}
+
+/* Bug mode sliders remain red but get a subtle cosmic edge */
+.slider-fill.bug-mode,
+.slider-thumb.bug-mode {
+  box-shadow: 0 0 15px var(--bug-fill-glow) !important;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: var(--toggle-bg-off) !important;
+  border: 1px solid rgba(192, 38, 211, 0.3);
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, #c026d3, #db2777) !important;
+  box-shadow: 0 0 20px var(--accent-glow-strong);
+}
+
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ====================== STATUS TILES ====================== */
+.tile i.fa-solid {
+  color: var(--accent-light);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+
+.tile-value {
+  color: var(--text-primary);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  filter: saturate(0.4) brightness(0.85);
+}
