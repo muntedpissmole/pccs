@@ -1,29 +1,5 @@
 /* Glassmorphism (Default) */
 
-/* ====================== MOBILE SCROLL PROTECTION ====================== */
-.slider-card,
-.slider-wrapper {
-  touch-action: pan-y pinch-zoom;
-  overscroll-behavior-y: contain;
-}
-
-.slider-inner,
-.slider-track,
-.slider-fill {
-  touch-action: pan-y;
-  pointer-events: none;
-}
-
-.slider-thumb {
-  touch-action: none;
-  pointer-events: auto;
-}
-
-.slider-wrapper {
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
 /* ====================== CUSTOM PROPERTIES ====================== */
 :root {
   /* Core Accent */
@@ -64,7 +40,6 @@
   /* Bug Mode */
   --bug-color: #e11d48;
   --bug-fill-glow: rgba(225, 29, 72, 0.9);
-  --thumb-border-accent: #e11d48;
 
   /* Toast */
   --toast-success: rgb(16, 185, 129);
@@ -92,6 +67,41 @@ html.light,
   --toggle-knob-border: var(--accent-color);
 
   --glass-shadow: 0 8px 25px -8px rgba(0,0,0,0.12);
+}
+
+/* ====================== BASE GLASSMORPHISM ====================== */
+.glass,
+.slider-card,
+.tile,
+.scene-btn {
+  background: var(--glass-bg);
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-frost),
+    inset 0 -3px 0 rgba(0,0,0,0.35);
+  backdrop-filter: var(--glass-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
+  transition: all 0.3s ease;
+}
+
+.glass:hover,
+.slider-card:hover,
+.tile:hover,
+.scene-btn:hover {
+  background: rgba(32, 32, 52, 0.78);
+  transform: translateY(-2px);
+}
+
+/* Light mode glass override */
+.light .glass,
+.light .slider-card,
+.light .tile,
+.light .scene-btn {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  color: #1e2937;
 }
 
 /* ====================== FONTS ====================== */
@@ -161,34 +171,21 @@ body::after {
   mix-blend-mode: overlay;
 }
 
-/* ====================== BASE GLASS ====================== */
-.tile,
-.slider-card {
-  background: var(--glass-bg);
-  border-radius: 20px;
-  border: 1px solid var(--glass-border);
+/* ====================== CARDS & TILES ====================== */
+.slider-card,
+.tile {
   padding: 20px;
-  box-shadow: 
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-frost),
-    inset 0 -3px 0 rgba(0,0,0,0.35);
-  backdrop-filter: var(--glass-blur) saturate(180%);
-  -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
-  transition: all 0.3s ease;
+  overflow: visible !important;
+  overscroll-behavior: none !important;
+  scroll-behavior: auto;
+  contain: layout style paint;
 }
 
-.tile:hover,
-.slider-card:hover {
-  background: rgba(32, 32, 52, 0.78);
-  transform: translateY(-5px) scale(1.008);
-}
-
-/* Light mode cards */
-.light .tile,
-.light .slider-card {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  color: #1e2937;
+.slider-card,
+.slider-card *,
+.tile,
+.tile * {
+  pointer-events: auto;
 }
 
 /* ====================== PAIRED RELAY CARDS ====================== */
@@ -245,7 +242,7 @@ body::after {
   color: var(--text-primary);
 }
 
-/* ====================== SCENES GRID & BUTTONS ====================== */
+/* ====================== SCENES GRID ====================== */
 #scenes-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -258,27 +255,18 @@ body::after {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 24px 12px;
+  padding: 20px;
   font-size: 0.875rem;
   font-weight: 600;
-  background: var(--glass-bg);
-  border-radius: 20px;
-  border: 1px solid var(--glass-border);
   cursor: pointer;
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: var(--glass-blur) saturate(170%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--text-primary);
-  min-height: 130px;
-  width: 100%;
-  box-sizing: border-box;
+  backdrop-filter: var(--glass-blur) saturate(170%);
 }
 
 .scene-btn:hover {
-  box-shadow: 4px 4px 8px var(--shadow-dark), 
-              -4px -4px 8px var(--shadow-light);
   transform: translateY(-3px);
   background: rgba(255,255,255,0.08);
+  box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
 }
 
 #scenes-grid .scene-btn:hover {
@@ -289,14 +277,13 @@ body::after {
 .scene-btn.active {
   background: linear-gradient(135deg, var(--accent-color), var(--accent-hover)) !important;
   color: var(--text-on-accent);
-  border-color: rgba(255,255,255,0.3);
-  box-shadow: 0 0 28px var(--accent-glow-strong);
+  border-color: rgba(255,255,255,0.3) !important;
+  box-shadow: 0 0 28px var(--accent-glow-strong) !important;
 }
 
 .scene-btn i {
   font-size: 32px;
   color: var(--accent-light);
-  transition: color 0.3s ease;
   filter: drop-shadow(0 0 10px var(--accent-glow)) !important;
 }
 
@@ -314,7 +301,7 @@ body::after {
   flex: 1;
 }
 
-/* ====================== SLIDER CARDS ====================== */
+/* ====================== SLIDER CARD HEADER ====================== */
 .slider-card-header {
   display: flex;
   align-items: center;
@@ -358,7 +345,7 @@ body::after {
   font-variant-numeric: tabular-nums;
 }
 
-/* Slider */
+/* ====================== SLIDER ====================== */
 .slider-wrapper {
   position: relative;
   width: 100%;
@@ -397,7 +384,7 @@ body::after {
 
 .slider-fill.bug-mode {
   background: linear-gradient(90deg, var(--bug-color), #f43f5e, #fb7185) !important;
-  box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 30px var(--bug-fill-glow)
+  box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 30px var(--bug-fill-glow);
 }
 
 .slider-thumb {
@@ -417,6 +404,8 @@ body::after {
     inset -3px -3px 8px rgba(0,0,0,0.6) !important;
   transition: all 0.25s ease;
   will-change: left;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .slider-thumb.bug-mode {
@@ -458,7 +447,7 @@ body::after {
   box-shadow: 0 0 28px var(--bug-fill-glow) !important;
 }
 
-/* ====================== KNOB ====================== */
+/* Knob */
 .toggle-pill .toggle-knob,
 .relay-toggle .relay-knob {
   position: absolute;
@@ -470,7 +459,6 @@ body::after {
   border-radius: 9999px;
   transform: translateY(-50%);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-
   border: 2px solid var(--accent-color);
   box-shadow: 
     inset 2px 2px 6px rgba(255,255,255,0.35),
@@ -488,12 +476,10 @@ body::after {
   background: #ffffff;
   width: 40px !important;
   height: 40px !important;
-  
   border: 2px solid var(--accent-color) !important;
-  
   box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.55),
-    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0,0,0,0.55),
+    0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--accent-glow-strong),
     inset 2px 2px 6px rgba(255,255,255,0.45),
     inset -2px -2px 6px rgba(0,0,0,0.4) !important;
@@ -503,8 +489,8 @@ body::after {
 .relay-toggle.bug-mode.on .relay-knob {
   border-color: var(--bug-color) !important;
   box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.55),
-    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0,0,0,0.55),
+    0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--bug-fill-glow),
     inset 2px 2px 6px rgba(255,255,255,0.45),
     inset -2px -2px 6px rgba(0,0,0,0.4) !important;
@@ -567,4 +553,14 @@ html.light .toast-message {
 
 #offline-banner {
   backdrop-filter: var(--glass-blur);
+}
+
+/* Utility overscroll rules */
+.slider-wrapper,
+.slider-inner,
+.slider-track,
+.slider-fill,
+.slider-thumb {
+  overscroll-behavior: none;
+  pointer-events: auto;
 }
