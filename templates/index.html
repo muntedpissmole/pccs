@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
-<body class="bg-zinc-950 text-white min-h-screen">
+<body class="bg-zinc-950 text-white min-h-screen flex flex-col">
 
 <div id="main-content" class="flex-1 p-4 md:p-4 xl:p-4 space-y-4">
   
@@ -159,6 +159,29 @@
 
   </div>
   
+  <!-- ====================== VERSION FOOTER ====================== -->
+  <footer class="mt-auto pt-0 pb-8 px-6 border-t border-white/10">
+    <div class="max-w-screen-2xl mx-auto flex items-center justify-between text-xs">
+      
+      <!-- Left: Dark/Light Toggle -->
+      <button onclick="toggleGlobalDarkMode()" 
+              class="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors p-2 -m-2 rounded-xl">
+        <i id="footer-mode-icon" class="fa-solid fa-moon text-lg"></i>
+      </button>
+
+      <!-- Center: Version -->
+      <div id="footer-version" 
+           class="font-mono tracking-[2px] text-white/40"></div>
+
+      <!-- Right: Diagnostics -->
+      <a href="/diag" 
+         class="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors p-2 -m-2 rounded-xl">
+        <i class="fa-solid fa-screwdriver-wrench text-lg"></i>
+      </a>
+
+    </div>
+  </footer>
+
   <!-- ====================== TOAST CONTAINER ====================== -->
   <div id="toast-container"></div>
 
@@ -167,6 +190,19 @@
     const socket = io();
 
     // ====================== LIVE DARK/LIGHT MODE ======================
+	function updateFooterModeIcon(mode) {
+		const icon = document.getElementById('footer-mode-icon');
+		if (!icon) return;
+		
+		if (mode === 'light') {
+			icon.classList.remove('fa-moon');
+			icon.classList.add('fa-sun');
+		} else {
+			icon.classList.remove('fa-sun');
+			icon.classList.add('fa-moon');
+		}
+	}
+
     function applyDarkMode(data) {
         const mode = data.mode;
         const isForced = data.forced === true;
@@ -176,6 +212,8 @@
         const html = document.documentElement;
         html.classList.remove('dark', 'light');
         html.classList.add(mode);
+		
+		updateFooterModeIcon(mode);
 
         const themeText = document.getElementById('diag-theme-text');
         const icon = document.getElementById('mode-icon');
@@ -251,6 +289,21 @@
         } catch (e) {
             console.error('Failed to load current theme', e);
             applyTheme('base');
+        }
+    }
+
+    // ====================== VERSION FETCH ======================
+    async function loadVersion() {
+        try {
+            const res = await fetch('/api/version');
+            const data = await res.json();
+            const versionEl = document.getElementById('footer-version');
+            if (versionEl) {
+                versionEl.textContent = `v${data.version || '?.?.?'}`;
+            }
+        } catch (e) {
+            console.warn('Could not load version', e);
+            document.getElementById('footer-version').textContent = 'v?.?.?';
         }
     }
 	
@@ -909,6 +962,8 @@
     socket.on('global_dark_mode_update', function(data) {
         applyDarkMode(data);
     });
+	
+	socket.emit('get_current_dark_mode');
 
     // ==================== SOCKET CONNECTION ====================
 	socket.on('connect', () => {
@@ -920,6 +975,7 @@
 		socket.emit('get_current_dark_mode');
 		
 		loadScenes();
+        loadVersion();               // ← Added
 	});
 
     socket.on('disconnect', () => showOfflineBanner());
@@ -1023,6 +1079,7 @@ function fixLastRowStretching(container) {
 
         registerThemeListener();
         loadCurrentTheme();
+        loadVersion();               // ← Added
 
         document.querySelectorAll('.scene-btn').forEach(btn => {
             btn.addEventListener('click', () => setScene(btn.dataset.scene));
@@ -1105,6 +1162,7 @@ function fixLastRowStretching(container) {
     socket.on('toast', function(data) {
         createToast(data);
     });
+	
 </script>
 </body>
 </html>
