@@ -4,7 +4,9 @@ import logging
 import time
 from typing import Callable, Dict, Optional, Tuple, List, DefaultDict
 from collections import defaultdict
-import subprocess   # Added for touchscreen control
+import subprocess
+import socket
+from datetime import datetime
 
 from flask_socketio import SocketIO
 from gpiozero import Button
@@ -638,65 +640,52 @@ class ReedManager:
 
     def _sleep_screen(self, screen_name: str):
         """Turn screen completely off."""
-        conf = self.screens[screen_name]
+        conf = self.screens.get(screen_name, {})
         friendly = conf.get('friendly', screen_name)
 
         cmd = f"ssh {conf['username']}@{conf['host']} \"echo 0 > {conf['brightness_path']}\""
 
         try:
             result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
-
-            if result.returncode == 0:
-                logger.info(f"🖥️ Slept screen: {friendly}")
-                self.screen_states[screen_name] = False
-                self.socketio.emit('screen_update', {'name': screen_name, 'on': False})
-            else:
-                stderr = (result.stderr or "").strip()
-                if "No route to host" in stderr or "Connection refused" in stderr or "Host is down" in stderr:
-                    logger.debug(f"🖥️ {friendly} unreachable (normal at boot if powered off)")
-                else:
-                    logger.warning(f"🖥️ Failed to sleep {friendly} (code {result.returncode}) - {stderr}")
-
-        except subprocess.TimeoutExpired:
-            logger.warning(f"🖥️ Timeout while trying to sleep screen {friendly}")
-        except Exception as e:
-            logger.warning(f"🖥️ SSH error sleeping screen {friendly}: {e}")
+            success = result.returncode == 0
+        except Exception:
+            success = False
 
         self.screen_states[screen_name] = False
-        self.socketio.emit('screen_update', {'name': screen_name, 'on': False})
+
+        # ←←← THIS IS THE IMPORTANT PART
+        self.socketio.emit('screen_update', {
+            'name': screen_name,
+            'on': False,
+            'online': True,           # assume reachable unless we know otherwise
+            'config': conf            # send full config (friendly + icon)
+        })
+
+        if success:
+            logger.info(f"🖥️ Slept screen: {friendly}")
+        else:
+            logger.debug(f"🖥️ Sleep command sent for {friendly} (may be unreachable)")
 
     def _wake_screen(self, screen_name: str):
-        """Turn screen on to full brightness."""
-        conf = self.screens[screen_name]
-        friendly = conf.get('friendly', screen_name)
+        """Wake + realistic connectivity check"""
+        success = self._set_screen_state(screen_name, sleep=False)
+        if success:
+            logger.info(f"🖥️ Woke screen: {self.screens[screen_name].get('friendly', screen_name)}")
+        else:
+            logger.debug(f"🖥️ Wake command sent but screen unreachable (expected if powered off)")
 
-        cmd = f"ssh {conf['username']}@{conf['host']} \"echo 255 > {conf['brightness_path']}\""
 
-        try:
-            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
-
-            if result.returncode == 0:
-                logger.info(f"🖥️ Woke screen: {friendly}")
-                self.screen_states[screen_name] = True
-                self.socketio.emit('screen_update', {'name': screen_name, 'on': True})
-            else:
-                stderr = (result.stderr or "").strip()
-                if "No route to host" in stderr or "Connection refused" in stderr or "Host is down" in stderr:
-                    logger.debug(f"🖥️ {friendly} unreachable (normal at boot if powered off)")
-                else:
-                    logger.warning(f"🖥️ Failed to wake {friendly} (code {result.returncode}) - {stderr}")
-
-        except subprocess.TimeoutExpired:
-            logger.warning(f"🖥️ Timeout while trying to wake screen {friendly}")
-        except Exception as e:
-            logger.warning(f"🖥️ SSH error waking screen {friendly}: {e}")
-
-        self.screen_states[screen_name] = True
-        self.socketio.emit('screen_update', {'name': screen_name, 'on': True})
+    def _sleep_screen(self, screen_name: str):
+        """Sleep + realistic connectivity check"""
+        success = self._set_screen_state(screen_name, sleep=True)
+        if success:
+            logger.info(f"🖥️ Slept screen: {self.screens[screen_name].get('friendly', screen_name)}")
+        else:
+            logger.debug(f"🖥️ Sleep command sent but screen unreachable")
         
     def _set_screen_state(self, screen_name: str, sleep: bool) -> bool:
         """Internal helper that returns True if SSH command succeeded."""
-        conf = self.screens[screen_name]
+        conf = self.screens.get(screen_name, {})
         friendly = conf.get('friendly', screen_name)
         value = "0" if sleep else "255"
         action_word = "sleep" if sleep else "wake"
@@ -709,24 +698,91 @@ class ReedManager:
             if result.returncode == 0:
                 logger.debug(f"🖥️ {action_word.capitalize()} command succeeded for {friendly}")
                 self.screen_states[screen_name] = not sleep
-                self.socketio.emit('screen_update', {'name': screen_name, 'on': not sleep})
+                
+                self.socketio.emit('screen_update', {
+                    'name': screen_name,
+                    'on': not sleep,
+                    'online': True,
+                    'config': conf
+                })
                 return True
+
             else:
                 stderr = (result.stderr or "").strip()
                 if any(x in stderr for x in ["No route to host", "Connection refused", "Host is down"]):
-                    self.screen_states[screen_name] = not sleep  # still update local state
-                    self.socketio.emit('screen_update', {'name': screen_name, 'on': not sleep})
-                    return False  # unreachable, but not a "failure"
+                    self.screen_states[screen_name] = not sleep
+                    
+                    self.socketio.emit('screen_update', {
+                        'name': screen_name,
+                        'on': not sleep,
+                        'online': False,
+                        'config': conf
+                    })
+                    return False  # unreachable, but not a hard failure
                 else:
                     logger.warning(f"🖥️ Failed to {action_word} {friendly} (code {result.returncode}) - {stderr}")
                     return False
 
         except subprocess.TimeoutExpired:
             logger.warning(f"🖥️ Timeout {action_word}ing screen {friendly}")
+            self.socketio.emit('screen_update', {
+                'name': screen_name,
+                'on': not sleep,
+                'online': False,
+                'config': conf
+            })
             return False
+
         except Exception as e:
             logger.warning(f"🖥️ SSH error {action_word}ing screen {friendly}: {e}")
+            self.socketio.emit('screen_update', {
+                'name': screen_name,
+                'on': not sleep,
+                'online': False,
+                'config': conf
+            })
             return False
+            
+    def test_screen_connectivity(self, screen_name: str, timeout: float = 3.0) -> dict:
+        """Test connectivity + actual passwordless SSH."""
+        conf = self.screens.get(screen_name)
+        if not conf or not conf.get('host'):
+            return {'online': False, 'ssh_passwordless': False, 'error': 'No config'}
+
+        host = conf['host']
+        username = conf['username']
+        port = 22
+
+        result = {
+            'online': False,
+            'latency': None,
+            'ssh_passwordless': False,
+            'last_checked': datetime.now().isoformat()
+        }
+
+        start = time.time()
+
+        # 1. Quick port check
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                result['latency'] = round((time.time() - start) * 1000, 1)
+                result['online'] = True
+        except:
+            pass
+
+        # 2. Test passwordless SSH (BatchMode prevents password prompt)
+        if result['online']:
+            try:
+                cmd = f"ssh -o BatchMode=yes -o ConnectTimeout={int(timeout)} -o StrictHostKeyChecking=no {username}@{host} 'echo SSH_OK 2>/dev/null'"
+                proc = subprocess.run(cmd, shell=True, timeout=timeout + 2, capture_output=True, text=True)
+                
+                result['ssh_passwordless'] = proc.returncode == 0 and 'SSH_OK' in proc.stdout
+            except subprocess.TimeoutExpired:
+                result['ssh_passwordless'] = False
+            except Exception:
+                result['ssh_passwordless'] = False
+
+        return result
 
     def _was_unreachable(self, screen_name: str) -> bool:
         """Optional helper if you want extra checks later."""

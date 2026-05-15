@@ -552,7 +552,12 @@ def handle_connect(sid=None):
         'screens': {
             name: {
                 'on': reed_manager.screen_states.get(name, False),
-                'config': conf
+                'online': True,
+                'config': {
+                    'friendly': conf.get('friendly', name),
+                    'icon': conf.get('icon', 'fa-display'),
+                    'host': conf.get('host')
+                }
             }
             for name, conf in reed_manager.screens.items()
         }
@@ -763,17 +768,43 @@ def get_version_route():
     
 @app.route('/screen_json')
 def screen_json():
+    """Basic screen data for initial load"""
     screens_data = {}
     for name, conf in reed_manager.screens.items():
         screens_data[name] = {
             'on': reed_manager.screen_states.get(name, False),
+            'online': True,                    # optimistic
+            'latency': None,
             'config': {
                 'friendly': conf.get('friendly', name),
-                'host': conf.get('host'),
-                'icon': conf.get('icon', 'fa-display')
+                'icon': conf.get('icon', 'fa-display'),
+                'host': conf.get('host')
             }
         }
     return {'screens': screens_data}
+    
+@app.route('/screen_status_json')
+def screen_status_json():
+    """Full status including connectivity test"""
+    if not hasattr(reed_manager, 'test_screen_connectivity'):
+        return {'screens': {}, 'error': 'test_screen_connectivity not available'}
+
+    result = {}
+    for name, conf in reed_manager.screens.items():
+        conn = reed_manager.test_screen_connectivity(name)
+        
+        result[name] = {
+            'on': reed_manager.screen_states.get(name, False),
+            'online': conn.get('online', False),
+            'latency': conn.get('latency'),
+            'last_checked': conn.get('last_checked'),
+            'config': {
+                'friendly': conf.get('friendly', name),
+                'icon': conf.get('icon', 'fa-display'),
+                'host': conf.get('host')
+            }
+        }
+    return {'screens': result}
 
 
 # ====================== CLEANUP ======================

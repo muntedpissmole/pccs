@@ -9,7 +9,7 @@
 
   /* Gentler backgrounds */
   --background: #121212;
-  --glass-bg: rgba(35, 35, 35, 0.88);     /* Renamed from --card-bg */
+  --glass-bg: rgba(32, 32, 32, 0.9);
   --control-bg: rgba(30, 30, 30, 0.86);
   --slider-bg: rgba(45, 45, 45, 0.90);
 
