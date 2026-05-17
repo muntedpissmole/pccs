@@ -5,7 +5,46 @@ import sys
 from pathlib import Path
 
 
-def setup_logging(config) -> logging.Logger:
+class ToastLoggingHandler(logging.Handler):
+    """Automatically turns WARNING and ERROR logs into UI toasts"""
+    
+    def __init__(self, toast_manager):
+        super().__init__()
+        self.toast_manager = toast_manager
+
+    def emit(self, record):
+        if not self.toast_manager or not hasattr(self.toast_manager, 'error'):
+            return
+
+        # Skip very noisy internal loggers
+        if record.name in ("werkzeug", "engineio", "socketio", "urllib3", "asyncio"):
+            return
+
+        message = record.getMessage()
+        
+        # Include exception info if present
+        if record.exc_info:
+            message = f"{message} — {record.exc_info[1]}"
+
+        try:
+            if record.levelno >= logging.ERROR:
+                self.toast_manager.error(
+                    message=message,
+                    title=record.name.split('.')[-1] or "Error",
+                    persistent=True
+                )
+            elif record.levelno >= logging.WARNING:
+                self.toast_manager.warning(
+                    message=message,
+                    title=record.name.split('.')[-1] or "Warning",
+                    persistent=False
+                )
+        except:
+            # Never let toast handler crash the logging system
+            pass
+
+
+def setup_logging(config, toast_manager=None) -> logging.Logger:
     """
     Setup logging using values from [logging] section in pccs.conf
     """
@@ -51,5 +90,11 @@ def setup_logging(config) -> logging.Logger:
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+
+    # ------------------- Toast Handler (if available) -------------------
+    if toast_manager:
+        toast_handler = ToastLoggingHandler(toast_manager)
+        toast_handler.setLevel(logging.WARNING)        # Only warnings + errors
+        logger.addHandler(toast_handler)
 
     return logger

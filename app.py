@@ -150,6 +150,18 @@ toast_manager = ToastManager(config, socketio)
 import modules.toasts
 modules.toasts.toast_manager = toast_manager
 
+logger = setup_logging(config, toast_manager=toast_manager)
+
+# ====================== ERROR & WARNING TOAST HELPERS ======================
+def send_error_toast(message: str, title: str = "Error"):
+    """Log error → automatically becomes persistent toast"""
+    logger.error(message)
+
+
+def send_warning_toast(message: str, title: str = "Warning"):
+    """Log warning → becomes toast"""
+    logger.warning(message)
+
 # ====================== ARDUINO + GPIO ======================
 arduino = ArduinoManager(config)
 LIGHT_MAP = arduino.LIGHT_MAP
