@@ -20,6 +20,9 @@ from modules.logger import setup_logging
 
 logger = setup_logging(config)
 
+# ====================== SONOS ======================
+from modules.sonos import SonosManager
+
 # ====================== BANNER ======================
 logger.info("=" * 71)
 logger.info(f"🚐💦  Welcome to the Pissmole Camper Control System v{APP_VERSION}  💦🚐")
@@ -756,6 +759,17 @@ def handle_screen_manual_toggle(data):
         reed_manager._sleep_screen(name)
         
         
+@socketio.on('sonos_command')
+def handle_sonos_command(data):
+    if 'sonos' not in globals() or not sonos:
+        emit('toast', {'type': 'error', 'message': 'Sonos module not loaded'})
+        return
+    
+    result = sonos.execute_command(data)
+    if 'error' in result:
+        emit('toast', {'type': 'error', 'message': f"Sonos: {result['error']}"})
+        
+        
 @app.route('/api/version')
 def get_version_route():
     return {
@@ -812,6 +826,9 @@ def cleanup():
     logger.info("🧹 Cleaning up...")
     shutdown_event.set()
     
+    if 'sonos' in globals() and sonos:
+        sonos.stop()
+    
     time.sleep(0.5)
     for name in list(active_ramps.keys()):
         cancel_ramp(name)
@@ -853,6 +870,15 @@ if __name__ == "__main__":
 
     if getattr(gps, 'serial', None):
         gps.start_reader()
+
+    global sonos
+    try:
+        sonos = SonosManager(socketio, config)
+        sonos.start()
+        logger.info("✅ Sonos integration loaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize SonosManager: {e}", exc_info=True)
+        sonos = None
 
     threading.Thread(target=background_state_sync, daemon=True).start()
 

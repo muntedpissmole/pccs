@@ -46,6 +46,9 @@
   --toast-error: rgb(244, 63, 94);
   --toast-warning: rgb(251, 191, 36);
   --toast-info: rgb(56, 189, 248);
+  
+  --label-scale: rgba(255,255,255,0.45);
+  --slider-track: rgba(148, 163, 184, 0.25);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -67,41 +70,9 @@ html.light,
   --toggle-knob-border: var(--accent-color);
 
   --glass-shadow: 0 8px 25px -8px rgba(0,0,0,0.12);
-}
-
-/* ====================== BASE GLASSMORPHISM ====================== */
-.glass,
-.slider-card,
-.tile,
-.scene-btn {
-  background: var(--glass-bg);
-  border-radius: 20px;
-  border: 1px solid var(--glass-border);
-  box-shadow: 
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-frost),
-    inset 0 -3px 0 rgba(0,0,0,0.35);
-  backdrop-filter: var(--glass-blur) saturate(180%);
-  -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
-  transition: all 0.3s ease;
-}
-
-.glass:hover,
-.slider-card:hover,
-.tile:hover,
-.scene-btn:hover {
-  background: rgba(32, 32, 52, 0.78);
-  transform: translateY(-2px);
-}
-
-/* Light mode glass override */
-.light .glass,
-.light .slider-card,
-.light .tile,
-.light .scene-btn {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  color: #1e2937;
+  
+  --label-scale: rgba(30, 41, 59, 0.65);
+  --slider-track: rgba(148, 163, 184, 0.35);
 }
 
 /* ====================== FONTS ====================== */
@@ -126,7 +97,7 @@ html.light,
   src: url('/static/fonts/Satoshi-Black.woff2') format('woff2'); font-weight: 900; font-display: swap;
 }
 
-/* ====================== GLOBAL ====================== */
+/* ====================== GLOBAL STYLES ====================== */
 html {
   opacity: 0;
   transition: opacity 0.3s ease-in-out;
@@ -171,6 +142,43 @@ body::after {
   mix-blend-mode: overlay;
 }
 
+/* ====================== GLASSMORPHISM BASE ====================== */
+.glass,
+.slider-card,
+.tile,
+.scene-btn {
+  background: var(--glass-bg);
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-frost),
+    inset 0 -3px 0 rgba(0,0,0,0.35);
+  backdrop-filter: var(--glass-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.glass:hover,
+.slider-card:hover,
+.tile:hover,
+.scene-btn:hover {
+  background: rgba(32, 32, 52, 0.78);
+  transform: translateY(-2px);
+}
+
+/* Light mode glass override */
+.light .glass,
+.light .slider-card,
+.light .tile,
+.light .scene-btn {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  color: #1e2937;
+}
+
 /* ====================== CARDS & TILES ====================== */
 .slider-card,
 .tile {
@@ -188,7 +196,7 @@ body::after {
   pointer-events: auto;
 }
 
-/* ====================== PAIRED RELAY CARDS ====================== */
+/* Paired Relay Cards */
 .paired-relay-card {
   height: 100%;
   display: flex;
@@ -214,6 +222,7 @@ body::after {
 
 .paired-relay-divider {
   height: 1px;
+  height: 1px;
   background: rgba(255,255,255,0.12);
   margin: 8px 0;
 }
@@ -222,7 +231,7 @@ body::after {
   background: rgba(0,0,0,0.12);
 }
 
-/* ====================== STATUS TILES ====================== */
+/* Status Tiles */
 .tile i.fa-solid {
   color: var(--accent-color) !important;
   filter: drop-shadow(0 0 10px var(--accent-glow)) !important;
@@ -242,7 +251,58 @@ body::after {
   color: var(--text-primary);
 }
 
-/* ====================== SCENES GRID ====================== */
+/* ====================== ACCENT GAUGES ====================== */
+.accent-fill {
+  background: linear-gradient(to right, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+#water-fill {
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* Low water warning - still keep red/orange but respect accent on normal levels */
+#water-fill.low {
+  background: linear-gradient(to right, #f87171, #ef4444) !important;
+}
+
+/* ====================== ACCENT WATER BAR ====================== */
+.accent-water-fill {
+  background: linear-gradient(to right, 
+    var(--accent-color), 
+    color-mix(in srgb, var(--accent-color), #67e8f9 45%)) !important;
+  box-shadow: 0 0 18px var(--accent-glow);
+  
+  /* Strong, specific transition for width */
+  transition: width 700ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 400ms ease,
+              box-shadow 400ms ease !important;
+}
+
+.accent-water-fill.low {
+  background: linear-gradient(to right, #f87171, #ef4444) !important;
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
+}
+
+/* ====================== ACCENT BATTERY GAUGE ====================== */
+#battery-gauge-progress {
+  transition: stroke-dashoffset 900ms cubic-bezier(0.25, 1.1, 0.5, 1) !important;
+}
+
+.accent-battery-ring {
+  stroke: var(--accent-color) !important;
+  transition: stroke 400ms ease;
+}
+
+.accent-battery-ring.low {
+  stroke: #ef4444 !important;
+}
+
+.accent-battery-ring.warning {
+  stroke: #fbbf24 !important;
+}
+
+/* ====================== SCENES ====================== */
 #scenes-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -283,7 +343,7 @@ body::after {
 
 .scene-btn i {
   font-size: 32px;
-  color: var(--accent-light);
+  color: var(--accent-color);
   filter: drop-shadow(0 0 10px var(--accent-glow)) !important;
 }
 
@@ -301,7 +361,7 @@ body::after {
   flex: 1;
 }
 
-/* ====================== SLIDER CARD HEADER ====================== */
+/* ====================== SLIDERS ====================== */
 .slider-card-header {
   display: flex;
   align-items: center;
@@ -345,7 +405,6 @@ body::after {
   font-variant-numeric: tabular-nums;
 }
 
-/* ====================== SLIDER ====================== */
 .slider-wrapper {
   position: relative;
   width: 100%;
@@ -525,7 +584,7 @@ body::after {
   width: 100%;
   box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 
@@ -534,17 +593,93 @@ body::after {
   transform: translateY(0);
 }
 
+/* Background colors - same in both dark and light mode */
 #toast-container .toast-success { background-color: var(--toast-success) !important; }
 #toast-container .toast-error   { background-color: var(--toast-error) !important; }
 #toast-container .toast-warning { background-color: var(--toast-warning) !important; }
 #toast-container .toast-info    { background-color: var(--toast-info) !important; }
 
-html.light .toast-title,
-html.light .toast-message {
-  color: var(--text-primary) !important;
+/* Content styling */
+.toast-content {
+  flex: 1;
+  min-width: 0;
 }
 
-/* ====================== DISABLED STATES ====================== */
+.toast-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 8px 0;
+  color: inherit;
+  letter-spacing: -0.01em;
+}
+
+.toast-message {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  opacity: 0.95;
+  margin: 0;
+  color: inherit;
+}
+
+/* White text on colored backgrounds (works for both modes) */
+#toast-container .toast-success,
+#toast-container .toast-error,
+#toast-container .toast-warning,
+#toast-container .toast-info {
+  color: #ffffff !important;
+}
+
+/* Close button */
+#toast-container button {
+  cursor: pointer !important;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: -4px -4px -4px auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#toast-container button:hover {
+  opacity: 0.7;
+}
+
+/* Light mode - keep same vivid backgrounds */
+html.light .toast-title,
+html.light .toast-message {
+  color: #ffffff !important;
+}
+
+/* ====================== LAYOUT & UTILITIES ====================== */
+#main-content {
+  max-width: 1920px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1920px) {
+  #main-content {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+#lighting-controls,
+#scenes-grid,
+.grid.grid-cols-2.sm\:grid-cols-3.lg\:grid-cols-6 {
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Disabled States */
 .slider-card.rooftop-disabled {
   opacity: 0.45;
   pointer-events: none;
@@ -565,32 +700,7 @@ html.light .toast-message {
   pointer-events: auto;
 }
 
-/* ====================== MAX WIDTH CONTAINER ====================== */
-#main-content {
-    max-width: 1920px;
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-/* Optional: Increase side padding on very large screens for breathing room */
-@media (min-width: 1920px) {
-    #main-content {
-        padding-left: 32px;
-        padding-right: 32px;
-    }
-}
-
-/* Make inner grids also center nicely */
-#lighting-controls,
-#scenes-grid,
-.grid.grid-cols-2.sm\:grid-cols-3.lg\:grid-cols-6 {
-    max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-}
-
+/* ====================== FOOTER ====================== */
 footer {
   background: transparent;
   backdrop-filter: none;
@@ -605,6 +715,16 @@ footer {
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
+/* Light mode footer fixes (fixes blurry version text) */
+.light footer {
+  border-top-color: rgba(148, 163, 184, 0.3);
+}
+
+.light #footer-version {
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75);
+  color: #1e2937;
+}
+
 /* Remove any glass effect on footer */
 footer {
   background: none !important;
@@ -612,26 +732,185 @@ footer {
   box-shadow: none !important;
 }
 
-/* ====================== FOOTER ICONS ====================== */
-/* Theme Toggle + Settings Icon */
-button[onclick="toggleGlobalDarkMode()"],
-a[href="/diag"],
-#footer-mode-icon,
-a[href="/diag"] i {
-  cursor: pointer !important;
+/* Hover effects */
+button[onclick="toggleGlobalDarkMode()"]:hover,
+a[href="/diag"]:hover {
+  color: var(--accent-color) !important;
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* Make sure hover works in light mode too */
+.light button[onclick="toggleGlobalDarkMode()"]:hover i,
+.light a[href="/diag"]:hover i {
+  color: var(--accent-color) !important;
+}
+
+
+/* ====================== SECTION HEADERS ====================== */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
   user-select: none;
 }
 
-/* Base transition for both */
-button[onclick="toggleGlobalDarkMode()"],
-a[href="/diag"] {
-  transition: all 0.25s ease;
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
 }
 
-/* Hover effect for both */
-button[onclick="toggleGlobalDarkMode()"]:hover,
-a[href="/diag"]:hover {
-  transform: scale(1.15) rotate(18deg);
-  color: white !important;
-  text-shadow: 0 0 10px var(--accent-glow);
+.section-line {
+  height: 2px;
+  flex: 1;
+  background: linear-gradient(90deg, 
+    color-mix(in srgb, var(--accent-color), transparent 40%) 0%, 
+    color-mix(in srgb, var(--accent-color), transparent 85%) 50%, 
+    transparent 100%);
+  border-radius: 9999px;
+}
+
+/* Light mode tweaks */
+.light .section-title {
+  color: var(--text-secondary);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+}
+
+.light .section-line {
+  background: linear-gradient(90deg, 
+    color-mix(in srgb, var(--accent-color), transparent 35%) 0%, 
+    color-mix(in srgb, var(--accent-color), transparent 80%) 50%, 
+    transparent 100%);
+}
+
+/* Tight spacing for 1280x800 screen */
+@media (max-height: 820px) {
+  #main-content {
+    space-y-4;
+  }
+  .section-header {
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 1.15rem;
+  }
+}
+
+.tile .tile-value {
+  line-height: 1 !important;     /* Critical for baseline */
+  font-feature-settings: "kern" off; /* optional */
+}
+
+.environmental-tile {
+  min-height: 150px;
+}
+
+/* ====================== APPEARANCE TILE FIXES ====================== */
+.mode-btn {
+  background: var(--control-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.mode-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--accent-color);
+}
+
+.mode-btn.active {
+  background: var(--accent-color);
+  color: var(--text-on-accent) !important;
+  border-color: var(--accent-color);
+}
+
+.mode-btn .mode-icon {
+  color: inherit;
+}
+
+.mode-btn.active .mode-icon {
+  color: var(--text-on-accent) !important;
+}
+
+/* ====================== SOLAR PROGRESS & VALUES ====================== */
+.solar-progress-bar {
+  background: linear-gradient(90deg, 
+    var(--accent-color), 
+    color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
+  box-shadow: 0 0 20px var(--accent-glow-strong);
+}
+
+.accent-solar-current {
+  color: var(--accent-color) !important;
+}
+
+/* Light mode tweaks */
+.light .solar-progress-bar {
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.light .accent-solar-current {
+  color: var(--accent-color) !important;
+}
+
+#sonos-bg.with-art {
+    filter: brightness(0.85) contrast(1.1);
+}
+
+#sonos-tile.disabled {
+    filter: grayscale(0.6);
+}
+
+/* ====================== LIGHT MODE BAR FIXES ====================== */
+
+/* Sonos Now Playing Progress Bar */
+#sonos-progress {
+    background: var(--accent-color);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.light #sonos-progress {
+    box-shadow: 0 0 8px rgba(3, 105, 161, 0.6);
+}
+
+/* Sonos Volume Fill */
+#sonos-volume-fill {
+    background: var(--accent-color);
+}
+
+.light #sonos-volume-fill {
+    box-shadow: 0 0 6px rgba(3, 105, 161, 0.5);
+}
+
+/* Solar Progress Bar */
+.solar-progress-bar {
+    background: linear-gradient(90deg, 
+        var(--accent-color), 
+        color-mix(in srgb, var(--accent-color), #67e8f9 40%));
+    box-shadow: 0 0 20px var(--accent-glow-strong);
+}
+
+.light .solar-progress-bar {
+    background: linear-gradient(90deg, 
+        #0369a1, 
+        #0ea5e9);
+    box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
+}
+
+.light .h-1.bg-white\/30,
+.light .bg-white\/30 {
+    background: rgba(148, 163, 184, 0.45);
+}
+
+.light #sonos-tile {
+    color: #1e2937;
+}
+
+.light #sonos-track,
+.light #sonos-artist {
+    color: var(--text-primary);
 }

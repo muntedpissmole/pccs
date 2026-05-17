@@ -14,15 +14,15 @@
 </head>
 <body class="bg-zinc-950 text-white min-h-screen flex flex-col">
 
-<div id="main-content" class="flex-1 p-4 md:p-4 xl:p-4 space-y-4">
-  
+<div id="main-content" class="flex-1 p-4 md:p-4 xl:p-4 space-y-6">
+
     <!-- OFFLINE OVERLAY -->
 	<div id="offline-overlay" 
 		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
 			<div id="offline-banner" 
            class="text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
            style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
-        <i class="fa-solid fa-circle-exclamation text-4xl animate-pulse"></i>
+        <i class="fa-solid fa-circle-exclamation text-2xl animate-pulse"></i>
         <div class="flex-1 text-left">
           System Offline
           <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
@@ -31,158 +31,368 @@
       </div>
     </div>
 
-    <!-- STATUS TILES -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Date</p>
-            <p class="tile-value" id="tile-date">—</p>
-          </div>
-          <i class="fa-solid fa-calendar-days text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Time</p>
-              <p class="tile-value" id="tile-time">—</p>
-            </div>
-            <i class="fa-solid fa-clock text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
+<!-- ====================== ENVIRONMENTAL ====================== -->
 
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Water</p>
-            <p class="tile-value" id="water-level">—</p>
-          </div>
-          <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Solar</p>
-              <p class="tile-value" id="solar-input">—</p>
-            </div>
-            <i class="fa-solid fa-sun text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
-
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Battery</p>
-            <p class="tile-value" id="battery-voltage">—</p>
-          </div>
-          <i class="fa-solid fa-battery-three-quarters text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Charge</p>
-              <p class="tile-value" id="battery-charge">—</p>
-            </div>
-            <i class="fa-solid fa-bolt text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
-
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Sunrise</p>
-            <p class="tile-value" id="sunrise">—</p>
-          </div>
-          <i class="fa-solid fa-sun text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Sunset</p>
-              <p class="tile-value" id="sunset">—</p>
-            </div>
-            <i class="fa-solid fa-moon text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
-
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Current Temp</p>
-            <p class="tile-value" id="outside-temp">—°C</p>
-          </div>
-          <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Min/Max</p>
-              <div class="flex items-center gap-3">
-                <p class="tile-value text-lg" id="temp-range">—° / —°</p>
-              </div>
-            </div>
-            <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
-
-      <div class="tile glass p-5">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="tile-label">Satellites</p>
-            <p class="tile-value" id="satellites">— / —</p>
-          </div>
-          <i class="fa-solid fa-satellite-dish text-2xl accent-sky"></i>
-        </div>
-        <div class="mt-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="tile-label">Location</p>
-              <p class="tile-value" id="location">---</p>
-            </div>
-            <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
-          </div>
-        </div>
-      </div>
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">Environmental</h2>
+      <div class="section-line"></div>
     </div>
-	
-	<!-- LIGHTING SCENES -->
-	<div id="scenes-grid" class="grid grid-cols-3 gap-4"></div>
+    
+	<!-- STATUS TILES -->
+	<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
 
-    <!-- ALL LIGHTING CONTROLS -->
-	<div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+	  <!-- Date / Time -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Date</p>
+			<p class="tile-value" id="tile-date">—</p>
+		  </div>
+		  <i class="fa-solid fa-calendar-days text-2xl accent-sky"></i>
+		</div><br>&nbsp;
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Time</p>
+			<p class="tile-value" id="tile-time">—</p>
+		  </div>
+		  <i class="fa-solid fa-clock text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Water -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Water</p>
+			<p class="tile-value text-3xl font-semibold" id="water-level">—%</p>
+		  </div>
+		  <i class="fa-solid fa-droplet text-3xl accent-sky drop-icon"></i>
+		</div>
+		<div class="mt-auto">
+		  <div class="relative">
+			<div class="h-3 bg-zinc-800/80 rounded-full overflow-hidden border border-white/10">
+				<div id="water-fill" 
+					 class="h-full rounded-full accent-water-fill" 
+					 style="width: 0%"></div>
+			</div>
+		<div class="flex justify-between text-[10px] mt-1 px-1 font-mono" style="color: var(--label-scale);">
+		  <div>0</div><div>50</div><div>100</div>
+		</div>
+		  </div>
+		  <div id="water-extra" class="text-xs text-white/50 mt-3 text-center font-mono"></div>
+		</div>
+	  </div>
+
+	<!-- BATTERY GAUGE TILE -->
+	<div class="tile environmental-tile glass p-5 flex flex-col h-full">
+	  <div class="flex justify-between items-start flex-shrink-0">
+		<!-- Gauge -->
+		<div class="relative w-20 h-20 -mt-2 -ml-1 flex-shrink-0">
+		  <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
+			<circle cx="60" cy="60" r="50" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="12"/>
+			<circle id="battery-gauge-progress" 
+					cx="60" cy="60" r="50" 
+					fill="none" 
+					stroke="var(--accent-color)" 
+					stroke-width="12" 
+					stroke-dasharray="314" 
+					stroke-dashoffset="314" 
+					stroke-linecap="round"
+					class="accent-battery-ring"/>
+		  </svg>
+		  <div class="absolute inset-0 flex flex-col items-center justify-center">
+			<div id="battery-voltage" class="tile-value text-2xl font-semibold">— V</div>
+		  </div>
+		</div>
+		<i class="fa-solid fa-battery-full text-3xl accent-sky"></i>
+	  </div>
+
+	  <!-- Bottom row - NO extra padding, clean baseline -->
+	  <div class="mt-auto flex justify-between items-end">
+		<div class="text-left">
+		  <p class="tile-label text-xs">Charge</p>
+		</div>
+		<div class="text-right">
+		  <p id="battery-percent" class="tile-value text-3xl font-semibold text-emerald-400">—%</p>
+		</div>
+	  </div>
+	</div>
+
+	  <!-- Sunrise / Sunset -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Sunrise</p>
+			<p class="tile-value" id="sunrise">—</p>
+		  </div>
+		  <i class="fa-solid fa-sun text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Sunset</p>
+			<p class="tile-value" id="sunset">—</p>
+		  </div>
+		  <i class="fa-solid fa-moon text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Temperature -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Current Temp</p>
+			<p class="tile-value" id="outside-temp">—°C</p>
+		  </div>
+		  <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Min/Max</p>
+			<div class="flex items-center gap-3">
+			  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+			</div>
+		  </div>
+		  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Satellites / Location -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Satellites</p>
+			<p class="tile-value" id="satellites">— / —</p>
+		  </div>
+		  <i class="fa-solid fa-satellite-dish text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Location</p>
+			<p class="tile-value" id="location">---</p>
+		  </div>
+		  <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+		</div>
+	  </div>
+	  
+	</div>
+  </div>
+
+  <!-- ====================== SCENES ====================== -->
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">Scenes</h2>
+      <div class="section-line"></div>
     </div>
+    <div id="scenes-grid" class="grid grid-cols-3 gap-4"></div>
+  </div>
 
+  <!-- ====================== LIGHTING ====================== -->
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">Lighting</h2>
+      <div class="section-line"></div>
+    </div>
+    <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+    </div>
+  </div>
+
+<!-- ====================== SYSTEM ====================== -->
+<div>
+  <div class="section-header">
+    <h2 class="section-title">System</h2>
+    <div class="section-line"></div>
   </div>
   
-  <!-- ====================== VERSION FOOTER ====================== -->
-  <footer class="mt-auto pt-0 pb-8 px-6 border-t border-white/10">
-    <div class="max-w-screen-2xl mx-auto flex items-center justify-between text-xs">
-      
-      <!-- Left: Dark/Light Toggle -->
-      <button onclick="toggleGlobalDarkMode()" 
-              class="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors p-2 -m-2 rounded-xl">
-        <i id="footer-mode-icon" class="fa-solid fa-moon text-lg"></i>
-      </button>
+  <!-- SYSTEM TILES -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-      <!-- Center: Version -->
-      <div id="footer-version" 
-           class="font-mono tracking-[2px] text-white/40"></div>
+	<!-- ====================== SONOS NOW PLAYING ====================== -->
+	<div id="sonos-tile" class="tile glass p-5 flex flex-col h-full relative sonos-tile">
 
-      <!-- Right: Diagnostics -->
-      <a href="/diag" 
-         class="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors p-2 -m-2 rounded-xl">
-        <i class="fa-solid fa-screwdriver-wrench text-lg"></i>
-      </a>
+	  <!-- Dynamic Album Art Background -->
+	  <div id="sonos-bg" 
+		   class="absolute inset-0 bg-cover bg-center transition-all duration-700"
+		   style="background-image: none;">
+		
+		<div id="sonos-gradient" 
+			 class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/70 to-black/90 hidden">
+		</div>
+	  </div>
 
+	  <div class="relative z-10 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <p class="tile-label text-sm">Music</p>
+		  <i class="fa-solid fa-music text-2xl accent-sky"></i>
+		</div>
+
+		<!-- Text Area -->
+		<div class="flex-1 mt-5 flex flex-col min-h-0">
+		  <p id="sonos-track" 
+			 class="tile-value text-[22px] font-semibold leading-tight flex-shrink-0">
+			 Nothing playing
+		  </p>
+		  <p id="sonos-artist" 
+			 class="text-base mt-2 flex-shrink-0" 
+			 style="color: var(--text-muted);">
+			 —
+		  </p>
+		  <div class="flex-1 min-h-[40px]"></div>
+		</div>
+
+		<!-- Progress Bar -->
+		<div>
+		  <div class="h-1 bg-white/30 rounded-full">
+			<div id="sonos-progress" class="h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+		  </div>
+		  <div class="flex justify-between text-xs font-mono mt-1" style="color: var(--text-muted);">
+			<span id="sonos-position">0:00</span>
+			<span id="sonos-duration">-0:00</span>
+		  </div>
+		</div>
+
+		<!-- Playback Controls -->
+		<div class="flex justify-center gap-8 text-3xl mt-5" style="color: var(--text-muted);">
+		  <i onclick="sonosAction('previous')" 
+			 class="fa-solid fa-backward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		  
+		  <i id="sonos-playpause" onclick="sonosAction('playpause')" 
+			 class="fa-solid fa-play hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		  
+		  <i onclick="sonosAction('next')" 
+			 class="fa-solid fa-forward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		</div>
+
+		<!-- Volume -->
+		<div class="mt-5 flex items-center gap-3" style="color: var(--text-muted);">
+		  <i class="fa-solid fa-volume-down text-xl"></i>
+		  <div onclick="sonosVolumeClick(event)" 
+			   class="flex-1 h-1.5 bg-white/30 rounded-full relative cursor-pointer">
+			<div id="sonos-volume-fill" 
+				 class="absolute left-0 top-0 h-full rounded-full transition-all" 
+				 style="width: 75%"></div>
+		  </div>
+		  <i class="fa-solid fa-volume-up text-xl"></i>
+		</div>
+	  </div>
+	</div>
+
+    <!-- NETWORK INFO (UniFi) -->
+    <div class="tile glass p-5 flex flex-col h-full">
+      <div class="flex justify-between items-start flex-shrink-0">
+        <div>
+          <p class="tile-label">Network</p>
+          <p class="tile-value text-emerald-400 text-3xl font-semibold" id="unifi-clients">14</p>
+          <p class="text-xs font-mono" style="color: var(--text-muted);">CLIENTS CONNECTED</p>
+        </div>
+        <i class="fa-solid fa-network-wired text-2xl accent-sky"></i>
+      </div>
+      <div class="mt-auto grid grid-cols-2 gap-y-4 text-sm">
+        <div>
+          <p class="text-xs" style="color: var(--text-muted);">WAN STATUS</p>
+          <p class="flex items-center gap-1.5 text-emerald-400 font-medium">
+            <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+            ONLINE
+          </p>
+        </div>
+        <div>
+          <p class="text-xs" style="color: var(--text-muted);">WiFi Name</p>
+          <p class="font-mono" style="color: var(--text-primary);" id="unifi-ssid">Pissmole</p>
+        </div>
+        <div>
+          <p class="text-xs" style="color: var(--text-muted);">DOWNLOAD</p>
+          <p class="font-medium" id="unifi-down">248 <span class="text-xs" style="color: var(--text-muted);">Mbps</span></p>
+        </div>
+        <div>
+          <p class="text-xs" style="color: var(--text-muted);">UPLOAD</p>
+          <p class="font-medium" id="unifi-up">38 <span class="text-xs" style="color: var(--text-muted);">Mbps</span></p>
+        </div>
+      </div>
     </div>
-  </footer>
 
-  <!-- ====================== TOAST CONTAINER ====================== -->
+	<!-- SOLAR GENERATION -->
+	<div class="tile glass p-5 flex flex-col h-full">
+	  <div class="flex justify-between items-start">
+		<p class="tile-label">Solar</p>
+		<i class="fa-solid fa-sun text-2xl accent-sky"></i>
+	  </div>
+	  <div class="mt-auto">
+		<div class="flex justify-between items-end">
+		  <div>
+			<p class="text-xs" style="color: var(--text-muted);">CURRENT</p>
+			<p id="solar-current" class="text-5xl font-semibold leading-none accent-solar-current">0.0 <span class="text-2xl" style="color: var(--text-muted);">kW</span></p>
+		  </div>
+		  <div class="text-right">
+			<p class="text-xs" style="color: var(--text-muted);">TODAY</p>
+			<p id="solar-daily" class="text-3xl font-semibold">0.0 <span class="text-lg" style="color: var(--text-muted);">kWh</span></p>
+		  </div>
+		</div>
+		
+		<!-- Progress Bar - Accent coloured -->
+		<div class="mt-5">
+		  <div class="relative h-2 bg-white/10 rounded-full overflow-hidden">
+			<div id="solar-progress" 
+				 class="solar-progress-bar absolute h-2 rounded-full transition-all duration-1000 ease-out"
+				 style="width: 0%"></div>
+		  </div>
+		  <div class="flex justify-between text-[10px] font-mono mt-1.5 px-1" style="color: var(--text-muted);">
+			<div>0%</div>
+			<div id="solar-percent-text">0% of expected</div>
+			<div>100%</div>
+		  </div>
+		</div>
+	  </div>
+	</div>
+
+	<!-- APPEARANCE / QUICK SETTINGS -->
+	<div class="tile glass p-5 flex flex-col h-full">
+	  <div class="flex justify-between items-start flex-shrink-0 mb-4">
+		<div>
+		  <p class="tile-label">Appearance</p>
+		</div>
+		<!-- Palette icon now links to settings -->
+		<a href="/diag" 
+		   class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
+		  <i class="fa-solid fa-palette"></i>
+		</a>
+	  </div>
+
+	  <div class="space-y-5 flex-1">
+		<!-- Dark / Light Mode -->
+		<div>
+		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Mode</p>
+		  <div class="flex gap-2">
+			<button onclick="setDarkMode('dark')" 
+					id="btn-dark"
+					class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-moon mode-icon"></i>
+			  <span class="font-medium">Dark</span>
+			</button>
+			<button onclick="setDarkMode('light')" 
+					id="btn-light"
+					class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-sun mode-icon"></i>
+			  <span class="font-medium">Light</span>
+			</button>
+		  </div>
+		</div>
+
+		<!-- Theme Selector -->
+		<div>
+		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Theme</p>
+		  <select id="quick-theme-select" 
+				  onchange="changeTheme(this.value)"
+				  class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
+		  </select>
+		</div>
+	  </div>
+	</div>
+
+  </div>
+</div>
+
+</div>
+
   <div id="toast-container"></div>
 
 <script src="/static/socket.io.min.js"></script>
@@ -871,14 +1081,120 @@
 		document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm} *`;
 	}
 
-    function updateSensors(data) {
-        if (data.water_percent !== undefined) document.getElementById('water-level').textContent = `${Math.round(data.water_percent)}%`;
-        if (data.solar_kw !== undefined) document.getElementById('solar-input').textContent = `${data.solar_kw} kW`;
-        if (data.battery_voltage !== undefined) document.getElementById('battery-voltage').textContent = `${parseFloat(data.battery_voltage).toFixed(1)}V`;
-        if (data.battery_charge !== undefined) document.getElementById('battery-charge').textContent = `${Math.round(data.battery_charge)}%`;
-        if (data.temp_c !== undefined && data.temp_c !== null) document.getElementById('outside-temp').textContent = `${Math.round(data.temp_c)}°C`;
-    }
+	function updateSensors(data) {
+		if (!data) return;
 
+		// ==================== WATER GAUGE ====================
+		if (data.water_percent !== undefined) {
+			const percent = Math.max(0, Math.min(100, Math.round(data.water_percent)));
+			
+			const levelEl = document.getElementById('water-level');
+			if (levelEl) levelEl.textContent = `${percent}%`;
+
+			const fill = document.getElementById('water-fill');
+			if (fill) {
+				fill.style.transition = 'none';
+				fill.style.width = '0%';
+				void fill.offsetWidth;
+				
+				fill.style.transition = '';
+				fill.style.width = `${percent}%`;
+				
+				if (percent < 25) {
+					fill.classList.add('low');
+				} else {
+					fill.classList.remove('low');
+				}
+			}
+
+			const extraEl = document.getElementById('water-extra');
+			if (extraEl && data.water_litres !== undefined) {
+				extraEl.textContent = `Fresh: ${Math.round(data.water_litres)} L`;
+			}
+		}
+
+		// ==================== SOLAR ====================
+		if (data.solar_kw !== undefined) {
+			const currentEl = document.getElementById('solar-current');
+			if (currentEl) {
+				currentEl.innerHTML = `${parseFloat(data.solar_kw).toFixed(1)} <span class="text-2xl" style="color: var(--text-muted);">kW</span>`;
+			}
+		}
+
+		if (data.solar_daily_kwh !== undefined) {
+			const dailyEl = document.getElementById('solar-daily');
+			if (dailyEl) {
+				dailyEl.innerHTML = `${parseFloat(data.solar_daily_kwh).toFixed(1)} <span class="text-lg" style="color: var(--text-muted);">kWh</span>`;
+			}
+		}
+
+		if (data.solar_percent_of_expected !== undefined) {
+			const progressBar = document.getElementById('solar-progress');
+			const percentText = document.getElementById('solar-percent-text');
+			
+			if (progressBar) {
+				const percent = Math.min(100, Math.max(0, data.solar_percent_of_expected));
+				
+				// Smooth animation like the water gauge
+				progressBar.style.transition = 'none';
+				// Force reflow
+				void progressBar.offsetWidth;
+				progressBar.style.transition = 'width 1000ms ease-out';
+				progressBar.style.width = `${percent}%`;
+			}
+			
+			if (percentText) {
+				percentText.textContent = `${Math.round(data.solar_percent_of_expected)}% of expected`;
+			}
+		}
+
+		// ==================== TEMPERATURE ====================
+		if (data.temp_c !== undefined && data.temp_c !== null) {
+			const tempEl = document.getElementById('outside-temp');
+			if (tempEl) {
+				tempEl.textContent = `${Math.round(data.temp_c)}°C`;
+			}
+		}
+
+		// ==================== BATTERY GAUGE ====================
+		if (data.battery_charge !== undefined) {
+			const percent = Math.max(0, Math.min(100, Math.round(data.battery_charge)));
+			
+			// Voltage
+			if (data.battery_voltage !== undefined) {
+				document.getElementById('battery-voltage').textContent = 
+					`${parseFloat(data.battery_voltage).toFixed(1)} V`;
+			}
+			
+			// Percent text
+			const percentEl = document.getElementById('battery-percent');
+			if (percentEl) {
+				percentEl.textContent = `${percent}%`;
+				percentEl.className = 'tile-value text-3xl font-semibold ' + 
+					(percent < 25 ? 'text-red-400' : 
+					 percent < 50 ? 'text-amber-400' : 'text-emerald-400');
+			}
+
+			// Circular gauge
+			const progress = document.getElementById('battery-gauge-progress');
+			if (progress) {
+				const offset = 314 * (1 - percent / 100);
+				progress.style.strokeDashoffset = offset;
+
+				// Color logic
+				if (percent < 25) {
+					progress.classList.add('low');
+					progress.classList.remove('warning');
+				} else if (percent < 50) {
+					progress.classList.add('warning');
+					progress.classList.remove('low');
+				} else {
+					progress.classList.remove('low', 'warning');
+				}
+			}
+		}
+	}
+	
     async function fetchWeatherForecast(lat, lon) {
         try {
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
@@ -957,6 +1273,107 @@
 
     socket.on('sensor_update', updateSensors);
     socket.on('gps_update', updateGPS);
+	
+	// ====================== SONOS INTEGRATION ======================
+	let currentSonosState = {};
+	let sonosAvailable = false;
+
+	function updateSonosUI(data) {
+		currentSonosState = data || {};
+		const tile = document.getElementById('sonos-tile');
+
+		// Better availability detection
+		const isAvailable = !!(data && 
+							data.player_name && 
+							data.player_name !== 'None' && 
+							!data.track?.includes('unavailable'));
+
+		sonosAvailable = isAvailable;
+
+		// Apply disabled state
+		if (tile) {
+			if (isAvailable) {
+				tile.style.opacity = '1';
+				tile.style.pointerEvents = 'auto';
+				tile.classList.remove('disabled');
+			} else {
+				tile.style.opacity = '0.4';
+				tile.style.pointerEvents = 'none';
+				tile.classList.add('disabled');
+			}
+		}
+
+		// Update content
+		document.getElementById('sonos-track').textContent = data?.track || "Nothing playing";
+		document.getElementById('sonos-artist').textContent = data?.artist || "—";
+
+		// Album Art
+		const bg = document.getElementById('sonos-bg');
+		const gradient = document.getElementById('sonos-gradient');
+		const hasArt = data?.album_art && 
+					   data.album_art.trim() !== "" && 
+					   !data.album_art.includes("unavailable");
+
+		if (hasArt && isAvailable) {
+			bg.style.backgroundImage = `url('${data.album_art}')`;
+			gradient.classList.remove('hidden');
+		} else {
+			bg.style.backgroundImage = 'none';
+			gradient.classList.add('hidden');
+		}
+
+		// Progress
+		const progressEl = document.getElementById('sonos-progress');
+		const posEl = document.getElementById('sonos-position');
+		const durEl = document.getElementById('sonos-duration');
+
+		const posSec = timeToSeconds(data?.position);
+		const durSec = timeToSeconds(data?.duration);
+
+		if (durSec > 0 && isAvailable) {
+			const percent = Math.min(100, Math.round((posSec / durSec) * 100));
+			progressEl.style.width = `${percent}%`;
+			posEl.textContent = data.position || "0:00";
+			durEl.textContent = data.duration ? `-${data.duration}` : "-0:00";
+		} else {
+			progressEl.style.width = '0%';
+			posEl.textContent = "0:00";
+			durEl.textContent = "-0:00";
+		}
+
+		// Play/Pause
+		const playBtn = document.getElementById('sonos-playpause');
+		if (data?.state === 'PLAYING') {
+			playBtn.classList.remove('fa-play');
+			playBtn.classList.add('fa-pause');
+		} else {
+			playBtn.classList.remove('fa-pause');
+			playBtn.classList.add('fa-play');
+		}
+	}
+
+	function timeToSeconds(timeStr) {
+		if (!timeStr || typeof timeStr !== 'string') return 0;
+		const parts = timeStr.split(':').map(Number);
+		if (parts.length === 2) return parts[0] * 60 + parts[1];
+		if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+		return 0;
+	}
+
+	// Controls
+	window.sonosAction = function(command) {
+		if (!sonosAvailable) return;
+		socket.emit('sonos_command', { command: command });
+	};
+
+	window.sonosVolumeClick = function(e) {
+		if (!sonosAvailable) return;
+		const rect = e.currentTarget.getBoundingClientRect();
+		const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+		socket.emit('sonos_command', { command: 'volume', value: percent });
+	};
+
+	socket.on('sonos_update', updateSonosUI);
 
     // ====================== DARK MODE ======================
     socket.on('global_dark_mode_update', function(data) {
@@ -971,11 +1388,14 @@
 		hideOfflineBanner();
 		registerThemeListener();
 		loadCurrentTheme();
-
-		socket.emit('get_current_dark_mode');
-		
+		loadQuickThemes();
 		loadScenes();
-        loadVersion();               // ← Added
+		loadVersion();
+
+		// Request Sonos status
+		setTimeout(() => {
+			socket.emit('sonos_command', { command: 'status' });
+		}, 800);
 	});
 
     socket.on('disconnect', () => showOfflineBanner());
@@ -1104,7 +1524,48 @@ function fixLastRowStretching(container) {
         }, 300);
 
         console.log("🚀 PCCS Frontend Ready – waiting for lights_config from backend");
+        
     };
+	
+	function setDarkMode(mode) {
+		socket.emit('set_global_dark_mode', { mode });
+	}
+
+	function changeTheme(theme) {
+		socket.emit('set_global_theme', { theme });
+	}
+
+	async function loadQuickThemes() {
+		try {
+			const res = await fetch('/api/themes');
+			const data = await res.json();
+			const select = document.getElementById('quick-theme-select');
+			select.innerHTML = '';
+			data.themes.forEach(t => {
+				const opt = document.createElement('option');
+				opt.value = t.file;
+				opt.textContent = t.name;
+				select.appendChild(opt);
+			});
+
+			const cur = await (await fetch('/api/current-theme')).json();
+			if (cur.theme) select.value = cur.theme;
+		} catch(e) {
+			console.warn('Failed to load quick themes', e);
+		}
+	}
+
+	function updateActiveModeButton(mode) {
+		document.getElementById('btn-dark').classList.toggle('active', mode === 'dark');
+		document.getElementById('btn-light').classList.toggle('active', mode === 'light');
+	}
+
+	// Socket listeners
+	socket.on('global_dark_mode_update', data => updateActiveModeButton(data.mode));
+	socket.on('global_theme_update', data => {
+		const select = document.getElementById('quick-theme-select');
+		if (select && data.theme) select.value = data.theme;
+	});
 
     // ====================== TOAST SYSTEM ======================
     function createToast(data) {
@@ -1121,16 +1582,16 @@ function fixLastRowStretching(container) {
         toast.className = `toast toast-${type}`;
         toast.id = id || 'toast-' + Date.now();
 
-        toast.innerHTML = `
-            <i class="fa-solid ${icon} text-2xl flex-shrink-0"></i>
-            <div class="toast-content flex-1 min-w-0">
-                ${title ? `<div class="toast-title">${title}</div>` : ''}
-                <div class="toast-message">${message}</div>
-            </div>
-            <button class="text-xl leading-none" aria-label="Close">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        `;
+		toast.innerHTML = `
+			<i class="fa-solid ${icon} text-2xl flex-shrink-0 mt-0.5"></i>
+			<div class="toast-content flex-1 min-w-0">
+				${title ? `<div class="toast-title">${title}</div>` : ''}
+				<div class="toast-message">${message}</div>
+			</div>
+			<button class="text-xl leading-none self-start mt-0.5" aria-label="Close">
+				<i class="fa-solid fa-xmark"></i>
+			</button>
+		`;
 
         container.appendChild(toast);
 

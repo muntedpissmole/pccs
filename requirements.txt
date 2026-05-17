@@ -13,3 +13,5 @@ pynmea2
 suntime
 markdown
 colorzero
+soco
+astral
