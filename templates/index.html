@@ -20,8 +20,7 @@
 	<div id="offline-overlay" 
 		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
 			<div id="offline-banner" 
-           class="text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4"
-           style="background: #f43f5e; width: 90%; max-width: 1024px; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);">
+           class="offline-banner text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4">
         <i class="fa-solid fa-circle-exclamation text-2xl animate-pulse"></i>
         <div class="flex-1 text-left">
           System Offline
@@ -65,59 +64,56 @@
 		<div class="flex justify-between items-start flex-shrink-0">
 		  <div>
 			<p class="tile-label">Water</p>
-			<p class="tile-value text-3xl font-semibold" id="water-level">—%</p>
+			<p class="tile-value" id="water-level">—%</p>
 		  </div>
-		  <i class="fa-solid fa-droplet text-3xl accent-sky drop-icon"></i>
+		  <i class="fa-solid fa-droplet text-3xl accent-sky"></i>
 		</div>
 		<div class="mt-auto">
 		  <div class="relative">
 			<div class="h-3 bg-zinc-800/80 rounded-full overflow-hidden border border-white/10">
-				<div id="water-fill" 
-					 class="h-full rounded-full accent-water-fill" 
-					 style="width: 0%"></div>
+				<div id="water-fill" class="progress-fill"></div>
 			</div>
-		<div class="flex justify-between text-[10px] mt-1 px-1 font-mono" style="color: var(--label-scale);">
-		  <div>0</div><div>50</div><div>100</div>
-		</div>
+			<div class="flex justify-between text-[10px] mt-1 px-1 font-mono scale-label">
+			  <div>0</div><div>50</div><div>100</div>
+			</div>
 		  </div>
 		  <div id="water-extra" class="text-xs text-white/50 mt-3 text-center font-mono"></div>
 		</div>
 	  </div>
 
-	<!-- BATTERY GAUGE TILE -->
-	<div class="tile environmental-tile glass p-5 flex flex-col h-full">
-	  <div class="flex justify-between items-start flex-shrink-0">
-		<!-- Gauge -->
-		<div class="relative w-20 h-20 -mt-2 -ml-1 flex-shrink-0">
-		  <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
-			<circle cx="60" cy="60" r="50" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="12"/>
-			<circle id="battery-gauge-progress" 
-					cx="60" cy="60" r="50" 
-					fill="none" 
-					stroke="var(--accent-color)" 
-					stroke-width="12" 
-					stroke-dasharray="314" 
-					stroke-dashoffset="314" 
-					stroke-linecap="round"
-					class="accent-battery-ring"/>
-		  </svg>
-		  <div class="absolute inset-0 flex flex-col items-center justify-center">
-			<div id="battery-voltage" class="tile-value text-2xl font-semibold">— V</div>
+	  <!-- BATTERY GAUGE TILE -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <!-- Gauge -->
+		  <div class="relative w-20 h-20 -mt-2 -ml-1 flex-shrink-0">
+			<svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
+			  <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="12"/>
+			  <circle id="battery-gauge-progress" 
+					  class="accent-battery-ring"
+					  cx="60" cy="60" r="50" 
+					  fill="none" 
+					  stroke-width="12" 
+					  stroke-dasharray="314" 
+					  stroke-dashoffset="314" 
+					  stroke-linecap="round"/>
+			</svg>
+			<div class="absolute inset-0 flex flex-col items-center justify-center">
+			  <div id="battery-voltage" class="tile-value">— V</div>
+			</div>
+		  </div>
+		  <i class="fa-solid fa-battery-full text-3xl accent-sky"></i>
+		</div>
+
+		<!-- Bottom row -->
+		<div class="mt-auto flex justify-between items-end">
+		  <div class="text-left">
+			<p class="tile-label text-xs">Charge</p>
+		  </div>
+		  <div class="text-right">
+			<p id="battery-percent" class="tile-value">—%</p>
 		  </div>
 		</div>
-		<i class="fa-solid fa-battery-full text-3xl accent-sky"></i>
 	  </div>
-
-	  <!-- Bottom row - NO extra padding, clean baseline -->
-	  <div class="mt-auto flex justify-between items-end">
-		<div class="text-left">
-		  <p class="tile-label text-xs">Charge</p>
-		</div>
-		<div class="text-right">
-		  <p id="battery-percent" class="tile-value text-3xl font-semibold text-emerald-400">—%</p>
-		</div>
-	  </div>
-	</div>
 
 	  <!-- Sunrise / Sunset -->
 	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
@@ -207,43 +203,42 @@
   <!-- SYSTEM TILES -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-	<!-- ====================== SONOS NOW PLAYING ====================== -->
+	<!-- SONOS NOW PLAYING -->
 	<div id="sonos-tile" class="tile glass p-5 flex flex-col h-full relative sonos-tile">
-
-	  <!-- Dynamic Album Art Background -->
-	  <div id="sonos-bg" 
-		   class="absolute inset-0 bg-cover bg-center transition-all duration-700"
-		   style="background-image: none;">
-		
-		<div id="sonos-gradient" 
-			 class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/70 to-black/90 hidden">
-		</div>
-	  </div>
+	  <div id="sonos-bg" class="sonos-bg"></div>
+	  <div id="sonos-gradient" class="sonos-gradient hidden"></div>
 
 	  <div class="relative z-10 flex flex-col h-full">
+		<!-- Header -->
 		<div class="flex justify-between items-start flex-shrink-0">
-		  <p class="tile-label text-sm">Music</p>
+		  <div class="flex items-center gap-2">
+			<p class="tile-label text-sm">Music</p>
+			<select id="sonos-speaker-select" 
+					onchange="switchSonosSpeaker(this.value)"
+					class="sonos-speaker-select rounded-xl px-3 py-1 text-sm focus:outline-none focus:border-sky-400 transition-colors">
+			</select>
+		  </div>
 		  <i class="fa-solid fa-music text-2xl accent-sky"></i>
 		</div>
 
-		<!-- Text Area -->
 		<div class="flex-1 mt-5 flex flex-col min-h-0">
-		  <p id="sonos-track" 
-			 class="tile-value text-[22px] font-semibold leading-tight flex-shrink-0">
-			 Nothing playing
+		  <p id="sonos-track" class="tile-value text-[22px] font-semibold leading-tight flex-shrink-0">
+			Nothing playing
 		  </p>
-		  <p id="sonos-artist" 
-			 class="text-base mt-2 flex-shrink-0" 
-			 style="color: var(--text-muted);">
-			 —
+		  <p id="sonos-artist" class="text-base mt-2 flex-shrink-0" style="color: var(--text-muted);">
+			—
 		  </p>
 		  <div class="flex-1 min-h-[40px]"></div>
 		</div>
 
 		<!-- Progress Bar -->
 		<div>
-		  <div class="h-1 bg-white/30 rounded-full">
-			<div id="sonos-progress" class="h-1 rounded-full transition-all duration-300" style="width: 0%"></div>
+		  <div id="sonos-progress-wrapper" class="relative h-8 cursor-pointer mt-1">
+			<div class="absolute inset-0 flex items-center">
+			  <div class="h-1 bg-white/30 rounded-full w-full relative overflow-hidden">
+				<div id="sonos-progress" class="progress-fill absolute h-full rounded-full transition-all"></div>
+			  </div>
+			</div>
 		  </div>
 		  <div class="flex justify-between text-xs font-mono mt-1" style="color: var(--text-muted);">
 			<span id="sonos-position">0:00</span>
@@ -251,33 +246,40 @@
 		  </div>
 		</div>
 
-		<!-- Playback Controls -->
+		<!-- Transport -->
 		<div class="flex justify-center gap-8 text-3xl mt-5" style="color: var(--text-muted);">
-		  <i onclick="sonosAction('previous')" 
-			 class="fa-solid fa-backward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
-		  
-		  <i id="sonos-playpause" onclick="sonosAction('playpause')" 
-			 class="fa-solid fa-play hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
-		  
-		  <i onclick="sonosAction('next')" 
-			 class="fa-solid fa-forward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		  <i onclick="sonosAction('previous')" class="fa-solid fa-backward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		  <i id="sonos-playpause" onclick="sonosAction('playpause')" class="fa-solid fa-play hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
+		  <i onclick="sonosAction('next')" class="fa-solid fa-forward-step hover:text-[var(--text-primary)] cursor-pointer transition-all active:scale-90"></i>
 		</div>
 
-		<!-- Volume -->
-		<div class="mt-5 flex items-center gap-3" style="color: var(--text-muted);">
-		  <i class="fa-solid fa-volume-down text-xl"></i>
-		  <div onclick="sonosVolumeClick(event)" 
-			   class="flex-1 h-1.5 bg-white/30 rounded-full relative cursor-pointer">
-			<div id="sonos-volume-fill" 
-				 class="absolute left-0 top-0 h-full rounded-full transition-all" 
-				 style="width: 75%"></div>
+		<!-- Volume Control with Thumb -->
+		<div class="mt-6">
+		  <div class="flex items-center gap-3" style="color: var(--text-muted);">
+			<!-- Mute -->
+			<i id="sonos-mute-btn" 
+			   onclick="sonosToggleMute()" 
+			   class="fa-solid fa-volume-high text-xl cursor-pointer hover:text-[var(--text-primary)] transition-all active:scale-90"></i>
+			
+			<!-- Volume Slider with Thumb -->
+			<div id="sonos-volume-wrapper" class="flex-1 relative h-8 cursor-pointer">
+			  <div class="absolute inset-0 flex items-center">
+				<div class="h-1.5 bg-white/30 rounded-full w-full relative">
+				  <div id="sonos-volume-fill" class="progress-fill absolute h-full rounded-full"></div>
+				  <div id="sonos-volume-thumb" 
+					   class="absolute w-5 h-5 bg-white border-2 border-sky-400 rounded-full shadow-lg -mt-2 transition-all"></div>
+				</div>
+			  </div>
+			</div>
+
+			<!-- Percentage -->
+			<span id="sonos-volume-percent" class="font-mono text-sm w-10 text-right">0%</span>
 		  </div>
-		  <i class="fa-solid fa-volume-up text-xl"></i>
 		</div>
 	  </div>
 	</div>
 
-    <!-- NETWORK INFO (UniFi) -->
+    <!-- NETWORK INFO -->
     <div class="tile glass p-5 flex flex-col h-full">
       <div class="flex justify-between items-start flex-shrink-0">
         <div>
@@ -328,12 +330,9 @@
 		  </div>
 		</div>
 		
-		<!-- Progress Bar - Accent coloured -->
 		<div class="mt-5">
 		  <div class="relative h-2 bg-white/10 rounded-full overflow-hidden">
-			<div id="solar-progress" 
-				 class="solar-progress-bar absolute h-2 rounded-full transition-all duration-1000 ease-out"
-				 style="width: 0%"></div>
+			<div id="solar-progress" class="solar-progress-bar"></div>
 		  </div>
 		  <div class="flex justify-between text-[10px] font-mono mt-1.5 px-1" style="color: var(--text-muted);">
 			<div>0%</div>
@@ -350,39 +349,29 @@
 		<div>
 		  <p class="tile-label">Appearance</p>
 		</div>
-		<!-- Palette icon now links to settings -->
-		<a href="/diag" 
-		   class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
+		<a href="/diag" class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
 		  <i class="fa-solid fa-palette"></i>
 		</a>
 	  </div>
 
 	  <div class="space-y-5 flex-1">
-		<!-- Dark / Light Mode -->
 		<div>
 		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Mode</p>
 		  <div class="flex gap-2">
-			<button onclick="setDarkMode('dark')" 
-					id="btn-dark"
-					class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			<button onclick="setDarkMode('dark')" id="btn-dark" class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
 			  <i class="fa-solid fa-moon mode-icon"></i>
 			  <span class="font-medium">Dark</span>
 			</button>
-			<button onclick="setDarkMode('light')" 
-					id="btn-light"
-					class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			<button onclick="setDarkMode('light')" id="btn-light" class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
 			  <i class="fa-solid fa-sun mode-icon"></i>
 			  <span class="font-medium">Light</span>
 			</button>
 		  </div>
 		</div>
 
-		<!-- Theme Selector -->
 		<div>
 		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Theme</p>
-		  <select id="quick-theme-select" 
-				  onchange="changeTheme(this.value)"
-				  class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
+		  <select id="quick-theme-select" onchange="changeTheme(this.value)" class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
 		  </select>
 		</div>
 	  </div>
@@ -550,6 +539,8 @@
     let currentReeds = {};
     let lightsConfig = [];
 	let lastRenderConfigHash = '';
+	
+	let sonosVolumeDragging = false;
 
     const currentlyDragging = new Set();
     const userJustSet = new Set();
@@ -1093,11 +1084,12 @@
 
 			const fill = document.getElementById('water-fill');
 			if (fill) {
+				// Force reflow and temporarily disable transition
 				fill.style.transition = 'none';
 				fill.style.width = '0%';
-				void fill.offsetWidth;
+				void fill.offsetWidth;   // force reflow
 				
-				fill.style.transition = '';
+				fill.style.transition = 'width 700ms cubic-bezier(0.34, 1.56, 0.64, 1)';
 				fill.style.width = `${percent}%`;
 				
 				if (percent < 25) {
@@ -1274,106 +1266,377 @@
     socket.on('sensor_update', updateSensors);
     socket.on('gps_update', updateGPS);
 	
-	// ====================== SONOS INTEGRATION ======================
-	let currentSonosState = {};
-	let sonosAvailable = false;
+// ====================== SONOS MULTI-SPEAKER INTEGRATION ======================
+let currentSonosState = {};
+let sonosAvailable = false;
+let sonosProgressInterval = null;
+let lastKnownPositionSec = 0;
+let lastUpdateTime = 0;
 
-	function updateSonosUI(data) {
-		currentSonosState = data || {};
-		const tile = document.getElementById('sonos-tile');
+function timeToSeconds(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    const parts = timeStr.split(':').map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+}
 
-		// Better availability detection
-		const isAvailable = !!(data && 
-							data.player_name && 
-							data.player_name !== 'None' && 
-							!data.track?.includes('unavailable'));
+function formatTime(seconds, showHours = false) {
+    if (seconds < 0) seconds = 0;
+    const hrs = Math.floor(seconds / 3600);
+    const min = Math.floor((seconds % 3600) / 60);
+    const sec = Math.floor(seconds % 60);
 
-		sonosAvailable = isAvailable;
+    if (hrs > 0 || showHours) {
+        return `${hrs}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 
-		// Apply disabled state
-		if (tile) {
-			if (isAvailable) {
-				tile.style.opacity = '1';
-				tile.style.pointerEvents = 'auto';
-				tile.classList.remove('disabled');
-			} else {
-				tile.style.opacity = '0.4';
-				tile.style.pointerEvents = 'none';
-				tile.classList.add('disabled');
+function updateSonosSpeakerDropdown(speakers, currentName) {
+    const select = document.getElementById('sonos-speaker-select');
+    if (!select) return;
+    select.innerHTML = '';
+    
+    if (!speakers || speakers.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = "No speakers found";
+        opt.disabled = true;
+        select.appendChild(opt);
+        return;
+    }
+
+    speakers.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name.length > 18 ? name.substring(0, 15) + '...' : name;
+        if (name === currentName) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+function updateSonosUI(data) {
+    currentSonosState = data || {};
+	if (sonosVolumeDragging) return;
+    const isAvailable = !!(data && data.player_name && data.player_name !== 'None');
+    sonosAvailable = isAvailable;
+
+    // Speaker dropdown
+    if (data?.available_speakers) updateSonosSpeakerDropdown(data.available_speakers, data.player_name);
+
+    // Track & Artist
+    document.getElementById('sonos-track').textContent = data?.track || "Nothing playing";
+    document.getElementById('sonos-artist').textContent = data?.artist || "—";
+
+    // Album Art
+    const bg = document.getElementById('sonos-bg');
+    const gradient = document.getElementById('sonos-gradient');
+    const hasArt = data?.album_art && data.album_art.trim() !== "" && !data.album_art.includes("unavailable");
+    if (hasArt && isAvailable) {
+        bg.style.backgroundImage = `url('${data.album_art}')`;
+        gradient.classList.remove('hidden');
+    } else {
+        bg.style.backgroundImage = 'none';
+        gradient.classList.add('hidden');
+    }
+
+    // ==================== OPTIMISTIC PROGRESS ====================
+    const posSec = timeToSeconds(data?.position);
+    const durSec = timeToSeconds(data?.duration);
+    const isPlaying = data?.state === 'PLAYING';
+
+    lastKnownPositionSec = posSec;
+    lastUpdateTime = Date.now();
+
+	// Inside updateSonosUI(), after calculating percent:
+	if (durSec > 0) {
+		const percent = Math.min(100, Math.round((posSec / durSec) * 100));
+		document.getElementById('sonos-progress').style.width = `${percent}%`;
+		document.getElementById('sonos-position').textContent = formatTime(posSec);
+	} else {
+		document.getElementById('sonos-progress').style.width = '0%';
+		document.getElementById('sonos-position').textContent = "0:00";
+	}
+
+    // Remaining time (right side)
+    const remainingEl = document.getElementById('sonos-duration');
+    if (durSec > 0) {
+        let remaining = durSec - posSec;
+        if (isPlaying) {
+            startSonosLiveProgress(durSec, posSec);
+        } else {
+            stopSonosProgress();
+            remainingEl.textContent = `-${formatTime(remaining)}`;
+        }
+    } else {
+        stopSonosProgress();
+        remainingEl.textContent = "-0:00";
+    }
+
+    // Volume
+    const vol = typeof data?.volume === 'number' ? Math.max(0, Math.min(100, data.volume)) : 0;
+    const volumeFill = document.getElementById('sonos-volume-fill');
+    const volumeThumb = document.getElementById('sonos-volume-thumb');
+    const volumePercent = document.getElementById('sonos-volume-percent');
+    if (volumeFill) volumeFill.style.width = `${vol}%`;
+    if (volumeThumb) volumeThumb.style.left = `calc(${vol}% - 10px)`;
+    if (volumePercent) volumePercent.textContent = `${Math.round(vol)}%`;
+
+    // Mute & Play/Pause
+    const muteBtn = document.getElementById('sonos-mute-btn');
+    if (muteBtn) {
+        const isMuted = data?.is_muted === true;
+        muteBtn.className = isMuted 
+            ? "fa-solid fa-volume-xmark text-xl cursor-pointer hover:text-[var(--text-primary)] transition-all active:scale-90 text-red-400" 
+            : "fa-solid fa-volume-high text-xl cursor-pointer hover:text-[var(--text-primary)] transition-all active:scale-90";
+    }
+
+    const playBtn = document.getElementById('sonos-playpause');
+    if (playBtn) {
+        if (isPlaying) {
+            playBtn.classList.remove('fa-play');
+            playBtn.classList.add('fa-pause');
+        } else {
+            playBtn.classList.remove('fa-pause');
+            playBtn.classList.add('fa-play');
+        }
+    }
+}
+
+// ==================== LIVE OPTIMISTIC PROGRESS (both elapsed + remaining) ====================
+function startSonosLiveProgress(durationSec, startPosSec) {
+    stopSonosProgress();
+
+    let currentPos = startPosSec;
+    const startTime = Date.now();
+
+    sonosProgressInterval = setInterval(() => {
+        const elapsedReal = (Date.now() - startTime) / 1000;
+        currentPos = startPosSec + elapsedReal;
+
+        if (currentPos >= durationSec) {
+            stopSonosProgress();
+            return;
+        }
+
+        // Update elapsed time (left)
+        document.getElementById('sonos-position').textContent = formatTime(Math.floor(currentPos));
+
+        // Update progress bar
+        const percent = Math.min(100, Math.round((currentPos / durationSec) * 100));
+        document.getElementById('sonos-progress').style.width = `${percent}%`;
+
+        // Update remaining time (right)
+        const remaining = Math.max(0, durationSec - currentPos);
+        document.getElementById('sonos-duration').textContent = `-${formatTime(remaining)}`;
+
+    }, 200); // smooth updates every 200ms
+}
+
+function stopSonosProgress() {
+    if (sonosProgressInterval) {
+        clearInterval(sonosProgressInterval);
+        sonosProgressInterval = null;
+    }
+}
+
+// ====================== CONTROLS ======================
+window.switchSonosSpeaker = function(name) {
+    if (!name) return;
+    socket.emit('sonos_switch_speaker', { name });
+};
+
+window.sonosAction = function(command) {
+    if (!sonosAvailable) return;
+    socket.emit('sonos_command', { command });
+
+    if (command === 'playpause') {
+        const playBtn = document.getElementById('sonos-playpause');
+        if (playBtn.classList.contains('fa-play')) {
+            playBtn.classList.remove('fa-play');
+            playBtn.classList.add('fa-pause');
+        } else {
+            playBtn.classList.remove('fa-pause');
+            playBtn.classList.add('fa-play');
+        }
+    }
+};
+
+window.sonosToggleMute = function() {
+    if (!sonosAvailable) return;
+    socket.emit('sonos_command', { command: 'mute' });
+};
+
+	// ==================== SONOS VOLUME SLIDER ====================
+	function initSonosVolumeSlider() {
+		const wrapper = document.getElementById('sonos-volume-wrapper');
+		if (!wrapper) return;
+
+		const fill = document.getElementById('sonos-volume-fill');
+		const thumb = document.getElementById('sonos-volume-thumb');
+		const percentEl = document.getElementById('sonos-volume-percent');
+
+		let lastSent = 0;
+
+		function updateVolume(clientX) {
+			const rect = wrapper.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, 
+				Math.round(((clientX - rect.left) / rect.width) * 100)
+			));
+
+			// Live UI update
+			if (fill) fill.style.width = `${percent}%`;
+			if (thumb) thumb.style.left = `calc(${percent}% - 10px)`;
+			if (percentEl) percentEl.textContent = `${percent}%`;
+
+			// Throttled send
+			const now = Date.now();
+			if (now - lastSent > 60) {
+				lastSent = now;
+				socket.emit('sonos_command', { 
+					command: 'volume', 
+					volume: percent 
+				});
 			}
 		}
 
-		// Update content
-		document.getElementById('sonos-track').textContent = data?.track || "Nothing playing";
-		document.getElementById('sonos-artist').textContent = data?.artist || "—";
-
-		// Album Art
-		const bg = document.getElementById('sonos-bg');
-		const gradient = document.getElementById('sonos-gradient');
-		const hasArt = data?.album_art && 
-					   data.album_art.trim() !== "" && 
-					   !data.album_art.includes("unavailable");
-
-		if (hasArt && isAvailable) {
-			bg.style.backgroundImage = `url('${data.album_art}')`;
-			gradient.classList.remove('hidden');
-		} else {
-			bg.style.backgroundImage = 'none';
-			gradient.classList.add('hidden');
+		function startDrag() {
+			sonosVolumeDragging = true;
+			wrapper.classList.add('dragging');
 		}
 
-		// Progress
-		const progressEl = document.getElementById('sonos-progress');
-		const posEl = document.getElementById('sonos-position');
-		const durEl = document.getElementById('sonos-duration');
-
-		const posSec = timeToSeconds(data?.position);
-		const durSec = timeToSeconds(data?.duration);
-
-		if (durSec > 0 && isAvailable) {
-			const percent = Math.min(100, Math.round((posSec / durSec) * 100));
-			progressEl.style.width = `${percent}%`;
-			posEl.textContent = data.position || "0:00";
-			durEl.textContent = data.duration ? `-${data.duration}` : "-0:00";
-		} else {
-			progressEl.style.width = '0%';
-			posEl.textContent = "0:00";
-			durEl.textContent = "-0:00";
+		function endDrag() {
+			sonosVolumeDragging = false;
+			wrapper.classList.remove('dragging');
 		}
 
-		// Play/Pause
-		const playBtn = document.getElementById('sonos-playpause');
-		if (data?.state === 'PLAYING') {
-			playBtn.classList.remove('fa-play');
-			playBtn.classList.add('fa-pause');
-		} else {
-			playBtn.classList.remove('fa-pause');
-			playBtn.classList.add('fa-play');
+		// Mouse
+		wrapper.addEventListener('mousedown', e => {
+			startDrag();
+			updateVolume(e.clientX);
+
+			const onMove = ev => updateVolume(ev.clientX);
+			const onUp = () => {
+				document.removeEventListener('mousemove', onMove);
+				endDrag();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp, { once: true });
+		});
+
+		// Touch
+		wrapper.addEventListener('touchstart', e => {
+			if (e.touches.length === 0) return;
+			startDrag();
+			updateVolume(e.touches[0].clientX);
+		}, { passive: true });
+
+		wrapper.addEventListener('touchmove', e => {
+			if (!sonosVolumeDragging || e.touches.length === 0) return;
+			e.preventDefault();
+			updateVolume(e.touches[0].clientX);
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', endDrag, { passive: true });
+		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
+
+		// Click to jump
+		wrapper.addEventListener('click', e => {
+			if (!sonosVolumeDragging) updateVolume(e.clientX);
+		});
+	}
+	
+	// ==================== SONOS PROGRESS SEEK SLIDER (Spotify Style) ====================
+	function initSonosProgressSlider() {
+		const wrapper = document.getElementById('sonos-progress-wrapper');
+		if (!wrapper) return;
+
+		const fill = document.getElementById('sonos-progress');
+		let isDragging = false;
+
+		function seekTo(clientX) {
+			const rect = wrapper.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, 
+				Math.round(((clientX - rect.left) / rect.width) * 100)
+			));
+
+			if (fill) fill.style.width = `${percent}%`;
 		}
+
+		function startDrag() {
+			// Only allow dragging if something is playing or paused
+			if (currentSonosState?.state !== 'PLAYING' && currentSonosState?.state !== 'PAUSED_PLAYBACK') {
+				return;
+			}
+			isDragging = true;
+			wrapper.classList.add('dragging');
+			stopSonosProgress(); // pause live updates
+		}
+
+		function endDrag(clientX) {
+			if (!isDragging) return;
+			isDragging = false;
+			wrapper.classList.remove('dragging');
+
+			const durationSec = timeToSeconds(currentSonosState?.duration || '0:00');
+			if (durationSec <= 0) return;
+
+			const rect = wrapper.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, 
+				Math.round(((clientX - rect.left) / rect.width) * 100)
+			));
+
+			const targetSeconds = Math.round((percent / 100) * durationSec);
+
+			socket.emit('sonos_command', { 
+				command: 'seek', 
+				position: targetSeconds 
+			});
+			
+			setTimeout(() => {
+				if (currentSonosState?.state === 'PLAYING') {
+					startSonosLiveProgress(
+						timeToSeconds(currentSonosState.duration),
+						targetSeconds  // use the new position
+					);
+				}
+			}, 800);
+		}
+
+		// Mouse
+		wrapper.addEventListener('mousedown', e => {
+			startDrag();
+			if (isDragging) seekTo(e.clientX);
+
+			const onMove = ev => { if (isDragging) seekTo(ev.clientX); };
+			const onUp = ev => {
+				document.removeEventListener('mousemove', onMove);
+				if (isDragging) endDrag(ev.clientX);
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp, { once: true });
+		});
+
+		// Touch
+		wrapper.addEventListener('touchstart', e => {
+			if (e.touches.length === 0) return;
+			startDrag();
+			if (isDragging) seekTo(e.touches[0].clientX);
+		}, { passive: true });
+
+		wrapper.addEventListener('touchmove', e => {
+			if (!isDragging || e.touches.length === 0) return;
+			e.preventDefault();
+			seekTo(e.touches[0].clientX);
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', e => {
+			if (!isDragging || e.changedTouches.length === 0) return;
+			endDrag(e.changedTouches[0].clientX);
+		}, { passive: true });
 	}
 
-	function timeToSeconds(timeStr) {
-		if (!timeStr || typeof timeStr !== 'string') return 0;
-		const parts = timeStr.split(':').map(Number);
-		if (parts.length === 2) return parts[0] * 60 + parts[1];
-		if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-		return 0;
-	}
-
-	// Controls
-	window.sonosAction = function(command) {
-		if (!sonosAvailable) return;
-		socket.emit('sonos_command', { command: command });
-	};
-
-	window.sonosVolumeClick = function(e) {
-		if (!sonosAvailable) return;
-		const rect = e.currentTarget.getBoundingClientRect();
-		const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-		socket.emit('sonos_command', { command: 'volume', value: percent });
-	};
-
-	socket.on('sonos_update', updateSonosUI);
+socket.on('sonos_update', updateSonosUI);
 
     // ====================== DARK MODE ======================
     socket.on('global_dark_mode_update', function(data) {
@@ -1396,6 +1659,9 @@
 		setTimeout(() => {
 			socket.emit('sonos_command', { command: 'status' });
 		}, 800);
+
+		initSonosVolumeSlider();
+		initSonosProgressSlider();
 	});
 
     socket.on('disconnect', () => showOfflineBanner());
@@ -1499,7 +1765,8 @@ function fixLastRowStretching(container) {
 
         registerThemeListener();
         loadCurrentTheme();
-        loadVersion();               // ← Added
+        loadVersion();
+		initSonosVolumeSlider();
 
         document.querySelectorAll('.scene-btn').forEach(btn => {
             btn.addEventListener('click', () => setScene(btn.dataset.scene));

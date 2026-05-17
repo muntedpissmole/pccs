@@ -660,24 +660,6 @@ def handle_set_scene(data):
 
     if success:
         socketio.emit('state_update', state.copy())
-        
-        
-@app.route('/api/scenes')
-def get_scenes():
-    from modules.scenes import get_all_scenes
-    scenes = get_all_scenes(config)
-    
-    scene_list = [
-        {
-            "key": key,
-            "name": data["name"],
-            "icon": data["icon"],
-            "description": data["description"],
-            "all_off": data["all_off"]
-        }
-        for key, data in scenes.items()
-    ]
-    return {"scenes": scene_list}
 
 
 @socketio.on('set_gps_simulation')
@@ -770,6 +752,20 @@ def handle_sonos_command(data):
         emit('toast', {'type': 'error', 'message': f"Sonos: {result['error']}"})
         
         
+@socketio.on('sonos_switch_speaker')
+def handle_sonos_switch(data):
+    if 'sonos' not in globals() or not sonos:
+        return
+    
+    name = data.get('name')
+    if sonos.switch_speaker(name):
+        # Send immediate update
+        state = sonos.get_current_state()
+        emit('sonos_update', state)
+    else:
+        emit('toast', {'type': 'error', 'message': f'Speaker "{name}" not found'})
+        
+        
 @app.route('/api/version')
 def get_version_route():
     return {
@@ -778,7 +774,24 @@ def get_version_route():
         "full": APP_VERSION,
         "built": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
+        
+        
+@app.route('/api/scenes')
+def get_scenes():
+    from modules.scenes import get_all_scenes
+    scenes = get_all_scenes(config)
     
+    scene_list = [
+        {
+            "key": key,
+            "name": data["name"],
+            "icon": data["icon"],
+            "description": data["description"],
+            "all_off": data["all_off"]
+        }
+        for key, data in scenes.items()
+    ]
+    return {"scenes": scene_list}    
     
 @app.route('/screen_json')
 def screen_json():
@@ -875,7 +888,6 @@ if __name__ == "__main__":
     try:
         sonos = SonosManager(socketio, config)
         sonos.start()
-        logger.info("✅ Sonos integration loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize SonosManager: {e}", exc_info=True)
         sonos = None

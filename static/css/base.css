@@ -49,6 +49,17 @@
   
   --label-scale: rgba(255,255,255,0.45);
   --slider-track: rgba(148, 163, 184, 0.25);
+
+  /* New for cleaned gauges */
+  --water-accent-end: #67e8f9;
+  --solar-accent: #facc15;
+  
+  --sonos-gradient: linear-gradient(to bottom, 
+    rgba(0,0,0,0.45), 
+    rgba(0,0,0,0.75), 
+    rgba(0,0,0,0.92));
+  
+  --sonos-text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -73,6 +84,13 @@ html.light,
   
   --label-scale: rgba(30, 41, 59, 0.65);
   --slider-track: rgba(148, 163, 184, 0.35);
+  
+  --sonos-gradient: linear-gradient(to bottom, 
+    rgba(255,255,255,0.65), 
+    rgba(255,255,255,0.85), 
+    rgba(255,255,255,0.97));
+  
+  --sonos-text-shadow: 0 2px 8px rgba(255,255,255,0.9);
 }
 
 /* ====================== FONTS ====================== */
@@ -222,7 +240,6 @@ body::after {
 
 .paired-relay-divider {
   height: 1px;
-  height: 1px;
   background: rgba(255,255,255,0.12);
   margin: 8px 0;
 }
@@ -251,40 +268,26 @@ body::after {
   color: var(--text-primary);
 }
 
-/* ====================== ACCENT GAUGES ====================== */
-.accent-fill {
-  background: linear-gradient(to right, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
-  box-shadow: 0 0 20px var(--accent-glow);
-}
+/* ====================== GAUGES & PROGRESS ====================== */
 
+/* Water Gauge */
 #water-fill {
-  transition: background 0.4s ease, box-shadow 0.4s ease;
-}
-
-/* Low water warning - still keep red/orange but respect accent on normal levels */
-#water-fill.low {
-  background: linear-gradient(to right, #f87171, #ef4444) !important;
-}
-
-/* ====================== ACCENT WATER BAR ====================== */
-.accent-water-fill {
-  background: linear-gradient(to right, 
-    var(--accent-color), 
-    color-mix(in srgb, var(--accent-color), #67e8f9 45%)) !important;
+  height: 100%;
+  background: linear-gradient(to right, var(--accent-color), var(--water-accent-end));
   box-shadow: 0 0 18px var(--accent-glow);
-  
-  /* Strong, specific transition for width */
-  transition: width 700ms cubic-bezier(0.34, 1.56, 0.64, 1),
-              background 400ms ease,
-              box-shadow 400ms ease !important;
+  transition: width 700ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
-.accent-water-fill.low {
+#water-fill.low {
   background: linear-gradient(to right, #f87171, #ef4444) !important;
   box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
 }
 
-/* ====================== ACCENT BATTERY GAUGE ====================== */
+.scale-label {
+  color: var(--label-scale);
+}
+
+/* Battery Gauge (preserving your original) */
 #battery-gauge-progress {
   transition: stroke-dashoffset 900ms cubic-bezier(0.25, 1.1, 0.5, 1) !important;
 }
@@ -300,6 +303,75 @@ body::after {
 
 .accent-battery-ring.warning {
   stroke: #fbbf24 !important;
+}
+
+/* Sonos */
+.sonos-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: background-image 700ms ease;
+}
+
+.sonos-gradient {
+  position: absolute;
+  inset: 0;
+  background: var(--sonos-gradient);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sonos-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, transparent, rgba(0,0,0,0.15));
+  opacity: 0.6;
+}
+
+.light .sonos-gradient::before {
+  background: linear-gradient(to top, transparent, rgba(255,255,255,0.25));
+}
+
+/* Solar */
+.solar-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
+  box-shadow: 0 0 20px var(--accent-glow-strong);
+}
+
+/* Offline Banner */
+.offline-banner {
+  background: #f43f5e;
+  width: 90%;
+  max-width: 1024px;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+}
+
+/* ====================== ACCENT GAUGES (your original continued) ====================== */
+.accent-fill {
+  background: linear-gradient(to right, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+#water-fill {
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+.accent-water-fill {
+  background: linear-gradient(to right, 
+    var(--accent-color), 
+    color-mix(in srgb, var(--accent-color), #67e8f9 45%)) !important;
+  box-shadow: 0 0 18px var(--accent-glow);
+  transition: width 700ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 400ms ease,
+              box-shadow 400ms ease !important;
+}
+
+.accent-water-fill.low {
+  background: linear-gradient(to right, #f87171, #ef4444) !important;
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
 }
 
 /* ====================== SCENES ====================== */
@@ -622,7 +694,7 @@ body::after {
   color: inherit;
 }
 
-/* White text on colored backgrounds (works for both modes) */
+/* White text on colored backgrounds */
 #toast-container .toast-success,
 #toast-container .toast-error,
 #toast-container .toast-warning,
@@ -649,7 +721,7 @@ body::after {
   opacity: 0.7;
 }
 
-/* Light mode - keep same vivid backgrounds */
+/* Light mode */
 html.light .toast-title,
 html.light .toast-message {
   color: #ffffff !important;
@@ -715,7 +787,7 @@ footer {
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
-/* Light mode footer fixes (fixes blurry version text) */
+/* Light mode footer fixes */
 .light footer {
   border-top-color: rgba(148, 163, 184, 0.3);
 }
@@ -725,7 +797,6 @@ footer {
   color: #1e2937;
 }
 
-/* Remove any glass effect on footer */
 footer {
   background: none !important;
   border: none !important;
@@ -739,12 +810,15 @@ a[href="/diag"]:hover {
   text-shadow: 0 0 10px var(--accent-glow);
 }
 
-/* Make sure hover works in light mode too */
 .light button[onclick="toggleGlobalDarkMode()"]:hover i,
 .light a[href="/diag"]:hover i {
   color: var(--accent-color) !important;
 }
 
+.light .bg-white\/10,
+.light .bg-white\/30 {
+  background: rgba(148, 163, 184, 0.45) !important;
+}
 
 /* ====================== SECTION HEADERS ====================== */
 .section-header {
@@ -774,7 +848,6 @@ a[href="/diag"]:hover {
   border-radius: 9999px;
 }
 
-/* Light mode tweaks */
 .light .section-title {
   color: var(--text-secondary);
   text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
@@ -787,22 +860,16 @@ a[href="/diag"]:hover {
     transparent 100%);
 }
 
-/* Tight spacing for 1280x800 screen */
+/* Tight spacing */
 @media (max-height: 820px) {
-  #main-content {
-    space-y-4;
-  }
-  .section-header {
-    margin-bottom: 8px;
-  }
-  .section-title {
-    font-size: 1.15rem;
-  }
+  #main-content { space-y-4; }
+  .section-header { margin-bottom: 8px; }
+  .section-title { font-size: 1.15rem; }
 }
 
 .tile .tile-value {
-  line-height: 1 !important;     /* Critical for baseline */
-  font-feature-settings: "kern" off; /* optional */
+  line-height: 1 !important;
+  font-feature-settings: "kern" off;
 }
 
 .environmental-tile {
@@ -836,81 +903,130 @@ a[href="/diag"]:hover {
   color: var(--text-on-accent) !important;
 }
 
-/* ====================== SOLAR PROGRESS & VALUES ====================== */
+/* ====================== SOLAR & SONOS ====================== */
+
+/* Solar Progress Bar */
 .solar-progress-bar {
-  background: linear-gradient(90deg, 
-    var(--accent-color), 
-    color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
   box-shadow: 0 0 20px var(--accent-glow-strong);
+}
+
+/* Light mode - make it visible like Sonos */
+.light .solar-progress-bar {
+  background: linear-gradient(90deg, #0369a1, #0ea5e9) !important;
+  box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
+}
+
+/* Ensure the track is visible in light mode */
+.light .solar-progress-bar {
+  background: linear-gradient(90deg, #0284c8, #22d3ee) !important;
 }
 
 .accent-solar-current {
   color: var(--accent-color) !important;
 }
 
-/* Light mode tweaks */
-.light .solar-progress-bar {
-  box-shadow: 0 0 16px var(--accent-glow);
+#sonos-tile.disabled {
+  filter: grayscale(0.6);
 }
 
-.light .accent-solar-current {
-  color: var(--accent-color) !important;
+#sonos-tile .relative.z-10 {
+  z-index: 2; /* above gradient */
+  text-shadow: var(--sonos-text-shadow);
+}
+
+#sonos-tile #sonos-track,
+#sonos-tile #sonos-artist {
+  text-shadow: var(--sonos-text-shadow);
+  position: relative;
+}
+
+#sonos-tile [style*="var(--text-muted)"] {
+  text-shadow: var(--sonos-text-shadow);
 }
 
 #sonos-bg.with-art {
-    filter: brightness(0.85) contrast(1.1);
+  filter: brightness(0.85) contrast(1.1);
 }
 
-#sonos-tile.disabled {
-    filter: grayscale(0.6);
-}
-
-/* ====================== LIGHT MODE BAR FIXES ====================== */
-
-/* Sonos Now Playing Progress Bar */
-#sonos-progress {
-    background: var(--accent-color);
-    box-shadow: 0 0 8px var(--accent-glow);
-}
-
-.light #sonos-progress {
-    box-shadow: 0 0 8px rgba(3, 105, 161, 0.6);
-}
-
-/* Sonos Volume Fill */
+#sonos-progress,
 #sonos-volume-fill {
-    background: var(--accent-color);
+  background: linear-gradient(90deg, var(--accent-color), #38bdf8) !important;
+  box-shadow: 0 0 12px var(--accent-glow-strong) !important;
+  transition: width 0.2s linear !important;
+  height: 100% !important;
+  border-radius: 9999px !important;
 }
 
+/* Light mode support */
+.light #sonos-progress,
 .light #sonos-volume-fill {
-    box-shadow: 0 0 6px rgba(3, 105, 161, 0.5);
+  background: linear-gradient(90deg, #0284c8, #22d3ee) !important;
+  box-shadow: 0 0 10px rgba(2, 132, 200, 0.8) !important;
 }
 
-/* Solar Progress Bar */
-.solar-progress-bar {
-    background: linear-gradient(90deg, 
-        var(--accent-color), 
-        color-mix(in srgb, var(--accent-color), #67e8f9 40%));
-    box-shadow: 0 0 20px var(--accent-glow-strong);
+/* Make sure the track is visible */
+#sonos-tile .h-1.bg-white\/30,
+#sonos-tile .bg-white\/30 {
+  background: rgba(148, 163, 184, 0.4) !important;
 }
 
-.light .solar-progress-bar {
-    background: linear-gradient(90deg, 
-        #0369a1, 
-        #0ea5e9);
-    box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
+.light #sonos-tile .h-1.bg-white\/30,
+.light #sonos-tile .bg-white\/30 {
+  background: rgba(148, 163, 184, 0.55) !important;
 }
 
-.light .h-1.bg-white\/30,
-.light .bg-white\/30 {
-    background: rgba(148, 163, 184, 0.45);
+.progress-fill {
+  background: var(--accent-color) !important;
 }
 
-.light #sonos-tile {
-    color: #1e2937;
+#sonos-volume-wrapper {
+  touch-action: none;
 }
 
-.light #sonos-track,
-.light #sonos-artist {
-    color: var(--text-primary);
+#sonos-volume-thumb {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4),
+              inset 0 1px 0 rgba(255,255,255,0.8),
+              inset 0 -1px 0 rgba(0,0,0,0.4);
+  transition: left 0.1s linear;
+}
+
+#sonos-volume-fill {
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ====================== SONOS SPEAKER DROPDOWN ====================== */
+#sonos-speaker-select {
+  background: var(--control-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+#sonos-speaker-select:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.15);
+}
+
+/* Light mode */
+.light #sonos-speaker-select {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #1e2937;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8),
+              inset 0 -1px 0 rgba(0,0,0,0.08);
+}
+
+/* Option styling */
+#sonos-speaker-select option {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+}
+
+.light #sonos-speaker-select option {
+  background: #f8fafc;
+  color: #1e2937;
 }
