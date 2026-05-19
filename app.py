@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import threading
@@ -562,7 +562,10 @@ def handle_connect(sid=None):
     global first_state_read_done
     logger.debug(f"🔌 Client connected from {request.remote_addr or 'unknown'} (SID: {sid})")
     
+    # ====================== CORE LIGHTS & CONFIG ======================
     emit('lights_config', arduino.get_frontend_config())
+    
+    # ====================== SCREENS ======================
     emit('screens_init', {
         'screens': {
             name: {
@@ -578,6 +581,7 @@ def handle_connect(sid=None):
         }
     })
     
+    # ====================== INITIAL STATE READ ======================
     if not first_state_read_done:
         logger.debug("🔄 First connection — reading full state from hardware")
         read_all_states()
@@ -587,43 +591,65 @@ def handle_connect(sid=None):
     
     emit('state_update', state.copy())
     
+    # ====================== PHASE & DARK MODE ======================
     if phase_manager:
+        phase_data = {
+            'phase': phase_manager.get_phase(),
+            'forced': phase_manager.is_forced(),
+        }
+        try:
+            phase_data.update(phase_manager.get_phase_times())
+        except Exception as e:
+            logger.warning(f"Failed to get phase times: {e}")
+        
+        emit('phase_update', phase_data)
+        
         emit('global_dark_mode_update', {
             'mode': phase_manager.get_current_dark_mode(),
             'manual': phase_manager.manual_dark_mode is not None
         })
     else:
-        emit('global_dark_mode_update', {'mode': 'dark'})
+        emit('phase_update', {'phase': 'Day', 'forced': False})
+        emit('global_dark_mode_update', {'mode': 'dark', 'manual': False})
     
-    if gps:
-        emit('gps_update', gps.get_state())
-    
+    # ====================== REED STATES ======================
     emit('reed_update', {
         'states': reed_manager.get_states(),
         'forced': reed_manager.get_forced_states()
     })
     
-    phase_data = {
-        'phase': phase_manager.get_phase() if phase_manager else 'Day',
-        'forced': phase_manager.is_forced() if phase_manager else False,
-    }
-    if phase_manager:
+    # ====================== SONOS INTEGRATION ======================
+    if sonos and sonos.enabled:
         try:
-            phase_data.update(phase_manager.get_phase_times())
+            initial_sonos = sonos.get_current_state()
+            emit('sonos_update', initial_sonos)
+            
+            # More reliable speaker list using the manager's internal state
+            emit('sonos_speakers', {
+                'speakers': list(sonos.speakers.keys()),
+                'current': sonos.current_speaker,
+                'enabled': True
+            })
+            
+            logger.debug(f"🎵 Sent initial Sonos state → {sonos.current_speaker} "
+                        f"({len(sonos.speakers)} player(s) discovered)")
+            
         except Exception as e:
-            logger.warning(f"Failed to get phase times: {e}")
-    
-    emit('phase_update', phase_data)
-    
-    if phase_manager:
-        current_mode = phase_manager.get_current_dark_mode()
-        manual = phase_manager.manual_dark_mode is not None
-        emit('global_dark_mode_update', {
-            'mode': current_mode,
-            'manual': manual
-        })
+            logger.warning(f"Could not send initial Sonos state: {e}")
+            # Fallback
+            emit('sonos_speakers', {
+                'speakers': list(sonos.speakers.keys()) if sonos.speakers else [],
+                'current': sonos.current_speaker,
+                'enabled': True
+            })
     else:
-        emit('global_dark_mode_update', {'mode': 'dark', 'manual': False})
+        # Send disabled state so frontend knows not to show Sonos
+        emit('sonos_update', {'enabled': False})
+        emit('sonos_speakers', {'speakers': [], 'current': None, 'enabled': False})
+    
+    # ====================== GPS ======================
+    if gps:
+        emit('gps_update', gps.get_state())
 
 
 @socketio.on('relay_change')
@@ -766,18 +792,56 @@ def handle_sonos_command(data):
         
 @socketio.on('sonos_switch_speaker')
 def handle_sonos_switch(data):
-    if 'sonos' not in globals() or not sonos:
+    if not sonos or not sonos.enabled:
+        emit('toast', {'type': 'error', 'message': 'Sonos not enabled'})
         return
-    
+
     name = data.get('name')
+    if not name:
+        return
+
     if sonos.switch_speaker(name):
-        # Send immediate update
-        state = sonos.get_current_state()
-        emit('sonos_update', state)
+        new_state = sonos.get_current_state()
+
+        # This is the correct way to broadcast
+        emit('sonos_update', new_state, broadcast=True)
+        emit('sonos_speakers', {
+            'speakers': list(sonos.speakers.keys()),
+            'current': sonos.current_speaker,
+            'enabled': True
+        }, broadcast=True)
+
+        logger.info(f"🎵 Switched active speaker to: {name}")
     else:
         emit('toast', {'type': 'error', 'message': f'Speaker "{name}" not found'})
         
         
+# ====================== SONOS STATE REQUEST ======================
+@socketio.on('sonos_request_state')
+def handle_sonos_request_state():
+    """Frontend requests current Sonos state (called on page load)"""
+    if 'sonos' not in globals() or not sonos or not sonos.enabled:
+        emit('sonos_update', {'speaker': None, 'track': 'Sonos disabled', 'enabled': False})
+        return
+
+    try:
+        state = sonos.get_current_state()
+        emit('sonos_update', state)
+        logger.debug(f"🎵 Sent Sonos state on request → {sonos.current_speaker}")
+    except Exception as e:
+        logger.error(f"Failed to send Sonos state: {e}")
+        emit('sonos_update', {'speaker': sonos.current_speaker, 'track': 'Error fetching state'})
+        
+        
+@app.route('/api/sonos/status')
+def sonos_status():
+    """Return current Sonos status for frontend diagnostics"""
+    if not sonos:
+        return {'enabled': False, 'error': 'Sonos module not loaded'}
+    
+    return sonos.get_current_state()
+
+   
 @app.route('/api/version')
 def get_version_route():
     return {
@@ -786,6 +850,59 @@ def get_version_route():
         "full": APP_VERSION,
         "built": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
+    
+# ====================== SONOS ALBUM ART PROXY ======================
+@app.route('/sonos-art')
+def proxy_sonos_album_art():
+    """Proxy Sonos album art so it works through Cloudflare Tunnel"""
+    art_url = request.args.get('url')
+    if not art_url:
+        return "Missing 'url' parameter", 400
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(art_url)
+
+        # Basic security check
+        if parsed.port != 1400 or not parsed.hostname:
+            logger.warning(f"Blocked suspicious Sonos art URL: {art_url}")
+            return "Invalid Sonos URL", 403
+
+        import requests
+
+        headers = {'User-Agent': 'Pissmole-Camper-Control-System'}
+
+        resp = requests.get(
+            art_url,
+            headers=headers,
+            timeout=10,
+            stream=True
+        )
+
+        if resp.status_code != 200:
+            logger.debug(f"Sonos art returned {resp.status_code}")
+            return "Failed to fetch art", resp.status_code
+
+        def generate():
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+
+        return Response(
+            generate(),
+            content_type=resp.headers.get('content-type', 'image/jpeg'),
+            headers={
+                'Cache-Control': 'public, max-age=7200',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Sonos art proxy request failed: {e}")
+        return "Proxy request error", 502
+    except Exception as e:
+        logger.error(f"Unexpected error proxying Sonos art: {e}", exc_info=True)
+        return "Proxy server error", 500
         
         
 @app.route('/api/scenes')
@@ -896,8 +1013,11 @@ if __name__ == "__main__":
     if getattr(gps, 'serial', None):
         gps.start_reader()
 
+    # ====================== SONOS ======================
     global sonos
+    sonos = None
     try:
+        from modules.sonos import SonosManager
         sonos = SonosManager(socketio, config)
         sonos.start()
     except Exception as e:

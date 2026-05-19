@@ -1,295 +1,420 @@
 # modules/sonos.py
+import logging
 import time
 import threading
-import logging
-from soco import SoCo, discover
+from urllib.parse import quote
+
+import soco
+from soco.discovery import discover
+from soco.exceptions import SoCoException
 
 logger = logging.getLogger("pccs")
 
 
 class SonosManager:
-    def __init__(self, socketio, config=None):
+    def __init__(self, socketio, config):
         self.socketio = socketio
-        self.config = config or {}
+        self.config = config
 
-        sonos = self.config.get('sonos', {}) if isinstance(self.config, dict) else {}
+        # ====================== CONFIG ======================
+        self.enabled = config.getboolean('sonos', 'enabled', fallback=True)
+        self.preferred_name = config.get('sonos', 'player_name', fallback=None)
+        self.auto_select_first = config.getboolean('sonos', 'auto_select_first', fallback=True)
+        self._manual_override = False
+        self.poll_interval = config.getint('sonos', 'poll_interval', fallback=3)
+        self.discovery_interval = config.getint('sonos', 'discovery_interval', fallback=30)
+        self.discovery_timeout = config.getint('sonos', 'discovery_timeout', fallback=8)
+        self.default_volume = config.getint('sonos', 'default_volume', fallback=-1)
 
-        self.enabled = sonos.get('enabled', True)
-        self.target_name = sonos.get('player_name', 'Master Bedroom')
-        self.auto_select_first = sonos.get('auto_select_first', True)
-
-        self.poll_interval = int(sonos.get('poll_interval', 3))
-        self.discovery_interval = int(sonos.get('discovery_interval', 30))
-        self.discovery_timeout = int(sonos.get('discovery_timeout', 8))
-        self.default_volume = int(sonos.get('default_volume', -1))
-
-        self._poller_thread = None
+        # Internal state
+        self.speakers = {}
+        self.current_speaker = None
         self._running = False
-        self.last_state = {}
-        self.device = None
-        self.all_devices = {}
-        self.last_discovery_attempt = 0
+        self._discovery_thread = None
+        self._poll_thread = None
+        self._last_state = {}
+        self._last_speaker_count = 0          # For smart logging
+        self._initial_discovery_done = False
 
-    def discover_all(self, log: bool = False):
-        """Discover all Sonos devices on the network."""
         if not self.enabled:
-            return {}
-
-        now = time.time()
-        if now - self.last_discovery_attempt < self.discovery_interval:
-            return self.all_devices
-
-        self.last_discovery_attempt = now
-        if log:
-            logger.info("🔍 Discovering Sonos devices...")
-
-        try:
-            devices = list(discover(timeout=self.discovery_timeout))
-            new_devices = {d.player_name: d for d in devices}
-
-            # Only log when devices actually change
-            if new_devices != self.all_devices:
-                self.all_devices = new_devices
-                if log or self.all_devices:
-                    count = len(self.all_devices)
-                    logger.info(f"🎵 Found {count} Sonos speaker(s)")
-
-            return self.all_devices
-
-        except Exception as e:
-            logger.warning(f"Sonos discovery failed: {e}")
-            self.all_devices = {}
-            return {}
-
-    def _apply_default_volume(self):
-        """Apply default volume on first connection if configured."""
-        if self.device and self.default_volume >= 0:
-            try:
-                self.device.volume = self.default_volume
-                logger.info(f"🔊 Applied default volume: {self.default_volume}%")
-            except Exception as e:
-                logger.debug(f"Failed to set default volume: {e}")
-
-    def _select_initial_device(self):
-        """Select preferred speaker, with optional fallback."""
-        if not self.all_devices:
+            logger.info("🎵 Sonos integration is disabled in config")
             return
 
-        # Try preferred speaker first (partial, case-insensitive match)
-        for dev_name, dev in self.all_devices.items():
-            if self.target_name.lower() in dev_name.lower():
-                self.device = dev
-                self.target_name = dev_name
-                logger.info(f"✅ Using preferred speaker: {dev_name}")
-                self._apply_default_volume()
-                return
-
-        # Fallback to first available speaker
-        if self.auto_select_first:
-            self.device = next(iter(self.all_devices.values()))
-            logger.info(f"✅ Using first available speaker: {self.device.player_name}")
-            self._apply_default_volume()
-        else:
-            logger.info(f"⚠️ Preferred speaker '{self.target_name}' not found "
-                       f"(auto_select_first=False)")
+        logger.info(f"🎵 SonosManager initialized (preferred: '{self.preferred_name}')")
 
     def start(self):
-        if self._running or not self.enabled:
+        if not self.enabled or self._running:
             return
+
         self._running = True
 
-        # Initial discovery
-        self.discover_all(log=True)
+        # Initial discovery (always logged)
+        self._discover_speakers(initial=True)
+        self._initial_discovery_done = True
 
-        count = len(self.all_devices)
-        if count > 0:
-            self._select_initial_device()
-        else:
-            logger.info("🎵 Sonos integration loaded (no speakers found)")
+        self._discovery_thread = threading.Thread(target=self._discovery_loop, daemon=True)
+        self._discovery_thread.start()
 
-        self._poller_thread = threading.Thread(target=self.poll_loop, daemon=True)
-        self._poller_thread.start()
-        logger.debug("🎵 SonosManager polling started")
+        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
 
-    def switch_speaker(self, name: str):
-        if name in self.all_devices:
-            self.device = self.all_devices[name]
-            self.target_name = name
-
-            if isinstance(self.config, dict):
-                self.config.setdefault('sonos', {})['player_name'] = name
-
-            logger.info(f"🔄 Switched to Sonos speaker: {name}")
-            self._apply_default_volume()
-            return True
-
-        logger.warning(f"Speaker '{name}' not found")
-        return False
-
-    def get_current_state(self):
-        if not self.device:
-            return {
-                'track': 'Sonos unavailable',
-                'artist': '',
-                'album_art': '',
-                'position': '0:00',
-                'duration': '0:00',
-                'state': 'STOPPED',
-                'volume': 0,
-                'is_muted': False,
-                'player_name': 'None',
-                'available_speakers': list(self.all_devices.keys())
-            }
-
-        try:
-            track = self.device.get_current_track_info()
-            transport = self.device.get_current_transport_info()
-            state = transport.get('current_transport_state', 'STOPPED')
-
-            return {
-                'track': track.get('title') or "Nothing playing",
-                'artist': track.get('artist') or "",
-                'album_art': track.get('album_art') or "",
-                'position': track.get('position', '0:00'),
-                'duration': track.get('duration', '0:00'),
-                'state': state,
-                'volume': self.device.volume,
-                'is_muted': self.device.mute,
-                'player_name': self.device.player_name,
-                'available_speakers': list(self.all_devices.keys())
-            }
-        except Exception as e:
-            logger.debug(f"Sonos state fetch error: {e}")
-            return {
-                'track': 'Nothing playing',
-                'artist': '',
-                'album_art': '',
-                'position': '0:00',
-                'duration': '0:00',
-                'state': 'STOPPED',
-                'volume': getattr(self.device, 'volume', 0),
-                'is_muted': False,
-                'player_name': getattr(self.device, 'player_name', 'None'),
-                'available_speakers': list(self.all_devices.keys())
-            }
-
-    def poll_loop(self):
-        while self._running:
-            try:
-                self.discover_all(log=False)   # silent during normal polling
-
-                if not self.device and self.all_devices:
-                    self._select_initial_device()
-
-                if self.device:
-                    current = self.get_current_state()
-                    if current != self.last_state:
-                        self.socketio.emit('sonos_update', current, namespace='/')
-                        self.last_state = current.copy()
-
-            except Exception as e:
-                logger.error(f"Sonos poller error: {e}")
-
-            time.sleep(self.poll_interval)
+        logger.debug("🎵 Sonos background threads started")
 
     def stop(self):
         self._running = False
-        logger.debug("🛑 SonosManager stopped")
+        logger.debug("🎵 SonosManager stopped")
 
-    def execute_command(self, data):
+    def _discover_speakers(self, initial: bool = False):
+        """Discover speakers — respect manual override even on page reloads"""
         if not self.enabled:
-            return {"error": "Sonos integration is disabled"}
-
-        cmd = data.get('command')
-
-        if cmd == 'status':
-            self.socketio.emit('sonos_update', self.get_current_state(), namespace='/')
-            return {"success": True}
-
-        # Auto-connect if we don't have a device yet
-        if not self.device:
-            self.discover_all(log=False)
-            if not self.device and self.all_devices:
-                self._select_initial_device()
-
-            if not self.device:
-                new_state = self.get_current_state()
-                self.socketio.emit('sonos_update', new_state, namespace='/')
-                return {"error": "No Sonos device found"}
+            return
 
         try:
-            if cmd == 'play':
-                self.device.play()
-            elif cmd == 'pause':
-                self.device.pause()
-            elif cmd == 'next':
-                self.device.next()
-            elif cmd == 'previous':
-                self.device.previous()
-            elif cmd == 'volume':
-                vol = int(data.get('volume') or data.get('value', 50))
-                vol = max(0, min(100, vol))
-                self.device.volume = vol
-                logger.debug(f"Sonos volume set to {vol}%")
-            elif cmd == 'mute':
-                current_mute = self.device.mute
-                self.device.mute = not current_mute
-                logger.info(f"🔇 Mute toggled: {'ON' if not current_mute else 'OFF'}")
-            elif cmd == 'playpause':
-                transport = self.device.get_current_transport_info()
-                if transport.get('current_transport_state') == 'PLAYING':
-                    self.device.pause()
-                else:
-                    self.device.play()
-            elif cmd == 'seek':
-                if not self.device:
-                    return {"error": "No Sonos device"}
+            logger.debug(f"[Discovery] Running - current: {self.current_speaker}, "
+                        f"manual_override: {self._manual_override}, initial: {initial}")
 
-                position_sec = int(data.get('position', 0))
-                
+            devices = list(discover(timeout=self.discovery_timeout, include_invisible=False))
+            new_speakers = {}
+
+            for device in devices:
                 try:
-                    transport = self.device.get_current_transport_info()
-                    current_state = transport.get('current_transport_state', 'STOPPED')
+                    name = device.player_name
+                    if name:
+                        new_speakers[name] = device
                 except:
-                    current_state = 'STOPPED'
+                    continue
 
-                if current_state not in ('PLAYING', 'PAUSED_PLAYBACK'):
-                    logger.info(f"Seek ignored - player is {current_state}")
-                    return {"success": False, "reason": "not_playing"}
+            old_count = len(self.speakers)
+            self.speakers = new_speakers
+            new_count = len(self.speakers)
 
-                hours = position_sec // 3600
-                minutes = (position_sec % 3600) // 60
-                seconds = position_sec % 60
-                time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            if initial or new_count != old_count:
+                if new_count == 0:
+                    logger.info("🎵 0 Sonos speaker(s) detected")
+                elif new_count == 1:
+                    logger.info(f"🎵 1 Sonos speaker detected → {list(self.speakers.keys())[0]}")
+                else:
+                    logger.info(f"🎵 {new_count} Sonos speaker(s) detected → {', '.join(sorted(self.speakers.keys()))}")
 
-                # More aggressive recovery for flaky Sonos seek
-                for attempt in range(4):
-                    try:
-                        # Ensure we're in a good state
-                        if attempt > 0:
-                            self.device.play()          # force playing state
-                            time.sleep(0.4)
-                        
-                        self.device.seek(time_str)
-                        logger.info(f"⏩ Seeked to {time_str} (attempt {attempt+1})")
-                        break
-                    except Exception as e:
-                        if attempt == 3:  # final failure
-                            logger.error(f"Sonos seek failed after retries: {e}")
-                            return {"error": str(e)}
-                        else:
-                            logger.warning(f"Seek attempt {attempt+1} failed, retrying... {e}")
-                            time.sleep(0.5)
-
+            if self._manual_override and self.current_speaker in self.speakers:
+                logger.debug(f"🎵 Keeping manual selection: {self.current_speaker} (override active)")
+            elif initial or not self.current_speaker:
+                logger.debug("🎵 Running auto-selection (initial or no current speaker)")
+                self._select_best_speaker()
             else:
-                return {"error": f"Unknown command: {cmd}"}
+                logger.debug(f"🎵 Preserving current speaker: {self.current_speaker}")
 
-            # Refresh state after successful command
-            time.sleep(0.4)
-            new_state = self.get_current_state()
-            self.socketio.emit('sonos_update', new_state, namespace='/')
-            return {"success": True, "state": new_state}
+            self._broadcast_speakers()
+            self._last_speaker_count = new_count
 
         except Exception as e:
-            logger.error(f"Sonos command '{cmd}' failed: {e}")
-            return {"error": str(e)}
+            logger.warning(f"Sonos discovery failed: {e}")
+            if initial:
+                logger.info("🎵 0 Sonos speaker(s) detected (discovery error)")
+
+    def _select_best_speaker(self):
+        if not self.speakers:
+            return
+
+        if self._manual_override and self.current_speaker in self.speakers:
+            logger.debug(f"🎵 Respecting manual override: {self.current_speaker}")
+            return
+
+        if self.preferred_name:
+            preferred_lower = self.preferred_name.lower()
+            for name in self.speakers:
+                if preferred_lower in name.lower():
+                    self.current_speaker = name
+                    self._manual_override = False
+                    logger.info(f"🎵 Selected preferred speaker: {name}")
+                    self._apply_default_volume()
+                    self._broadcast_speakers()
+                    return
+
+        if self.auto_select_first and not self.current_speaker:
+            self.current_speaker = next(iter(self.speakers.keys()))
+            logger.info(f"🎵 Auto-selected initial speaker: {self.current_speaker}")
+            self._apply_default_volume()
+            self._broadcast_speakers()
+
+    def _apply_default_volume(self):
+        if self.default_volume >= 0 and self.current_speaker:
+            try:
+                device = self.speakers[self.current_speaker]
+                device.volume = max(0, min(100, self.default_volume))
+                logger.info(f"🎵 Applied default volume → {self.default_volume}% on {self.current_speaker}")
+            except Exception as e:
+                logger.warning(f"Failed to set default volume: {e}")
+
+    def _discovery_loop(self):
+        """Background loop — only logs when speaker count changes"""
+        while self._running and self.enabled:
+            time.sleep(self.discovery_interval)
+            if self._running:
+                self._discover_speakers(initial=False)
+
+    def _poll_loop(self):
+        """Poll ALL speakers (not just the active one) for diag page"""
+        while self._running and self.enabled:
+            try:
+                self._poll_all_speakers()
+            except Exception as e:
+                logger.debug(f"Sonos poll error: {e}")
+            time.sleep(self.poll_interval)
+
+    def _poll_all_speakers(self):
+        """Poll every speaker (for diag) but only emit full state for the ACTIVE one to everyone"""
+        for name, device in list(self.speakers.items()):
+            try:
+                state = self._get_single_speaker_state(name, device)
+                
+                if state != self._last_state.get(name):
+                    self._last_state[name] = state.copy()
+                    
+                    self.socketio.emit('sonos_update', state)
+                    
+                    if name == self.current_speaker:
+                        current_state = state.copy()
+                        current_state['is_current_active'] = True
+                        self.socketio.emit('sonos_update', current_state)  # main UI listens to this too
+                        
+            except Exception as e:
+                logger.debug(f"Failed to poll {name}: {e}")
+
+    def _get_single_speaker_state(self, name: str, device) -> dict:
+        """Get full state for one speaker"""
+        state = {
+            'speaker': name,
+            'volume': device.volume,
+            'mute': device.mute,
+            'is_playing': False,
+            'track': 'Nothing playing',
+            'artist': '',
+            'album': '',
+            'album_art': None,
+            'position': 0,
+            'duration': 0,
+        }
+
+        try:
+            # Transport state
+            transport = device.get_current_transport_info()
+            state['is_playing'] = transport.get('current_transport_state') == 'PLAYING'
+
+            # Track info
+            track = device.get_current_track_info()
+            state.update({
+                'track': track.get('title') or 'Nothing playing',
+                'artist': track.get('artist') or '',
+                'album': track.get('album') or '',
+                'position': self._time_to_seconds(track.get('position')),
+                'duration': self._time_to_seconds(track.get('duration')),
+            })
+
+            # Album art
+            raw_art = track.get('album_art')
+            if raw_art:
+                state['album_art'] = self._make_album_art_proxy_url(raw_art)
+
+        except Exception as e:
+            logger.debug(f"Partial state for {name}: {e}")
+
+        return state
+
+    def _poll_current_state(self):
+        device = self.speakers[self.current_speaker]
+
+        try:
+            state = {
+                'speaker': self.current_speaker,
+                'speakers': list(self.speakers.keys()),
+                'volume': device.volume,
+                'mute': device.mute,
+                'is_playing': False,
+                'track': 'Nothing playing',
+                'artist': None,
+                'album': None,
+                'album_art': None,
+                'position': 0,
+                'duration': 0,
+            }
+
+            # Transport state (playing/paused)
+            transport = device.get_current_transport_info()
+            state['is_playing'] = transport.get('current_transport_state') == 'PLAYING'
+
+            # Track info
+            try:
+                track = device.get_current_track_info()
+
+                state.update({
+                    'track': track.get('title') or 'Nothing playing',
+                    'artist': track.get('artist') or '',
+                    'album': track.get('album') or '',
+                })
+
+                # Convert position and duration to seconds
+                state['position'] = self._time_to_seconds(track.get('position'))
+                state['duration'] = self._time_to_seconds(track.get('duration'))
+
+                # Album art
+                raw_art = track.get('album_art')
+                state['album_art'] = self._make_album_art_proxy_url(raw_art)
+
+            except Exception as e:
+                logger.debug(f"Failed to get track info: {e}")
+
+            # Only emit if something meaningful changed
+            if state != self._last_state:
+                self._last_state = state.copy()
+                self.socketio.emit('sonos_update', state)
+
+        except Exception as e:
+            logger.debug(f"SoCo error on {self.current_speaker}: {e}")
+
+    def _time_to_seconds(self, time_str: str | None) -> int:
+        """Convert SoCo time string (e.g. '0:03:45' or '2:15:30') to seconds"""
+        if not time_str or time_str == '0:00':
+            return 0
+        try:
+            parts = time_str.split(':')
+            if len(parts) == 3:
+                h, m, s = map(int, parts)
+                return h * 3600 + m * 60 + s
+            elif len(parts) == 2:
+                m, s = map(int, parts)
+                return m * 60 + s
+            else:
+                return int(parts[0])
+        except:
+            return 0
+
+    def _make_album_art_proxy_url(self, original_url: str | None) -> str | None:
+        if not original_url:
+            return None
+        if original_url.startswith(('https://', 'http://')) and not any(x in original_url for x in ['192.168.', '10.', '172.16.']):
+            return original_url
+
+        encoded = quote(original_url, safe=':/?=&')
+        return f"/sonos-art?url={encoded}"
+
+    def _broadcast_speakers(self):
+        data = {
+            'speakers': list(self.speakers.keys()),
+            'current': self.current_speaker,
+            'enabled': self.enabled
+        }
+        self.socketio.emit('sonos_speakers', data)
+
+    def switch_speaker(self, name: str) -> bool:
+        if name not in self.speakers:
+            logger.warning(f"Sonos speaker not found: {name}")
+            return False
+
+        self.current_speaker = name
+        self._manual_override = True
+        self._broadcast_speakers()
+        return True
+
+    def execute_command(self, data: dict) -> dict:
+        if not self.enabled:
+            return {'error': 'Sonos integration is disabled'}
+
+        target_speaker = data.get('speaker') or self.current_speaker
+        if not target_speaker or target_speaker not in self.speakers:
+            return {'error': f'No valid speaker: {target_speaker}'}
+
+        device = self.speakers[target_speaker]
+
+        cmd = data.get('command')
+        value = data.get('value')
+
+        if not cmd:
+            return {'error': 'No command provided'}
+
+        try:
+            if cmd == 'playpause':
+                transport = device.get_current_transport_info()
+                if transport.get('current_transport_state') == 'PLAYING':
+                    device.pause()
+                else:
+                    device.play()
+
+            elif cmd == 'play':
+                device.play()
+            elif cmd == 'pause':
+                device.pause()
+            elif cmd == 'next':
+                device.next()
+            elif cmd == 'previous':
+                device.previous()
+            elif cmd == 'volume':
+                if isinstance(value, (int, float)):
+                    device.volume = max(0, min(100, int(value)))
+            elif cmd == 'mute':
+                if value is None:
+                    device.mute = not device.mute
+                else:
+                    device.mute = bool(value)
+            elif cmd == 'seek':
+                if value is not None and 0 <= float(value) <= 1:
+                    track = device.get_current_track_info()
+                    duration = self._time_to_seconds(track.get('duration'))
+                    if duration > 0:
+                        # Convert percentage to seconds
+                        position_seconds = int(duration * float(value))
+                        # Convert to SoCo required HH:MM:SS format
+                        hours = position_seconds // 3600
+                        minutes = (position_seconds % 3600) // 60
+                        seconds = position_seconds % 60
+                        timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                        
+                        logger.debug(f"🎵 Seeking to {timestamp} ({position_seconds}s)")
+                        device.seek(timestamp)
+            else:
+                return {'error': f'Unknown command: {cmd}'}
+
+            # Refresh state after command
+            time.sleep(0.4)
+            self._poll_current_state()
+            return {'success': True}
+
+        except SoCoException as e:
+            logger.error(f"Sonos command '{cmd}' failed on {target_speaker}: {e}")
+            return {'error': str(e)}
+        except Exception as e:
+            logger.error(f"Unexpected error in Sonos command '{cmd}' on {target_speaker}: {e}")
+            return {'error': str(e)}
+            
+    def request_state(self):
+        """Called when frontend requests current state"""
+        if self.current_speaker and self.current_speaker in self.speakers:
+            self._poll_current_state()
+        else:
+            empty_state = {
+                'speaker': self.current_speaker,
+                'track': 'Nothing playing',
+                'artist': '',
+                'is_playing': False,
+                'volume': 30,
+                'mute': False
+            }
+            self.socketio.emit('sonos_update', empty_state)
+
+    def get_current_state(self) -> dict:
+        if self.current_speaker and self.current_speaker in self.speakers:
+            try:
+                self._poll_current_state()
+                return self._last_state
+            except:
+                pass
+        return {
+            'speaker': self.current_speaker,
+            'speakers': list(self.speakers.keys()),
+            'enabled': self.enabled,
+            'is_playing': False
+        }
+        
+    def _should_auto_select(self):
+        """Only allow auto-selection on initial startup"""
+        return not self._manual_override and not self.current_speaker

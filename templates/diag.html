@@ -423,6 +423,23 @@
                 <button onclick="sendCustomPersistent()" class="btn" style="background:rgba(148,163,184,0.2); color:#94a3b8; border-color:rgba(148,163,184,0.4);">📌 Persistent</button>
             </div>
         </div>
+		
+		<!-- SONOS -->
+		<div id="sonos-section" class="section">
+			<h2><i class="fas fa-music"></i> Sonos Players</h2>
+			
+			<!-- Active Player Dropdown -->
+			<div class="tile" style="margin-bottom: 24px;">
+				<h3>Active Player (used by main dashboard)</h3>
+				<select id="active-sonos-player" onchange="switchActiveSonosPlayer(this.value)" 
+						style="width:100%; padding:14px; border-radius:12px; background:var(--control-bg); color:var(--text-primary); border:1px solid var(--glass-border); font-size:1.05rem;">
+					<option value="">— No player selected —</option>
+				</select>
+			</div>
+
+			<!-- Rich Player Tiles -->
+			<div id="sonos-players-grid" class="grid-2"></div>
+		</div>
 
     </div>
 
@@ -811,6 +828,137 @@
                 })
                 .catch(err => console.warn("Could not load screens:", err));
         };
+		
+    // ====================== SONOS DIAGNOSTICS ======================
+    let currentSonosSpeakers = [];
+    let currentActiveSpeaker = null;
+    let sonosStates = {}; 
+
+    function formatTime(seconds) {
+        if (!seconds || isNaN(seconds)) return "0:00";
+        const min = Math.floor(seconds / 60);
+        const sec = Math.floor(seconds % 60);
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function renderSonosPlayers(speakers, active) {
+        currentSonosSpeakers = speakers || [];
+        currentActiveSpeaker = active;
+
+        const select = document.getElementById('active-sonos-player');
+        select.innerHTML = '<option value="">— No player selected —</option>';
+        
+        currentSonosSpeakers.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === active) opt.selected = true;
+            select.appendChild(opt);
+        });
+
+        const container = document.getElementById('sonos-players-grid');
+        container.innerHTML = '';
+
+        if (currentSonosSpeakers.length === 0) {
+            container.innerHTML = `
+                <div class="tile" style="grid-column: 1 / -1; text-align:center; padding:40px; opacity:0.7;">
+                    <i class="fas fa-music fa-3x mb-4"></i><br>
+                    No Sonos players discovered
+                </div>`;
+            return;
+        }
+
+        currentSonosSpeakers.forEach(name => {
+            const state = sonosStates[name] || { track: "Nothing playing", artist: "", album_art: "", is_playing: false, volume: 30, mute: false, position: 0, duration: 0 };
+            const isActive = name === active;
+            const hasArt = !!state.album_art;
+            const progress = state.duration > 0 ? Math.min(100, Math.round((state.position / state.duration) * 100)) : 0;
+
+            const card = document.createElement('div');
+            card.className = `tile ${isActive ? 'border-2 border-sky-400' : ''}`;
+            card.innerHTML = `
+                <div style="height:180px; background-image: url('${hasArt ? state.album_art : 'https://placehold.co/600x600/1f2937/4fc3f7?text=No+Art'}'); 
+                            background-size: cover; background-position: center; border-radius: 12px 12px 0 0; position: relative;">
+                    <div style="position:absolute; inset:0; background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.85)); border-radius: 12px 12px 0 0;"></div>
+                    ${isActive ? `<div style="position:absolute; top:12px; right:12px; background:rgba(16,185,129,0.9); color:white; padding:4px 12px; border-radius:9999px; font-size:0.8rem; font-weight:700;">ACTIVE</div>` : ''}
+                </div>
+
+                <div style="padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
+                        <strong style="font-size:1.15rem;">${name}</strong>
+                        <button onclick="switchActiveSonosPlayer('${name}')" class="btn ${isActive ? 'success' : ''}" style="padding:6px 14px; font-size:0.9rem;">
+                            ${isActive ? '✓ Active' : 'Set Active'}
+                        </button>
+                    </div>
+
+                    <div style="margin-bottom:12px; min-height:50px;">
+                        <div style="font-weight:600;">${state.track}</div>
+                        <div style="opacity:0.75; font-size:0.95rem;">${state.artist || '—'}</div>
+                    </div>
+
+                    <div style="margin:12px 0 16px;">
+                        <div style="height:5px; background:rgba(255,255,255,0.2); border-radius:9999px; overflow:hidden;">
+                            <div style="width:${progress}%; height:100%; background:#4fc3f7;"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-top:4px; opacity:0.75;">
+                            <span>${formatTime(state.position)}</span>
+                            <span>${formatTime(state.duration)}</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i onclick="toggleMuteDiag('${name}')" class="fas fa-volume-${state.mute ? 'mute' : 'high'} cursor-pointer" style="font-size:1.4rem; width:32px;"></i>
+                        <input type="range" min="0" max="100" value="${state.volume}" 
+                               oninput="setVolumeDiag('${name}', this.value)" style="flex:1; accent-color:#4fc3f7;">
+                        <span style="font-family:monospace; width:42px; text-align:right;">${state.volume}%</span>
+                    </div>
+
+                    <div style="margin-top:14px; display:flex; gap:8px; justify-content:center;">
+                        <button onclick="sonosDiagCommand('${name}', 'previous')" class="btn">⏮</button>
+                        <button onclick="sonosDiagCommand('${name}', 'playpause')" class="btn" style="min-width:52px;">
+                            ${state.is_playing ? '⏸' : '▶'}
+                        </button>
+                        <button onclick="sonosDiagCommand('${name}', 'next')" class="btn">⏭</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function sonosDiagCommand(name, command) {
+        socket.emit('sonos_command', { speaker: name, command: command });
+    }
+
+    function setVolumeDiag(name, volume) {
+        socket.emit('sonos_command', { speaker: name, command: 'volume', value: parseInt(volume) });
+    }
+
+    function toggleMuteDiag(name) {
+        socket.emit('sonos_command', { speaker: name, command: 'mute' });
+    }
+
+    function switchActiveSonosPlayer(name) {
+        if (name) socket.emit('sonos_switch_speaker', { name });
+    }
+
+    // Socket listeners
+    socket.on('sonos_speakers', (data) => {
+        if (data.enabled === false) {
+            document.getElementById('sonos-section').style.display = 'none';
+            return;
+        }
+        renderSonosPlayers(data.speakers, data.current);
+    });
+
+    socket.on('sonos_update', (state) => {
+        if (state && state.speaker) {
+            sonosStates[state.speaker] = state;
+            if (currentSonosSpeakers.length > 0) {
+                renderSonosPlayers(currentSonosSpeakers, currentActiveSpeaker);
+            }
+        }
+    });
     </script>
 </body>
 </html>

@@ -54,12 +54,6 @@
   --water-accent-end: #67e8f9;
   --solar-accent: #facc15;
   
-  --sonos-gradient: linear-gradient(to bottom, 
-    rgba(0,0,0,0.45), 
-    rgba(0,0,0,0.75), 
-    rgba(0,0,0,0.92));
-  
-  --sonos-text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -85,12 +79,6 @@ html.light,
   --label-scale: rgba(30, 41, 59, 0.65);
   --slider-track: rgba(148, 163, 184, 0.35);
   
-  --sonos-gradient: linear-gradient(to bottom, 
-    rgba(255,255,255,0.65), 
-    rgba(255,255,255,0.85), 
-    rgba(255,255,255,0.97));
-  
-  --sonos-text-shadow: 0 2px 8px rgba(255,255,255,0.9);
 }
 
 /* ====================== FONTS ====================== */
@@ -303,35 +291,6 @@ body::after {
 
 .accent-battery-ring.warning {
   stroke: #fbbf24 !important;
-}
-
-/* Sonos */
-.sonos-bg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  transition: background-image 700ms ease;
-}
-
-.sonos-gradient {
-  position: absolute;
-  inset: 0;
-  background: var(--sonos-gradient);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.sonos-gradient::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, transparent, rgba(0,0,0,0.15));
-  opacity: 0.6;
-}
-
-.light .sonos-gradient::before {
-  background: linear-gradient(to top, transparent, rgba(255,255,255,0.25));
 }
 
 /* Solar */
@@ -903,22 +862,19 @@ a[href="/diag"]:hover {
   color: var(--text-on-accent) !important;
 }
 
-/* ====================== SOLAR & SONOS ====================== */
+/* ====================== SOLAR ====================== */
 
-/* Solar Progress Bar */
 .solar-progress-bar {
   height: 100%;
   background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color), #67e8f9 40%)) !important;
   box-shadow: 0 0 20px var(--accent-glow-strong);
 }
 
-/* Light mode - make it visible like Sonos */
 .light .solar-progress-bar {
   background: linear-gradient(90deg, #0369a1, #0ea5e9) !important;
   box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
 }
 
-/* Ensure the track is visible in light mode */
 .light .solar-progress-bar {
   background: linear-gradient(90deg, #0284c8, #22d3ee) !important;
 }
@@ -927,106 +883,112 @@ a[href="/diag"]:hover {
   color: var(--accent-color) !important;
 }
 
-#sonos-tile.disabled {
-  filter: grayscale(0.6);
+/* ====================== SONOS TILE ====================== */
+.sonos-tile {
 }
 
-#sonos-tile .relative.z-10 {
-  z-index: 2; /* above gradient */
-  text-shadow: var(--sonos-text-shadow);
+.sonos-tile #sonos-album-art {
+  background-size: cover;
+  background-position: center;
 }
 
-#sonos-tile #sonos-track,
-#sonos-tile #sonos-artist {
-  text-shadow: var(--sonos-text-shadow);
-  position: relative;
-}
-
-#sonos-tile [style*="var(--text-muted)"] {
-  text-shadow: var(--sonos-text-shadow);
-}
-
-#sonos-bg.with-art {
+.sonos-tile.light #sonos-album-art {
   filter: brightness(0.85) contrast(1.1);
+  background-size: cover;
+  background-position: center;
+  transition: filter 0.4s ease;
 }
 
-#sonos-progress,
-#sonos-volume-fill {
-  background: linear-gradient(90deg, var(--accent-color), #38bdf8) !important;
-  box-shadow: 0 0 12px var(--accent-glow-strong) !important;
-  transition: width 0.2s linear !important;
-  height: 100% !important;
-  border-radius: 9999px !important;
+.sonos-tile #sonos-overlay {
+  transition: opacity 0.4s ease;
 }
 
-/* Light mode support */
-.light #sonos-progress,
-.light #sonos-volume-fill {
-  background: linear-gradient(90deg, #0284c8, #22d3ee) !important;
-  box-shadow: 0 0 10px rgba(2, 132, 200, 0.8) !important;
+.sonos-tile:has(#sonos-overlay[style*="opacity: 0"]) #sonos-album-art {
+  filter: brightness(0.6) saturate(0.7);
 }
 
-/* Make sure the track is visible */
-#sonos-tile .h-1.bg-white\/30,
-#sonos-tile .bg-white\/30 {
-  background: rgba(148, 163, 184, 0.4) !important;
+.sonos-tile .line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.light #sonos-tile .h-1.bg-white\/30,
-.light #sonos-tile .bg-white\/30 {
-  background: rgba(148, 163, 184, 0.55) !important;
+.sonos-tile.light #sonos-overlay,
+html.light .sonos-tile #sonos-overlay {
+  background: linear-gradient(to bottom, 
+    rgba(255,255,255,0.75) 0%, 
+    rgba(255,255,255,0.92) 50%, 
+    rgba(255,255,255,0.98) 100%);
 }
 
-.progress-fill {
-  background: var(--accent-color) !important;
+.sonos-tile.light #sonos-playpause-btn,
+html.light .sonos-tile #sonos-playpause-btn {
+  background-color: #fff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
 }
 
-#sonos-volume-wrapper {
-  touch-action: none;
+
+.sonos-tile.light #sonos-overlay,
+html.light .sonos-tile #sonos-overlay {
+  background: linear-gradient(to bottom, 
+    rgba(255,255,255,0.65) 0%, 
+    rgba(255,255,255,0.88) 55%, 
+    rgba(255,255,255,0.97) 100%);
 }
 
-#sonos-volume-thumb {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4),
-              inset 0 1px 0 rgba(255,255,255,0.8),
-              inset 0 -1px 0 rgba(0,0,0,0.4);
-  transition: left 0.1s linear;
-}
-
-#sonos-volume-fill {
-  box-shadow: 0 0 10px var(--accent-glow);
-}
-
-/* ====================== SONOS SPEAKER DROPDOWN ====================== */
-#sonos-speaker-select {
-  background: var(--control-bg);
-  border: 1px solid var(--glass-border);
+.sonos-player-name {
+  font-size: 1.05rem;
+  font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  letter-spacing: -0.01em;
 }
 
-#sonos-speaker-select:focus {
-  border-color: var(--accent-color);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.15);
-}
-
-/* Light mode */
-.light #sonos-speaker-select {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(148, 163, 184, 0.6);
-  color: #1e2937;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8),
-              inset 0 -1px 0 rgba(0,0,0,0.08);
-}
-
-/* Option styling */
-#sonos-speaker-select option {
-  background: var(--glass-bg);
+.sonos-tile #sonos-track {
   color: var(--text-primary);
 }
 
-.light #sonos-speaker-select option {
-  background: #f8fafc;
-  color: #1e2937;
+.sonos-tile #sonos-artist {
+  color: var(--text-muted);
+}
+
+.light .sonos-tile #sonos-track,
+.light .sonos-tile #sonos-artist {
+  color: inherit;
+}
+
+#sonos-progress-container {
+  background: rgba(255,255,255,0.2);
+}
+
+.light #sonos-progress-container {
+  background: rgba(0,0,0,0.18);
+}
+
+#sonos-progress-bar {
+  background: var(--text-primary);
+}
+
+.light #sonos-progress-bar {
+  background: var(--text-primary);
+}
+
+#sonos-volume-slider {
+  accent-color: var(--accent-color);
+}
+
+#sonos-time-elapsed,
+#sonos-time-remaining {
+  color: var(--text-muted);
+}
+
+#sonos-playpause-btn {
+  background-color: var(--text-primary);
+  color: var(--background);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.light #sonos-playpause-btn {
+  background-color: var(--text-primary);
+  color: var(--background);
 }
