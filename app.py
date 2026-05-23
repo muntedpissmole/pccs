@@ -396,6 +396,15 @@ reed_manager = ReedManager(
     toast_manager=toast_manager
 )
 
+# ====================== GPIO INITIALIZATION ======================
+gpio_manager.init_devices()
+
+reed_manager.register_event_handlers()
+
+logger.debug(f"🚪 Registered event handlers for {len(gpio_manager.reeds)} reeds")
+for name in sorted(gpio_manager.reeds.keys()):
+    logger.debug(f"   → {name} handler attached")
+
 gps = None
 phase_manager = None
 sensor_manager = None
@@ -988,7 +997,6 @@ if __name__ == "__main__":
     logger.info("✅ System starting...")
     
     arduino.init_serial()
-    gpio_manager.init_devices()
 
     sensor_manager = SensorManager(config, arduino.send_command, socketio)
 

@@ -992,3 +992,91 @@ html.light .sonos-tile #sonos-overlay {
   background-color: var(--text-primary);
   color: var(--background);
 }
+
+/* ====================== SECTION HEADER WITH RIGHT ICON ====================== */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.section-line {
+  height: 2px;
+  flex: 1;
+  background: linear-gradient(90deg, 
+    color-mix(in srgb, var(--accent-color), transparent 40%) 0%, 
+    color-mix(in srgb, var(--accent-color), transparent 85%) 50%, 
+    transparent 100%);
+  border-radius: 9999px;
+  position: relative;
+}
+
+/* Fullscreen Button */
+.fullscreen-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: var(--accent-color);
+  cursor: pointer;
+  z-index: 10;                    /* sits over the line */
+  flex-shrink: 0;
+}
+
+.fullscreen-btn:hover {
+  color: white;
+  text-shadow: 0 0 12px var(--accent-glow);
+}
+
+.light .fullscreen-btn {
+  color: var(--accent-color);
+}
+
+/* ====================== HIDE SCROLLBARS ====================== */
+
+html, body {
+    scrollbar-width: none;           /* Firefox */
+    -ms-overflow-style: none;        /* IE/Edge */
+    overflow-x: hidden;              /* Prevent horizontal scroll */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;                   /* Chrome, Safari, Edge, Opera */
+}
+
+/* Also hide on all main scrollable containers */
+#main-content,
+#lighting-controls,
+#scenes-grid,
+.tile,
+.glass,
+.slider-card,
+.paired-relay-card,
+.sonos-tile,
+section {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#main-content::-webkit-scrollbar,
+#lighting-controls::-webkit-scrollbar,
+#scenes-grid::-webkit-scrollbar,
+.tile::-webkit-scrollbar,
+.glass::-webkit-scrollbar,
+.slider-card::-webkit-scrollbar,
+.paired-relay-card::-webkit-scrollbar,
+.sonos-tile::-webkit-scrollbar {
+    display: none;
+}

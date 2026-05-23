@@ -522,9 +522,12 @@ class ReedManager:
         logger.debug(f"🚪 Registered event handlers for {len(self.gpio.reeds)} reeds")
 
     def _on_reed_event(self, name: str, closed: bool):
+        logger.debug(f"Reed event received: {name} → {'Closed' if closed else 'Open'}")
         now = time.time()
         delta_ms = (now - self.last_change_time.get(name, 0)) * 1000
+        
         if delta_ms < self.REED_DEBOUNCE_MS:
+            logger.debug(f"Reed {name} debounced")
             return
 
         self.gpio.reed_states[name] = closed
@@ -532,10 +535,11 @@ class ReedManager:
 
         effective_closed = self.get_effective_state(name)
         action = "CLOSED" if effective_closed else "OPEN"
-        logger.info(f"🚪 Reed {name} → {action}")
-
-        affected = self.get_affected_lights(name)
-        for light_name in affected:
+        
+        logger.info(f"🚪 Reed {name} → {action} [EVENT]  (raw: {closed})")
+        
+        # Trigger lights
+        for light_name in self.get_affected_lights(name):
             self._apply_light_for_reed(light_name)
 
         self._throttled_broadcast_and_ambient()
@@ -550,8 +554,12 @@ class ReedManager:
         self.monitor_thread.start()
 
     def _monitor_loop(self):
-        logger.debug(f"🚪 Reed monitor fallback started - watching {len(self.gpio.reed_states)} reeds")
-        last_states: Dict[str, bool] = self.gpio.reed_states.copy()
+        logger.debug("🚪 Reed monitor started in POLLING mode")
+
+        last_physical = {
+            name: self.gpio.reeds[name].is_pressed 
+            for name in self.gpio.reed_states
+        }
 
         while not self.stop_event.is_set():
             changed = False
@@ -564,17 +572,16 @@ class ReedManager:
                         continue
 
                     real_closed = device.is_pressed
-                    effective_closed = self.get_effective_state(name)
 
-                    if effective_closed != last_states.get(name):
-                        delta_ms = (now - self.last_change_time.get(name, 0)) * 1000
-                        if delta_ms > 10:
-                            action = "Closed" if effective_closed else "Open"
-                            logger.info(f"🚪 Reed {name} → {action}")
-
-                        last_states[name] = effective_closed
+                    if real_closed != last_physical.get(name):
                         self.gpio.reed_states[name] = real_closed
+                        last_physical[name] = real_closed
                         changed = True
+
+                        effective_closed = self.get_effective_state(name)
+                        action = "Closed" if effective_closed else "Open"
+
+                        logger.info(f"🚪 Reed {name} → {action}")
 
                         for light_name in self.get_affected_lights(name):
                             self._apply_light_for_reed(light_name)

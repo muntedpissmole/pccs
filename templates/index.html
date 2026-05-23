@@ -1,16 +1,25 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="glassmorphism">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Pissmole Camper Control System</title>
-  
-  <script src="/static/tailwind.min.js"></script>
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
-  
+
+  <script src="{{ url_for('static', filename='tailwind.min.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon/favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon/favicon-16x16.png') }}">
+
+  <!-- Apple Touch Icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon/apple-touch-icon.png') }}">
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="{{ url_for('static', filename='favicon/site.webmanifest') }}">
 </head>
 <body class="bg-zinc-950 text-white min-h-screen flex flex-col">
 
@@ -32,11 +41,17 @@
 
 <!-- ====================== ENVIRONMENTAL ====================== -->
 
-  <div>
-    <div class="section-header">
-      <h2 class="section-title">Environmental</h2>
-      <div class="section-line"></div>
-    </div>
+	<div>
+	  <div class="section-header">
+		<h2 class="section-title">Environmental</h2>
+		<div class="section-line"></div>
+		
+		<!-- Fullscreen Toggle -->
+		<button onclick="toggleFullscreen()" 
+				class="fullscreen-btn ml-4 text-2xl accent-sky hover:text-white transition-all hover:scale-110 active:scale-95">
+		  <i id="fullscreen-icon" class="fa-solid fa-expand"></i>
+		</button>
+	  </div>
     
 	<!-- STATUS TILES -->
 	<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -1385,7 +1400,7 @@ function fixLastRowStretching(container) {
 
     // ==================== INIT ====================
     window.onload = function() {
-        updateClock();
+		updateClock();
         setInterval(updateClock, 10000);
 
         registerThemeListener();
@@ -1576,7 +1591,7 @@ function updateSonosUI(state) {
 
   // Track info
   document.getElementById('sonos-track').textContent = state.track || 'Nothing playing';
-  document.getElementById('sonos-artist').textContent = state.artist || (state.album || '—');
+  document.getElementById('sonos-artist').textContent = state.artist || (state.album || '\u00A0');
 
   // Play/Pause icon
   const playIcon = document.getElementById('sonos-play-icon');
@@ -1706,6 +1721,37 @@ document.getElementById('sonos-progress-container').addEventListener('click', fu
         command: 'seek', 
         value: percent 
     });
+});
+
+// ====================== FULLSCREEN TOGGLE ======================
+function toggleFullscreen() {
+  const icon = document.getElementById('fullscreen-icon');
+  
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(() => {
+      icon.classList.remove('fa-expand');
+      icon.classList.add('fa-compress');
+    }).catch(err => console.log('Fullscreen failed:', err));
+  } else {
+    document.exitFullscreen().then(() => {
+      icon.classList.remove('fa-compress');
+      icon.classList.add('fa-expand');
+    });
+  }
+}
+
+// Optional: Sync icon if user exits fullscreen with ESC key
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('fullscreen-icon');
+  if (icon) {
+    if (document.fullscreenElement) {
+      icon.classList.remove('fa-expand');
+      icon.classList.add('fa-compress');
+    } else {
+      icon.classList.remove('fa-compress');
+      icon.classList.add('fa-expand');
+    }
+  }
 });
 	
 </script>

@@ -2,6 +2,7 @@
 import logging
 import time
 import threading
+import socket
 from urllib.parse import quote
 
 import soco
@@ -20,6 +21,11 @@ class SonosManager:
         self.enabled = config.getboolean('sonos', 'enabled', fallback=True)
         self.preferred_name = config.get('sonos', 'player_name', fallback=None)
         self.auto_select_first = config.getboolean('sonos', 'auto_select_first', fallback=True)
+        
+        self.interface_addr = config.get('sonos', 'interface_addr', fallback=None)
+        if self.interface_addr == "":
+            self.interface_addr = None
+
         self._manual_override = False
         self.poll_interval = config.getint('sonos', 'poll_interval', fallback=3)
         self.discovery_interval = config.getint('sonos', 'discovery_interval', fallback=30)
@@ -33,14 +39,14 @@ class SonosManager:
         self._discovery_thread = None
         self._poll_thread = None
         self._last_state = {}
-        self._last_speaker_count = 0          # For smart logging
+        self._last_speaker_count = 0
         self._initial_discovery_done = False
 
         if not self.enabled:
             logger.info("🎵 Sonos integration is disabled in config")
             return
 
-        logger.info(f"🎵 SonosManager initialized (preferred: '{self.preferred_name}')")
+        logger.info(f"🎵 SonosManager initialized (preferred: '{self.preferred_name}', interface: {self.interface_addr or 'auto'})")
 
     def start(self):
         if not self.enabled or self._running:
@@ -65,17 +71,20 @@ class SonosManager:
         logger.debug("🎵 SonosManager stopped")
 
     def _discover_speakers(self, initial: bool = False):
-        """Discover speakers — respect manual override even on page reloads"""
+        """Discover speakers using the correct network interface"""
         if not self.enabled:
             return
 
         try:
-            logger.debug(f"[Discovery] Running - current: {self.current_speaker}, "
-                        f"manual_override: {self._manual_override}, initial: {initial}")
+            logger.debug(f"[Discovery] Running on interface {self.interface_addr or 'auto'}")
 
-            devices = list(discover(timeout=self.discovery_timeout, include_invisible=False))
+            devices = list(discover(
+                timeout=self.discovery_timeout, 
+                include_invisible=False,
+                interface_addr=self.interface_addr
+            ))
+
             new_speakers = {}
-
             for device in devices:
                 try:
                     name = device.player_name
@@ -97,9 +106,8 @@ class SonosManager:
                     logger.info(f"🎵 {new_count} Sonos speaker(s) detected → {', '.join(sorted(self.speakers.keys()))}")
 
             if self._manual_override and self.current_speaker in self.speakers:
-                logger.debug(f"🎵 Keeping manual selection: {self.current_speaker} (override active)")
+                logger.debug(f"🎵 Keeping manual selection: {self.current_speaker}")
             elif initial or not self.current_speaker:
-                logger.debug("🎵 Running auto-selection (initial or no current speaker)")
                 self._select_best_speaker()
             else:
                 logger.debug(f"🎵 Preserving current speaker: {self.current_speaker}")
