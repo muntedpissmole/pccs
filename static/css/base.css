@@ -1080,3 +1080,40 @@ section {
 .sonos-tile::-webkit-scrollbar {
     display: none;
 }
+
+/* ====================== COMBINED TIME & SUN TILE ====================== */
+
+#day-path {
+  stroke: var(--accent-color);
+  transition: stroke 400ms ease;
+}
+
+#night-path {
+  stroke: #64748b;
+  transition: stroke-opacity 1000ms ease-in-out;
+}
+
+/* Light mode adjustments */
+.light #day-path {
+  stroke: var(--accent-color);
+  /* Slightly more opaque in light mode for better visibility */
+  stroke-opacity: 0.9;
+}
+
+.light #night-path {
+  stroke: #94a3b8;
+}
+
+/* Sun / Moon circle - controlled by JS (already good) */
+#sun-position,
+#sun-glow {
+  transition: fill 400ms ease, 
+              cx 800ms cubic-bezier(0.4, 0, 0.2, 1), 
+              cy 800ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure light mode doesn't override JS moon color */
+.light #sun-position,
+.light #sun-glow {
+  /* No hardcoded fill - let JS handle day (accent) vs night (grey) */
+}
