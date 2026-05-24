@@ -14,4 +14,4 @@ suntime
 markdown
 colorzero
 soco
-astral
+astralpsutil

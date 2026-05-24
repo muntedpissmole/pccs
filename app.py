@@ -8,7 +8,12 @@ import os
 import logging
 import sys
 import math
+import flask
+import importlib.metadata
 import json
+import psutil
+import platform
+import socket
 from datetime import datetime
 
 # ====================== VERSION ======================
@@ -139,11 +144,15 @@ from modules.phases import PhaseManager
 from modules.sensors import SensorManager
 from modules.arduino import ArduinoManager
 from modules.toasts import ToastManager, toast_manager
+from modules.system import SystemInfoManager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.get('system', 'secret_key')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# ====================== SYSTEM INFO MANAGER ======================
+system_manager = SystemInfoManager(config, socketio, APP_VERSION)
 
 # ====================== TOASTS ======================
 toast_manager = ToastManager(config, socketio)
@@ -519,8 +528,11 @@ def get_current_theme():
 @app.route('/api/current-dark-mode')
 def get_current_dark_mode():
     return {'mode': phase_manager.get_current_dark_mode() if phase_manager else 'dark'}
-
-
+    
+@app.route('/api/system_info')
+def system_info():
+    return system_manager.get_system_info()
+    
 # ====================== SOCKETIO ======================
 @socketio.on('light_change')
 def handle_light_change(data):
@@ -1009,6 +1021,10 @@ if __name__ == "__main__":
     gps = GPSModule(config, socketio)
     gps.init_gps()
     gps.init_geolocator()
+    
+    app._start_time = datetime.now()
+    
+    system_manager.get_dhcp_clients()
 
     phase_manager = PhaseManager(config, gps, socketio, dark_mode_config)
     phase_manager.reed_manager = reed_manager
