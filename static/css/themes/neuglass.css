@@ -51,14 +51,102 @@ body {
   background: var(--background) !important;
 }
 
-/* ====================== NEUGLASS FLAIR ====================== */
+/* ====================== NEUMORPHISM BASE (core look) ====================== */
+.glass,
+.slider-card,
+.tile,
+.scene-btn {
+  background: var(--glass-bg);
+  border-radius: 24px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -2px 0 var(--shadow-dark) !important;
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle shine layers — essential for the Neumorphic 3D effect */
+.tile::before,
+.slider-card::before,
+.scene-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tile::after,
+.slider-card::after,
+.scene-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  border: 1px solid var(--glass-highlight-2);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ====================== SCENES ====================== */
+.scene-btn.active {
+  background: var(--accent-color) !important;
+  box-shadow: 
+    0 8px 28px -8px var(--shadow-dark),
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 22px rgba(79, 195, 247, 0.18) !important;
+}
+
+/* ====================== SLIDERS ====================== */
+.slider-fill {
+  box-shadow: 0 0 10px var(--accent-glow) !important;
+}
+
+/* ====================== TOGGLES ====================== */
+.toggle-pill,
+.relay-toggle {
+  background: var(--slider-bg) !important;
+  box-shadow: 
+    inset 6px 6px 12px var(--shadow-dark), 
+    inset -6px -6px 12px var(--shadow-light) !important;
+}
+
+.toggle-pill.on,
+.relay-toggle.on {
+  background: linear-gradient(90deg, var(--toggle-checked-color), var(--accent-hover)) !important;
+  box-shadow: 
+    inset 6px 6px 12px rgba(0,0,0,0.35),
+    inset -6px -6px 12px rgba(255,255,255,0.15) !important;
+}
+
+/* ====================== KNOB ====================== */
+.toggle-pill .toggle-knob,
+.relay-toggle .relay-knob {
+  box-shadow: 
+    3px 3px 8px rgba(0,0,0,0.4), 
+    -2px -2px 6px rgba(255,255,255,0.7) !important;
+}
+
+.toggle-pill.on .toggle-knob,
+.relay-toggle.on .relay-knob {
+  transform: translate(39px, -50%);
+}
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ====================== HOVER / FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {
   transform: translateY(-2px) !important;
-}
-
-.slider-card.rooftop-disabled {
-  filter: brightness(0.7) contrast(0.9);
-  opacity: 0.8;
 }
