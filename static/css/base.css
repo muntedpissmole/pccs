@@ -41,12 +41,10 @@
   --bug-color: #e11d48;
   --bug-fill-glow: rgba(225, 29, 72, 0.9);
 
-  /* Bug mode gradients & highlights (currently hard-coded in many places) */
   --bug-gradient-start: #f43f5e;
   --bug-gradient-end: #fb7185;
   --bug-mode-glow: rgba(225, 29, 72, 0.25);
 
-  /* Slider thumb inner highlights (frequently overridden by themes) */
   --slider-thumb-inner-light: rgba(255,255,255,0.55);
   --slider-thumb-inner-dark: rgba(0,0,0,0.6);
 
@@ -64,16 +62,13 @@
   --solar-accent: #facc15;
   --solar-accent-end: #67e8f9;
 
-  /* Glassmorphism details (frequently overridden by themes) */
   --glass-inner-highlight: rgba(255, 255, 255, 0.12);
   --glass-inner-shadow: rgba(0,0,0,0.35);
   --card-hover-bg: rgba(32, 32, 52, 0.78);
 
-  /* Common accent fills & glows */
   --accent-fill-glow: var(--accent-glow);
   --accent-fill-glow-strong: var(--accent-glow-strong);
 
-  /* Common shadow and highlight tokens (for easier theming) */
   --shadow-black-06: rgba(0,0,0,0.6);
   --shadow-black-035: rgba(0,0,0,0.35);
   --shadow-black-04: rgba(0,0,0,0.4);
@@ -81,14 +76,12 @@
   --glass-white-03: rgba(255,255,255,0.3);
   --glass-white-012: rgba(255,255,255,0.12);
 
-  /* Semantic / remaining hard-coded colors (low gauge states, errors, etc.) */
   --error-red: #ef4444;
   --error-red-light: #f87171;
   --warning-yellow: #fbbf24;
   --warning-yellow-glow: rgba(251, 191, 36, 0.7);
   --offline-red: #f43f5e;
 
-  /* Bug mode legacy hard-codes (still appear in fallbacks) */
   --bug-pink: #f43f5e;
   --bug-pink-light: #fb7185;
 
@@ -226,7 +219,7 @@ body::after {
 .slider-card:hover,
 .tile:hover,
 .scene-btn:hover {
-  background: var(--card-hover-bg, rgba(32, 32, 52, 0.78));
+  background: var(--card-hover-bg);
   transform: translateY(-2px);
 }
 
@@ -238,10 +231,6 @@ body::after {
   background: var(--glass-bg);
   border-color: var(--glass-border);
   color: #1e2937;
-  box-shadow: 
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-inner-highlight),
-    inset 0 -3px 0 var(--glass-inner-shadow);
 }
 
 /* ====================== CARDS & TILES ====================== */
@@ -326,7 +315,7 @@ body::after {
 }
 
 #water-fill.low {
-  background: linear-gradient(to right, var(--error-red-light, #f87171), var(--error-red, #ef4444)) !important;
+  background: linear-gradient(to right, var(--error-red-light), var(--error-red)) !important;
   box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
 }
 
@@ -345,26 +334,19 @@ body::after {
 }
 
 .accent-battery-ring.low {
-  stroke: var(--error-red, #ef4444) !important;
+  stroke: var(--error-red) !important;
 }
 
 .accent-battery-ring.warning {
-  stroke: var(--warning-yellow, #fbbf24) !important;
-}
-
-/* Solar */
-.solar-progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color), var(--solar-accent-end) 40%)) !important;
-  box-shadow: 0 0 20px var(--accent-glow-strong);
+  stroke: var(--warning-yellow) !important;
 }
 
 /* Offline Banner */
 .offline-banner {
-  background: var(--offline-red, #f43f5e);
+  background: var(--offline-red);
   width: 90%;
   max-width: 1024px;
-  box-shadow: 0 25px 50px -12px var(--shadow-black-06, rgb(0 0 0 / 0.6));
+  box-shadow: 0 25px 50px -12px var(--shadow-black-06));
 }
 
 /* ====================== ACCENT GAUGES ====================== */
@@ -385,7 +367,7 @@ body::after {
 }
 
 #night-path {
-  stroke: var(--text-muted, #64748b);
+  stroke: var(--text-muted);
   transition: stroke-opacity 1000ms ease-in-out;
 }
 
@@ -397,7 +379,7 @@ body::after {
 }
 
 .light #night-path {
-  stroke: var(--text-muted, #94a3b8);
+  stroke: var(--text-muted);
 }
 
 /* Sun / Moon circle - controlled by JS (already good) */
@@ -453,7 +435,7 @@ body::after {
 
 .scene-btn:hover {
   transform: translateY(-3px);
-  background: var(--glass-white-08, rgba(255,255,255,0.08));
+  background: var(--glass-white-08));
   box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
 }
 
@@ -841,7 +823,6 @@ html.light .toast-message {
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  /* Dynamic viewport units + iOS fallback for full coverage */
   height: 100dvh !important;
   min-height: 100dvh !important;
   height: -webkit-fill-available !important; /* iOS Safari */
@@ -881,11 +862,11 @@ footer {
 
 /* Light mode footer fixes */
 .light footer {
-  border-top-color: var(--glass-border-light, rgba(148, 163, 184, 0.3));
+  border-top-color: var(--glass-border-light));
 }
 
 .light #footer-version {
-  text-shadow: 0 1px 2px var(--glass-white-075, rgba(255, 255, 255, 0.75));
+  text-shadow: 0 1px 2px var(--glass-white-075));
   color: #1e2937;
 }
 
@@ -926,7 +907,7 @@ a[href="/diag"]:hover {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-secondary);
-  text-shadow: 0 1px 3px var(--shadow-black-06, rgba(0, 0, 0, 0.6));
+  text-shadow: 0 1px 3px var(--shadow-black-06));
   white-space: nowrap;
 }
 
@@ -1047,14 +1028,14 @@ a[href="/diag"]:hover {
 html.light .sonos-tile #sonos-overlay {
   background: linear-gradient(to bottom, 
     var(--glass-white-055) 0%, 
-    var(--glass-white-092, rgba(255,255,255,0.92)) 50%, 
-    var(--glass-white-098, rgba(255,255,255,0.98)) 100%);
+    var(--glass-white-092)) 50%, 
+    var(--glass-white-098)) 100%);
 }
 
 .sonos-tile.light #sonos-playpause-btn,
 html.light .sonos-tile #sonos-playpause-btn {
-  background-color: var(--glass-white-100, #fff);
-  box-shadow: 0 4px 15px var(--shadow-black-015, rgba(0, 0, 0, 0.15));
+  background-color: var(--glass-white-100);
+  box-shadow: 0 4px 15px var(--shadow-black-015));
 }
 
 .sonos-player-name {
@@ -1078,18 +1059,14 @@ html.light .sonos-tile #sonos-playpause-btn {
 }
 
 #sonos-progress-container {
-  background: var(--glass-white-02, rgba(255,255,255,0.2));
+  background: var(--glass-white-02));
 }
 
 .light #sonos-progress-container {
-  background: var(--glass-black-018, rgba(0,0,0,0.18));
+  background: var(--glass-black-018));
 }
 
 #sonos-progress-bar {
-  background: var(--text-primary);
-}
-
-.light #sonos-progress-bar {
   background: var(--text-primary);
 }
 
@@ -1155,7 +1132,7 @@ html.light .sonos-tile #sonos-playpause-btn {
 }
 
 .fullscreen-btn:hover {
-  color: var(--glass-white-100, white);
+  color: var(--glass-white-100);
   text-shadow: 0 0 12px var(--accent-glow);
 }
 
