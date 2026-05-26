@@ -717,8 +717,44 @@ html.light .toast-message {
   cursor: not-allowed;
 }
 
+/* Force-disable all interactive children of the rooftop tent card.
+   This counters the broad "pointer-events: auto" utility rule below that
+   would otherwise let users drag the thumb / click the toggle even when
+   the physical reed switch has the tent closed. */
+.slider-card.rooftop-disabled .slider-wrapper,
+.slider-card.rooftop-disabled .slider-inner,
+.slider-card.rooftop-disabled .slider-track,
+.slider-card.rooftop-disabled .slider-fill,
+.slider-card.rooftop-disabled .slider-thumb,
+.slider-card.rooftop-disabled .toggle-pill,
+.slider-card.rooftop-disabled .relay-toggle {
+  pointer-events: none !important;
+}
+
 #offline-banner {
   backdrop-filter: var(--glass-blur);
+}
+
+/* Fix for "system offline" overlay leaving a ~20px gap at the bottom on phones
+   (especially iOS Safari / dynamic viewport / safe-area issues).
+   Tailwind's `fixed inset-0` is not always enough on mobile browsers. */
+#offline-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  /* Dynamic viewport units + iOS fallback for full coverage */
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  height: -webkit-fill-available !important; /* iOS Safari */
+  width: 100vw !important;
+  /* Respect device safe areas (notch, home indicator, etc.) */
+  padding-top: env(safe-area-inset-top, 0) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0) !important;
+  padding-left: env(safe-area-inset-left, 0) !important;
+  padding-right: env(safe-area-inset-right, 0) !important;
+  box-sizing: border-box !important;
 }
 
 /* Utility overscroll rules */

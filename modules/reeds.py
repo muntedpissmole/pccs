@@ -100,46 +100,13 @@ class ReedManager:
             else:
                 logger.warning("⚠️ No [ambient] section found")
 
-            ambient_count = 0
-            for section in self.config.sections():
-                if not section.startswith('ambient.'):
-                    continue
-
-                light_name = section.split('.', 1)[1].strip()
-                self.ambient_lights.append(light_name)
-                self.phase_settings[light_name] = {}
-
-                for phase in ['day', 'evening', 'night']:
-                    try:
-                        val = self.config.get(section, phase, fallback=None)
-                        if val is not None:
-                            val = str(val).strip()
-                            if ',' in val:
-                                b_str, mode = [x.strip() for x in val.split(',', 1)]
-                                self.phase_settings[light_name][phase] = (int(b_str), mode.lower())
-                            else:
-                                self.phase_settings[light_name][phase] = (int(val), 'white')
-                        elif phase == 'day':
-                            self.phase_settings[light_name]['day'] = (0, 'white')
-                    except Exception:
-                        if phase == 'day':
-                            self.phase_settings[light_name]['day'] = (0, 'white')
-                        continue
-
-                ambient_count += 1
-                logger.debug(f"✅ Loaded ambient light '{light_name}' with phases: "
-                            f"{list(self.phase_settings[light_name].keys())}")
-
+            # Load reed_phases FIRST so they take precedence over ambient (per config docstring)
             reed_only_count = 0
             for section in self.config.sections():
                 if not section.startswith('reed_phases.'):
                     continue
 
                 light_name = section.split('.', 1)[1].strip()
-
-                if light_name in self.phase_settings:
-                    continue
-
                 self.phase_settings[light_name] = {}
                 for phase in ['day', 'evening', 'night']:
                     try:
@@ -156,6 +123,41 @@ class ReedManager:
 
                 if self.phase_settings[light_name]:
                     reed_only_count += 1
+
+            # Load ambient.* ; only fill phases/lights not already defined by reed_phases (fallback)
+            ambient_count = 0
+            for section in self.config.sections():
+                if not section.startswith('ambient.'):
+                    continue
+
+                light_name = section.split('.', 1)[1].strip()
+                self.ambient_lights.append(light_name)
+
+                if light_name not in self.phase_settings:
+                    self.phase_settings[light_name] = {}
+
+                for phase in ['day', 'evening', 'night']:
+                    try:
+                        val = self.config.get(section, phase, fallback=None)
+                        if val is not None:
+                            val = str(val).strip()
+                            if ',' in val:
+                                b_str, mode = [x.strip() for x in val.split(',', 1)]
+                                if phase not in self.phase_settings[light_name]:
+                                    self.phase_settings[light_name][phase] = (int(b_str), mode.lower())
+                            else:
+                                if phase not in self.phase_settings[light_name]:
+                                    self.phase_settings[light_name][phase] = (int(val), 'white')
+                        elif phase == 'day' and phase not in self.phase_settings[light_name]:
+                            self.phase_settings[light_name]['day'] = (0, 'white')
+                    except Exception:
+                        if phase == 'day' and phase not in self.phase_settings[light_name]:
+                            self.phase_settings[light_name]['day'] = (0, 'white')
+                        continue
+
+                ambient_count += 1
+                logger.debug(f"✅ Loaded ambient light '{light_name}' with phases: "
+                            f"{list(self.phase_settings[light_name].keys())}")
 
             logger.info(
                 f"💡 Loaded {ambient_count} ambient lights "
@@ -245,6 +247,18 @@ class ReedManager:
         if phase not in config:
             return None
         return config[phase]
+
+    def get_phase_level(self, light_name: str, phase: str) -> Optional[dict]:
+        """Return {'brightness': int, 'mode': str} for scene phase references.
+
+        Pulls from phase_settings (populated from [reed_phases.*] preferred and
+        [ambient.*] as fallback per pccs.conf documentation).
+        """
+        settings = self.get_light_settings(phase, light_name)
+        if settings is None:
+            return None
+        brightness, mode = settings
+        return {"brightness": brightness, "mode": mode}
 
     def _set_ambient_light(self, light_name: str, brightness: int, mode: str = "white", source: str = "ambient"):
         ramp_ms = self.reed_ramp_time_ms

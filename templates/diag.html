@@ -268,6 +268,18 @@
 			color: var(--text-primary);
 			box-sizing: border-box;
 		}
+		
+		.grid-sonos {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			gap: 20px;
+		}
+
+		.grid-sonos .tile {
+			max-width: 420px;
+			width: 100%;
+			box-sizing: border-box;
+		}
 
 		/* Mobile Adjustments */
 		@media (max-width: 640px) {
@@ -454,7 +466,7 @@
 			</div>
 
 			<!-- Rich Player Tiles -->
-			<div id="sonos-players-grid" class="grid-2"></div>
+			<div id="sonos-players-grid" class="grid-sonos"></div>
 		</div>
 		
         <!-- PCCS CORE INFORMATION -->

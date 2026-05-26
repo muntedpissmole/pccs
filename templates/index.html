@@ -755,6 +755,11 @@
 		const light = lightsConfig.find(l => l.name === name);
 		if (!light) return;
 
+		// Safety: rooftop tent reed closed → block all user interaction on frontend
+		if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+			return;
+		}
+
 		userJustSet.add(name);
 		setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
 
@@ -837,6 +842,9 @@
 		}
 
 		// ====================== DIMMERS / BUG MODE ======================
+		// When the rooftop tent reed is physically closed, the dedicated
+		// updateRooftopTentControls() already forces the UI to 0%.
+		// We still allow normal state syncs here (they're harmless).
 		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
 		const fill = wrapper ? wrapper.querySelector('.slider-fill') : null;
 		const thumb = wrapper ? wrapper.querySelector('.slider-thumb') : null;
@@ -967,6 +975,11 @@
 			if (e.touches.length === 0) return;
 			const touch = e.touches[0];
 
+			// Safety interlock for rooftop tent (physical reed closed)
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+				return;
+			}
+
 			const deltaX = Math.abs(touch.clientX - startX);
 			const deltaY = Math.abs(touch.clientY - startY);
 
@@ -989,6 +1002,9 @@
 		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
 
 		wrapper.addEventListener('mousedown', e => {
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+				return; // safety interlock - physical reed closed
+			}
 			startX = e.clientX;
 			startDrag();
 			updatePosition(e.clientX);
@@ -1020,6 +1036,10 @@
         } else {
             tentCard.classList.remove('rooftop-disabled');
         }
+    }
+
+    function isRooftopTentPhysicallyClosed() {
+        return !!currentReeds.rooftop_tent;
     }
 
     // ==================== GPS, SENSORS, WEATHER ====================
@@ -1528,6 +1548,12 @@ function fixLastRowStretching(container) {
         loadVersion();
 		
 		startProgressUpdater();
+		
+	setTimeout(() => {
+        if (!document.fullscreenElement) {
+            toggleFullscreen();
+        }
+    }, 1200);
 
         document.querySelectorAll('.scene-btn').forEach(btn => {
             btn.addEventListener('click', () => setScene(btn.dataset.scene));
