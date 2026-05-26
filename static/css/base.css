@@ -79,6 +79,13 @@
   --glass-white-055: rgba(255,255,255,0.55);
   --glass-white-03: rgba(255,255,255,0.3);
   --glass-white-012: rgba(255,255,255,0.12);
+
+  /* Semantic / remaining hard-coded colors (low gauge states, errors, etc.) */
+  --error-red: #ef4444;
+  --error-red-light: #f87171;
+  --warning-yellow: #fbbf24;
+  --warning-yellow-glow: rgba(251, 191, 36, 0.7);
+  --offline-red: #f43f5e;
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -309,7 +316,7 @@ body::after {
 }
 
 #water-fill.low {
-  background: linear-gradient(to right, #f87171, #ef4444) !important;
+  background: linear-gradient(to right, var(--error-red-light, #f87171), var(--error-red, #ef4444)) !important;
   box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
 }
 
@@ -328,11 +335,11 @@ body::after {
 }
 
 .accent-battery-ring.low {
-  stroke: #ef4444 !important;
+  stroke: var(--error-red, #ef4444) !important;
 }
 
 .accent-battery-ring.warning {
-  stroke: #fbbf24 !important;
+  stroke: var(--warning-yellow, #fbbf24) !important;
 }
 
 /* Solar */
@@ -873,7 +880,7 @@ a[href="/diag"]:hover {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-secondary);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 3px var(--shadow-black-06, rgba(0, 0, 0, 0.6));
   white-space: nowrap;
 }
 
@@ -951,12 +958,12 @@ a[href="/diag"]:hover {
 }
 
 .light .solar-progress-bar {
-  background: linear-gradient(90deg, #0369a1, #0ea5e9) !important;
+  background: linear-gradient(90deg, var(--accent-color, #0369a1), #0ea5e9) !important;
   box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
 }
 
 .light .solar-progress-bar {
-  background: linear-gradient(90deg, #0284c8, #22d3ee) !important;
+  background: linear-gradient(90deg, var(--accent-color, #0284c8), #22d3ee) !important;
 }
 
 .accent-solar-current {
@@ -997,7 +1004,7 @@ a[href="/diag"]:hover {
 .sonos-tile.light #sonos-overlay,
 html.light .sonos-tile #sonos-overlay {
   background: linear-gradient(to bottom, 
-    rgba(255,255,255,0.75) 0%, 
+    var(--glass-white-055, rgba(255,255,255,0.75)) 0%, 
     rgba(255,255,255,0.92) 50%, 
     rgba(255,255,255,0.98) 100%);
 }
@@ -1169,7 +1176,7 @@ section {
 }
 
 #night-path {
-  stroke: #64748b;
+  stroke: var(--text-muted, #64748b);
   transition: stroke-opacity 1000ms ease-in-out;
 }
 
@@ -1181,7 +1188,7 @@ section {
 }
 
 .light #night-path {
-  stroke: #94a3b8;
+  stroke: var(--text-muted, #94a3b8);
 }
 
 /* Sun / Moon circle - controlled by JS (already good) */
