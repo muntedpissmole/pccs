@@ -86,6 +86,15 @@
   --warning-yellow: #fbbf24;
   --warning-yellow-glow: rgba(251, 191, 36, 0.7);
   --offline-red: #f43f5e;
+
+  /* Bug mode legacy hard-codes (still appear in fallbacks) */
+  --bug-pink: #f43f5e;
+  --bug-pink-light: #fb7185;
+
+  /* Extra common shadow/highlight tokens */
+  --glass-white-045: rgba(255,255,255,0.45);
+  --glass-white-08: rgba(255,255,255,0.08);
+  --glass-white-012-alt: rgba(255, 255, 255, 0.12);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -351,10 +360,10 @@ body::after {
 
 /* Offline Banner */
 .offline-banner {
-  background: #f43f5e;
+  background: var(--offline-red, #f43f5e);
   width: 90%;
   max-width: 1024px;
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+  box-shadow: 0 25px 50px -12px var(--shadow-black-06, rgb(0 0 0 / 0.6));
 }
 
 /* ====================== ACCENT GAUGES (your original continued) ====================== */
@@ -378,7 +387,7 @@ body::after {
 }
 
 .accent-water-fill.low {
-  background: linear-gradient(to right, #f87171, #ef4444) !important;
+  background: linear-gradient(to right, var(--error-red-light, #f87171), var(--error-red, #ef4444)) !important;
   box-shadow: 0 0 18px rgba(248, 113, 113, 0.7) !important;
 }
 
@@ -405,7 +414,7 @@ body::after {
 
 .scene-btn:hover {
   transform: translateY(-3px);
-  background: rgba(255,255,255,0.08);
+  background: var(--glass-white-08, rgba(255,255,255,0.08));
   box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
 }
 
