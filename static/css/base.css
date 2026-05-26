@@ -59,10 +59,26 @@
   --label-scale: rgba(255,255,255,0.45);
   --slider-track: rgba(148, 163, 184, 0.25);
 
-  /* New for cleaned gauges */
+  /* Gauges */
   --water-accent-end: #67e8f9;
   --solar-accent: #facc15;
-  
+
+  /* Glassmorphism details (frequently overridden by themes) */
+  --glass-inner-highlight: rgba(255, 255, 255, 0.12);
+  --glass-inner-shadow: rgba(0,0,0,0.35);
+  --card-hover-bg: rgba(32, 32, 52, 0.78);
+
+  /* Common accent fills & glows */
+  --accent-fill-glow: var(--accent-glow);
+  --accent-fill-glow-strong: var(--accent-glow-strong);
+
+  /* Common shadow and highlight tokens (for easier theming) */
+  --shadow-black-06: rgba(0,0,0,0.6);
+  --shadow-black-035: rgba(0,0,0,0.35);
+  --shadow-black-04: rgba(0,0,0,0.4);
+  --glass-white-055: rgba(255,255,255,0.55);
+  --glass-white-03: rgba(255,255,255,0.3);
+  --glass-white-012: rgba(255,255,255,0.12);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -96,6 +112,11 @@ html.light,
   /* Slider thumb inner highlights (light) */
   --slider-thumb-inner-light: rgba(255,255,255,0.7);
   --slider-thumb-inner-dark: rgba(0,0,0,0.35);
+
+  /* Glassmorphism details (light) */
+  --glass-inner-highlight: rgba(255, 255, 255, 0.6);
+  --glass-inner-shadow: rgba(0,0,0,0.08);
+  --card-hover-bg: rgba(255,255,255,0.95);
 }
 
 /* ====================== FONTS ====================== */
@@ -175,8 +196,8 @@ body::after {
   border: 1px solid var(--glass-border);
   box-shadow: 
     var(--glass-shadow),
-    inset 0 1px 0 var(--glass-frost),
-    inset 0 -3px 0 rgba(0,0,0,0.35);
+    inset 0 1px 0 var(--glass-inner-highlight, rgba(255, 255, 255, 0.12)),
+    inset 0 -3px 0 var(--glass-inner-shadow, rgba(0,0,0,0.35));
   backdrop-filter: var(--glass-blur) saturate(180%);
   -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
   transition: all 0.3s ease;
@@ -188,7 +209,7 @@ body::after {
 .slider-card:hover,
 .tile:hover,
 .scene-btn:hover {
-  background: rgba(32, 32, 52, 0.78);
+  background: var(--card-hover-bg, rgba(32, 32, 52, 0.78));
   transform: translateY(-2px);
 }
 
@@ -200,6 +221,10 @@ body::after {
   background: var(--glass-bg);
   border-color: var(--glass-border);
   color: #1e2937;
+  box-shadow: 
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-inner-highlight, rgba(255, 255, 255, 0.6)),
+    inset 0 -3px 0 var(--glass-inner-shadow, rgba(0,0,0,0.08));
 }
 
 /* ====================== CARDS & TILES ====================== */
@@ -492,7 +517,7 @@ body::after {
 .slider-fill.bug-mode {
   /* Migrated to variables (with exact original values as fallbacks — no visual change) */
   background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start, #f43f5e), var(--bug-gradient-end, #fb7185)) !important;
-  box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 30px var(--bug-fill-glow);
+  box-shadow: inset 3px 3px 6px var(--glass-white-03, rgba(255,255,255,0.3)), 0 0 30px var(--bug-fill-glow);
 }
 
 .slider-thumb {
