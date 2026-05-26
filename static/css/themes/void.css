@@ -71,69 +71,6 @@ body::after {
   mix-blend-mode: screen;
 }
 
-/* ====================== BASE GLASS ====================== */
-.tile,
-.slider-card,
-.scene-btn {
-  background: var(--glass-bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  border-radius: 8px !important;
-}
-
-/* ====================== SCENES GRID & BUTTONS ====================== */
-.scene-btn {
-  border-radius: 6px !important;
-}
-
-.scene-btn.active {
-  background: rgba(160, 60, 255, 0.18) !important;
-  color: #e0b0ff;
-}
-
-/* ====================== SLIDER CARDS ====================== */
-.slider-fill {
-  background: linear-gradient(90deg, #b450ff, #e0a0ff) !important;
-  box-shadow: none !important;
-}
-
-.slider-thumb {
-  background: #f0d0ff !important;
-  border: 2px solid #c060ff !important;
-}
-
-/* ====================== TOGGLES ====================== */
-.toggle-pill,
-.relay-toggle {
-  background: var(--toggle-bg-off) !important;
-  border: 1px solid var(--glass-border) !important;
-}
-
-.toggle-pill.on,
-.relay-toggle.on {
-  background: #c060ff !important;
-  box-shadow: none !important;
-}
-
-/* ====================== KNOB ====================== */
-.toggle-pill .toggle-knob,
-.relay-toggle .relay-knob {
-  background: var(--toggle-handle) !important;
-  border: 2px solid var(--toggle-knob-border) !important;
-}
-
-.toggle-pill.on .toggle-knob,
-.relay-toggle.on .relay-knob {
-  background: #ffffff !important;
-}
-
-/* ====================== DISABLED STATES ====================== */
-.slider-card.rooftop-disabled {
-  opacity: 0.35;
-  pointer-events: none;
-  cursor: not-allowed;
-}
-
 /* ====================== VOID FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
@@ -149,4 +86,10 @@ body::after {
 .slider-thumb {
   filter: none !important;
   box-shadow: none !important;
+}
+
+/* Rooftop disabled state — keep minimal unique treatment */
+.slider-card.rooftop-disabled {
+  filter: brightness(0.65) grayscale(0.6);
+  opacity: 0.75;
 }
