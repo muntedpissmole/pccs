@@ -41,6 +41,15 @@
   --bug-color: #e11d48;
   --bug-fill-glow: rgba(225, 29, 72, 0.9);
 
+  /* Bug mode gradients & highlights (currently hard-coded in many places) */
+  --bug-gradient-start: #f43f5e;
+  --bug-gradient-end: #fb7185;
+  --bug-mode-glow: rgba(225, 29, 72, 0.25);
+
+  /* Slider thumb inner highlights (frequently overridden by themes) */
+  --slider-thumb-inner-light: rgba(255,255,255,0.55);
+  --slider-thumb-inner-dark: rgba(0,0,0,0.6);
+
   /* Toast */
   --toast-success: rgb(16, 185, 129);
   --toast-error: rgb(244, 63, 94);
@@ -78,7 +87,15 @@ html.light,
   
   --label-scale: rgba(30, 41, 59, 0.65);
   --slider-track: rgba(148, 163, 184, 0.35);
-  
+
+  /* Bug mode (light) */
+  --bug-gradient-start: #e11d48;
+  --bug-gradient-end: #fb7185;
+  --bug-mode-glow: rgba(225, 29, 72, 0.2);
+
+  /* Slider thumb inner highlights (light) */
+  --slider-thumb-inner-light: rgba(255,255,255,0.7);
+  --slider-thumb-inner-dark: rgba(0,0,0,0.35);
 }
 
 /* ====================== FONTS ====================== */
@@ -473,7 +490,8 @@ body::after {
 }
 
 .slider-fill.bug-mode {
-  background: linear-gradient(90deg, var(--bug-color), #f43f5e, #fb7185) !important;
+  /* Migrated to variables (with exact original values as fallbacks — no visual change) */
+  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start, #f43f5e), var(--bug-gradient-end, #fb7185)) !important;
   box-shadow: inset 3px 3px 6px rgba(255,255,255,0.3), 0 0 30px var(--bug-fill-glow);
 }
 
@@ -490,8 +508,8 @@ body::after {
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 8px rgba(255,255,255,0.55),
-    inset -3px -3px 8px rgba(0,0,0,0.6) !important;
+    inset 3px 3px 8px var(--slider-thumb-inner-light, rgba(255,255,255,0.55)),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark, rgba(0,0,0,0.6)) !important;
   transition: all 0.25s ease;
   will-change: left;
   pointer-events: auto;
@@ -503,9 +521,9 @@ body::after {
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 8px rgba(255,255,255,0.55),
-    inset -3px -3px 8px rgba(0,0,0,0.6),
-    0 0 0 4px rgba(225, 29, 72, 0.25) !important;
+    inset 3px 3px 8px var(--slider-thumb-inner-light, rgba(255,255,255,0.55)),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark, rgba(0,0,0,0.6)),
+    0 0 0 4px var(--bug-mode-glow, rgba(225, 29, 72, 0.25)) !important;
 }
 
 /* ====================== TOGGLES ====================== */
@@ -533,7 +551,8 @@ body::after {
 
 .toggle-pill.bug-mode.on,
 .relay-toggle.bug-mode.on {
-  background: linear-gradient(90deg, var(--bug-color), #f43f5e, #fb7185) !important;
+  /* Migrated to variables (exact original hard-coded values preserved as fallbacks) */
+  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start, #f43f5e), var(--bug-gradient-end, #fb7185)) !important;
   box-shadow: 0 0 28px var(--bug-fill-glow) !important;
 }
 
@@ -551,8 +570,8 @@ body::after {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid var(--accent-color);
   box-shadow: 
-    inset 2px 2px 6px rgba(255,255,255,0.35),
-    inset -2px -2px 6px rgba(0,0,0,0.45) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.35)),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.45)) !important;
 }
 
 .toggle-pill.bug-mode .toggle-knob,
@@ -571,8 +590,8 @@ body::after {
     0 4px 12px rgba(0,0,0,0.55),
     0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--accent-glow-strong),
-    inset 2px 2px 6px rgba(255,255,255,0.45),
-    inset -2px -2px 6px rgba(0,0,0,0.4) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.45)),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.4)) !important;
 }
 
 .toggle-pill.bug-mode.on .toggle-knob,
@@ -582,8 +601,8 @@ body::after {
     0 4px 12px rgba(0,0,0,0.55),
     0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--bug-fill-glow),
-    inset 2px 2px 6px rgba(255,255,255,0.45),
-    inset -2px -2px 6px rgba(0,0,0,0.4) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.45)),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.4)) !important;
 }
 
 /* ====================== TOASTS ====================== */

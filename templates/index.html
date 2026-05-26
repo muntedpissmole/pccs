@@ -419,8 +419,11 @@
   <div id="toast-container"></div>
 
 <script src="/static/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
 <script>
     const socket = io();
+    // Expose globally so extracted modules (theme-manager, future extractions) can use it
+    window.socket = socket;
 
     // ====================== LIVE DARK/LIGHT MODE ======================
 	function updateFooterModeIcon(mode) {
@@ -480,50 +483,8 @@
 		socket.emit('set_global_dark_mode', { mode: newMode });
 	};
 
-    // ====================== GLOBAL THEME SWITCHING ======================
-    let currentThemeFile = null;
-
-	function applyTheme(themeFile) {
-		if (!themeFile) themeFile = 'base';
-		currentThemeFile = themeFile;
-		document.documentElement.setAttribute('data-theme', themeFile);
-
-		document.querySelectorAll('link[data-theme-link]').forEach(link => link.remove());
-
-		if (themeFile === 'base') {
-			document.documentElement.setAttribute('data-theme-loaded', 'true');
-			return;
-		}
-
-		const cssPath = `/static/css/themes/${themeFile}.css?v=${Date.now()}`;
-		const link = document.createElement('link');
-		link.rel = 'stylesheet';
-		link.href = cssPath;
-		link.dataset.themeLink = 'true';
-
-		link.onload = () => document.documentElement.setAttribute('data-theme-loaded', 'true');
-		link.onerror = () => document.documentElement.setAttribute('data-theme-loaded', 'true');
-
-		document.head.appendChild(link);
-	}
-
-    function registerThemeListener() {
-        socket.off('global_theme_update');
-        socket.on('global_theme_update', function(data) {
-            if (data && data.theme) applyTheme(data.theme);
-        });
-    }
-
-    async function loadCurrentTheme() {
-        try {
-            const res = await fetch('/api/current-theme');
-            const data = await res.json();
-            applyTheme(data.theme || 'base');
-        } catch (e) {
-            console.error('Failed to load current theme', e);
-            applyTheme('base');
-        }
-    }
+    // Theme management is now in static/js/theme-manager.js
+    // (keeps the giant inline script smaller and improves caching/separation)
 
     // ====================== VERSION FETCH ======================
     async function loadVersion() {
@@ -1585,30 +1546,6 @@ function fixLastRowStretching(container) {
 		socket.emit('set_global_dark_mode', { mode });
 	}
 
-	function changeTheme(theme) {
-		socket.emit('set_global_theme', { theme });
-	}
-
-	async function loadQuickThemes() {
-		try {
-			const res = await fetch('/api/themes');
-			const data = await res.json();
-			const select = document.getElementById('quick-theme-select');
-			select.innerHTML = '';
-			data.themes.forEach(t => {
-				const opt = document.createElement('option');
-				opt.value = t.file;
-				opt.textContent = t.name;
-				select.appendChild(opt);
-			});
-
-			const cur = await (await fetch('/api/current-theme')).json();
-			if (cur.theme) select.value = cur.theme;
-		} catch(e) {
-			console.warn('Failed to load quick themes', e);
-		}
-	}
-
 	function updateActiveModeButton(mode) {
 		document.getElementById('btn-dark').classList.toggle('active', mode === 'dark');
 		document.getElementById('btn-light').classList.toggle('active', mode === 'light');
@@ -1616,6 +1553,8 @@ function fixLastRowStretching(container) {
 
 	// Socket listeners
 	socket.on('global_dark_mode_update', data => updateActiveModeButton(data.mode));
+
+	// Theme select sync is also handled by theme-manager.js; this is a lightweight backup
 	socket.on('global_theme_update', data => {
 		const select = document.getElementById('quick-theme-select');
 		if (select && data.theme) select.value = data.theme;
