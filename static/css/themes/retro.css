@@ -23,129 +23,45 @@
   --text-on-accent: #2a0055;
 
   --toggle-bg-off: rgba(50, 15, 85, 0.9);
-  --toggle-handle: #fff0f5;
-  --toggle-checked-color: #ff00ff;
-  --toggle-knob-border: #67e8f9;
-
-  --bug-color: #ff2a6d;
-  --bug-fill-glow: rgba(255, 42, 109, 0.9);
-
-  --toast-success: #39ff14;
-  --toast-error: #ff2a6d;
-  --toast-warning: #ffd700;
-  --toast-info: #00ffff;
+  --toggle-handle: #ffd700;
+  --toggle-checked-color: #00ffff;
+  --toggle-knob-border: #ff00ff;
 }
 
-/* ====================== ICONIC VAPORWAVE BACKGROUND ====================== */
+/* ====================== LIGHT MODE ====================== */
+html.light,
+.light {
+  --background: #f8f1ff;
+  --glass-bg: rgba(255, 245, 255, 0.95);
+  --glass-border: rgba(255, 105, 180, 0.4);
+  --control-bg: rgba(255, 240, 255, 0.95);
+  --slider-bg: rgba(255, 215, 0, 0.25);
+
+  --text-primary: #2a0055;
+  --text-secondary: #c026d3;
+  --text-muted: #ff69b4;
+  --text-on-accent: #ffffff;
+
+  --toggle-bg-off: #f3e8ff;
+  --toggle-handle: #ffffff;
+  --toggle-checked-color: #00ffff;
+  --toggle-knob-border: #ff00ff;
+}
+
+/* ====================== GLOBAL ====================== */
 body {
   background: var(--background) !important;
-  position: relative;
-  overflow: hidden;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -3;
-  background: 
-    /* Classic vaporwave sunset sky */
-    linear-gradient(to bottom, #4b0082 0%, #ff69b4 35%, #ffd700 55%, #ff1493 80%, #1a0033 100%),
-    
-    /* Palm tree silhouettes */
-    radial-gradient(circle at 15% 65%, rgba(0, 255, 200, 0.25) 8%, transparent 12%),
-    radial-gradient(circle at 82% 58%, rgba(0, 255, 200, 0.22) 7%, transparent 11%),
-    
-    /* Retro grid floor */
-    linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px) 0 0 / 60px 60px,
-    linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px) 0 0 / 60px 60px,
-    
-    /* Subtle checkerboard */
-    repeating-linear-gradient(45deg, transparent, transparent 30px, rgba(255,215,0,0.06) 30px, rgba(255,215,0,0.06) 60px);
-  
-  background-size: cover, 300px 300px, 60px 60px, 60px 60px, 120px 120px;
-  filter: contrast(1.15) saturate(1.3) hue-rotate(5deg);
-  opacity: 0.95;
-}
-
-/* Floating vaporwave haze + sun glow */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background: 
-    radial-gradient(circle at 50% 35%, rgba(255, 215, 0, 0.35) 0%, transparent 45%),
-    radial-gradient(circle at 30% 20%, rgba(0, 255, 255, 0.18) 0%, transparent 35%);
-  animation: vapor-drift 25s infinite linear;
-  pointer-events: none;
-}
-
-@keyframes vapor-drift {
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  100% { transform: translate(25px, -15px) rotate(1deg); }
-}
-
-/* ====================== VAPORWAVE PATTERNED CARDS ====================== */
-.tile,
-.slider-card,
-.scene-btn {
-  background: var(--glass-bg);
-  border: 2px solid var(--glass-border);
-  box-shadow: 
-    0 10px 30px -6px var(--shadow-dark),
-    0 0 20px -4px var(--accent-glow),
-    inset 0 0 12px rgba(255, 255, 255, 0.12);
-  
-  /* Chrome / holographic edge */
-  background-image: 
-    linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%),
-    radial-gradient(circle at 30% 30%, rgba(0, 255, 255, 0.25) 0%, transparent 60%);
-  
-  position: relative;
-  overflow: hidden;
-}
-
-.tile::before,
-.slider-card::before,
-.scene-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: 
-    /* Retro grid overlay */
-    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 25px 25px,
-    linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 25px 25px;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0.6;
-}
-
-/* Corner "glitch" accents */
-.tile::after,
-.slider-card::after,
-.scene-btn::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-top: 2px solid rgba(0, 255, 255, 0.6);
-  border-right: 2px solid rgba(0, 255, 255, 0.6);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
+/* ====================== RETRO FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {
-  box-shadow: 
-    0 15px 40px -8px var(--shadow-dark),
-    0 0 30px 8px var(--accent-glow);
-  transform: translateY(-4px) scale(1.02);
-  border-color: #00ffff;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 0 20px var(--accent-glow) !important;
 }
 
-.scene-btn.active {
-  box-shadow: 0 0 35
+.slider-card.rooftop-disabled {
+  filter: brightness(0.75) saturate(0.7);
+  opacity: 0.8;
+}

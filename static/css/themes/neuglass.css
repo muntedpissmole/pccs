@@ -28,18 +28,22 @@
 /* ====================== LIGHT MODE ====================== */
 html.light,
 .light {
-  --background: #f5f5f5;
-  --glass-bg: rgba(255, 255, 255, 0.90);
-  --control-bg: rgba(248, 248, 248, 0.88);
-  --slider-bg: rgba(230, 230, 230, 0.92);
+  --background: #f1f5f9;
+  --glass-bg: rgba(255, 255, 255, 0.95);
+  --control-bg: rgba(241, 245, 249, 0.95);
+  --slider-bg: rgba(226, 232, 240, 0.8);
 
-  --glass-border: rgba(203, 213, 225, 0.65);
-  --glass-frost: rgba(255, 255, 255, 0.45);
-  --glass-highlight: rgba(255, 255, 255, 0.45);
-  --glass-highlight-2: rgba(0, 0, 0, 0.04);
+  --glass-border: rgba(148, 163, 184, 0.5);
+  --glass-frost: rgba(255, 255, 255, 0.6);
+  --glass-blur: blur(16px);
 
-  --shadow-dark: rgba(0, 0, 0, 0.14);
-  --shadow-light: rgba(255, 255, 255, 0.75);
+  --shadow-dark: rgba(148, 163, 184, 0.25);
+  --shadow-light: rgba(255, 255, 255, 0.7);
+
+  --text-primary: #1e2937;
+  --text-secondary: #0e7490;
+  --text-muted: #64748b;
+  --text-on-accent: #ffffff;
 }
 
 /* ====================== GLOBAL ====================== */
@@ -47,110 +51,14 @@ body {
   background: var(--background) !important;
 }
 
-/* Enhanced background layers */
-body::before {
-  background: 
-    radial-gradient(circle at 30% 20%, rgba(79, 195, 247, 0.08) 0%, transparent 55%),
-    radial-gradient(circle at 80% 70%, rgba(79, 195, 247, 0.06) 0%, transparent 65%),
-    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px) !important;
-  background-size: 100% 100%, 100% 100%, 80px 80px, 80px 80px;
+/* ====================== NEUGLASS FLAIR ====================== */
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  transform: translateY(-2px) !important;
 }
 
-body::after {
-  background: radial-gradient(ellipse at center, transparent 65%, rgba(18,18,18,0.65) 100%) !important;
-}
-
-/* ====================== BASE GLASS ====================== */
-.tile,
-.slider-card,
-.scene-btn {
-  background: var(--glass-bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  backdrop-filter: var(--glass-blur) saturate(140%) !important;
-  box-shadow: 
-    0 8px 28px -8px var(--shadow-dark),
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -2px 0 var(--shadow-dark) !important;
-  border-radius: 24px;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Subtle shine layers */
-.tile::before,
-.slider-card::before,
-.scene-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 24px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.tile::after,
-.slider-card::after,
-.scene-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 24px;
-  border: 1px solid var(--glass-highlight-2);
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* ====================== SCENES GRID & BUTTONS ====================== */
-.scene-btn.active,
-.slider-card.on,
-.tile.on {
-  background: var(--accent-color) !important;
-  box-shadow: 
-    0 8px 28px -8px var(--shadow-dark),
-    inset 0 1px 0 rgba(255,255,255,0.25),
-    0 0 22px rgba(79, 195, 247, 0.18) !important;
-}
-
-/* ====================== SLIDER CARDS ====================== */
-.slider-fill {
-  box-shadow: 0 0 10px var(--accent-glow) !important;
-}
-
-/* ====================== TOGGLES ====================== */
-.toggle-pill,
-.relay-toggle {
-  background: var(--slider-bg) !important;
-  box-shadow: 
-    inset 6px 6px 12px var(--shadow-dark), 
-    inset -6px -6px 12px var(--shadow-light) !important;
-}
-
-.toggle-pill.on,
-.relay-toggle.on {
-  background: linear-gradient(90deg, var(--toggle-checked-color), var(--accent-hover)) !important;
-  box-shadow: 
-    inset 6px 6px 12px rgba(0,0,0,0.35),
-    inset -6px -6px 12px rgba(255,255,255,0.15) !important;
-}
-
-/* ====================== KNOB ====================== */
-.toggle-pill .toggle-knob,
-.relay-toggle .relay-knob {
-  box-shadow: 
-    3px 3px 8px rgba(0,0,0,0.4), 
-    -2px -2px 6px rgba(255,255,255,0.7) !important;
-}
-
-.toggle-pill.on .toggle-knob,
-.relay-toggle.on .relay-knob {
-  transform: translate(39px, -50%);
-}
-
-/* ====================== DISABLED STATES ====================== */
 .slider-card.rooftop-disabled {
-  opacity: 0.45;
-  pointer-events: none;
-  cursor: not-allowed;
+  filter: brightness(0.7) contrast(0.9);
+  opacity: 0.8;
 }
