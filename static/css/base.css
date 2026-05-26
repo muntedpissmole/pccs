@@ -334,7 +334,7 @@ body::after {
   color: var(--label-scale);
 }
 
-/* Battery Gauge (preserving your original) */
+/* Battery Gauge */
 #battery-gauge-progress {
   transition: stroke-dashoffset 900ms cubic-bezier(0.25, 1.1, 0.5, 1) !important;
 }
@@ -831,23 +831,23 @@ footer {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--glass-white-08);
   margin-top: auto;
 }
 
 #footer-version {
   background: transparent;
   padding: 0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 2px var(--shadow-black-06);
 }
 
 /* Light mode footer fixes */
 .light footer {
-  border-top-color: rgba(148, 163, 184, 0.3);
+  border-top-color: var(--glass-border-light, rgba(148, 163, 184, 0.3));
 }
 
 .light #footer-version {
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px var(--glass-white-075, rgba(255, 255, 255, 0.75));
   color: #1e2937;
 }
 
@@ -966,7 +966,7 @@ a[href="/diag"]:hover {
 }
 
 .light .solar-progress-bar {
-  background: linear-gradient(90deg, var(--accent-color), #0ea5e9) !important;
+  background: linear-gradient(90deg, var(--accent-color), var(--solar-accent-end)) !important;
   box-shadow: 0 0 16px rgba(3, 105, 161, 0.7);
 }
 
@@ -1009,14 +1009,14 @@ a[href="/diag"]:hover {
 html.light .sonos-tile #sonos-overlay {
   background: linear-gradient(to bottom, 
     var(--glass-white-055) 0%, 
-    rgba(255,255,255,0.92) 50%, 
-    rgba(255,255,255,0.98) 100%);
+    var(--glass-white-092, rgba(255,255,255,0.92)) 50%, 
+    var(--glass-white-098, rgba(255,255,255,0.98)) 100%);
 }
 
 .sonos-tile.light #sonos-playpause-btn,
 html.light .sonos-tile #sonos-playpause-btn {
-  background-color: #fff;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  background-color: var(--glass-white-100, #fff);
+  box-shadow: 0 4px 15px var(--shadow-black-015, rgba(0, 0, 0, 0.15));
 }
 
 .sonos-player-name {
@@ -1040,11 +1040,11 @@ html.light .sonos-tile #sonos-playpause-btn {
 }
 
 #sonos-progress-container {
-  background: rgba(255,255,255,0.2);
+  background: var(--glass-white-02, rgba(255,255,255,0.2));
 }
 
 .light #sonos-progress-container {
-  background: rgba(0,0,0,0.18);
+  background: var(--glass-black-018, rgba(0,0,0,0.18));
 }
 
 #sonos-progress-bar {
@@ -1089,7 +1089,7 @@ html.light .sonos-tile #sonos-playpause-btn {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-secondary);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 3px var(--shadow-black-06);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1117,7 +1117,7 @@ html.light .sonos-tile #sonos-playpause-btn {
 }
 
 .fullscreen-btn:hover {
-  color: white;
+  color: var(--glass-white-100, white);
   text-shadow: 0 0 12px var(--accent-glow);
 }
 
