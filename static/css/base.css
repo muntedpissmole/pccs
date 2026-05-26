@@ -212,8 +212,8 @@ body::after {
   border: 1px solid var(--glass-border);
   box-shadow: 
     var(--glass-shadow),
-    inset 0 1px 0 var(--glass-inner-highlight, rgba(255, 255, 255, 0.12)),
-    inset 0 -3px 0 var(--glass-inner-shadow, rgba(0,0,0,0.35));
+    inset 0 1px 0 var(--glass-inner-highlight),
+    inset 0 -3px 0 var(--glass-inner-shadow);
   backdrop-filter: var(--glass-blur) saturate(180%);
   -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
   transition: all 0.3s ease;
@@ -531,9 +531,8 @@ body::after {
 }
 
 .slider-fill.bug-mode {
-  /* Migrated to variables (with exact original values as fallbacks — no visual change) */
-  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start, #f43f5e), var(--bug-gradient-end, #fb7185)) !important;
-  box-shadow: inset 3px 3px 6px var(--glass-white-03, rgba(255,255,255,0.3)), 0 0 30px var(--bug-fill-glow);
+  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start), var(--bug-gradient-end)) !important;
+  box-shadow: inset 3px 3px 6px var(--glass-white-03), 0 0 30px var(--bug-fill-glow);
 }
 
 .slider-thumb {
@@ -549,8 +548,8 @@ body::after {
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 8px var(--slider-thumb-inner-light, rgba(255,255,255,0.55)),
-    inset -3px -3px 8px var(--slider-thumb-inner-dark, rgba(0,0,0,0.6)) !important;
+    inset 3px 3px 8px var(--slider-thumb-inner-light),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark) !important;
   transition: all 0.25s ease;
   will-change: left;
   pointer-events: auto;
@@ -562,9 +561,9 @@ body::after {
   box-shadow: 
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 8px var(--slider-thumb-inner-light, rgba(255,255,255,0.55)),
-    inset -3px -3px 8px var(--slider-thumb-inner-dark, rgba(0,0,0,0.6)),
-    0 0 0 4px var(--bug-mode-glow, rgba(225, 29, 72, 0.25)) !important;
+    inset 3px 3px 8px var(--slider-thumb-inner-light),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark),
+    0 0 0 4px var(--bug-mode-glow) !important;
 }
 
 /* ====================== TOGGLES ====================== */
@@ -592,8 +591,7 @@ body::after {
 
 .toggle-pill.bug-mode.on,
 .relay-toggle.bug-mode.on {
-  /* Migrated to variables (exact original hard-coded values preserved as fallbacks) */
-  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start, #f43f5e), var(--bug-gradient-end, #fb7185)) !important;
+  background: linear-gradient(90deg, var(--bug-color), var(--bug-gradient-start), var(--bug-gradient-end)) !important;
   box-shadow: 0 0 28px var(--bug-fill-glow) !important;
 }
 
@@ -611,8 +609,8 @@ body::after {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid var(--accent-color);
   box-shadow: 
-    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.35)),
-    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.45)) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark) !important;
 }
 
 .toggle-pill.bug-mode .toggle-knob,
@@ -631,8 +629,8 @@ body::after {
     0 4px 12px rgba(0,0,0,0.55),
     0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--accent-glow-strong),
-    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.45)),
-    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.4)) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark) !important;
 }
 
 .toggle-pill.bug-mode.on .toggle-knob,
@@ -642,8 +640,8 @@ body::after {
     0 4px 12px rgba(0,0,0,0.55),
     0 2px 6px rgba(0,0,0,0.35),
     0 0 16px var(--bug-fill-glow),
-    inset 2px 2px 6px var(--slider-thumb-inner-light, rgba(255,255,255,0.45)),
-    inset -2px -2px 6px var(--slider-thumb-inner-dark, rgba(0,0,0,0.4)) !important;
+    inset 2px 2px 6px var(--slider-thumb-inner-light),
+    inset -2px -2px 6px var(--slider-thumb-inner-dark) !important;
 }
 
 /* ====================== TOASTS ====================== */
