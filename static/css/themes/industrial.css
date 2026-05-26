@@ -58,14 +58,37 @@ body {
   background: var(--background) !important;
 }
 
-/* ====================== INDUSTRIAL FLAIR ====================== */
+/* Optional subtle industrial texture overlay (restored to match original) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.6;
+}
+
+.light body::before {
+  background: 
+    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.5;
+}
+
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  filter: brightness(0.7) contrast(0.85);
+  opacity: 0.8;
+}
+
+/* ====================== THEME FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {
   transform: translateY(-1px) !important;
-}
-
-.slider-card.rooftop-disabled {
-  filter: brightness(0.7) contrast(0.85);
-  opacity: 0.8;
 }

@@ -58,8 +58,8 @@ body {
   overflow: hidden;
 }
 
-/* ====================== REAL AURORA BOREALIS WALLPAPER ====================== */
-/* Real high-quality aurora photograph */
+/* ====================== AURORA BOREALIS BACKGROUND ====================== */
+/* Real high-quality aurora photograph + moving glow */
 body::before {
   content: "";
   position: fixed;
@@ -88,14 +88,15 @@ body::after {
   100% { opacity: 0.95; transform: translateX(5%); }
 }
 
-/* ====================== AURORA FLAIR ====================== */
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  filter: brightness(0.75) contrast(0.85);
+  opacity: 0.8;
+}
+
+/* ====================== THEME FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {
   transform: translateY(-2px) !important;
-}
-
-.slider-card.rooftop-disabled {
-  filter: brightness(0.75) contrast(0.85);
-  opacity: 0.8;
 }

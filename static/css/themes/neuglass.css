@@ -167,7 +167,7 @@ body::after {
   cursor: not-allowed;
 }
 
-/* ====================== HOVER / FLAIR ====================== */
+/* ====================== THEME FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {

@@ -56,19 +56,27 @@ body {
 }
 
 /* ====================== ICONIC VAPORWAVE BACKGROUND ====================== */
+/* Classic 80s vaporwave sunset + palm silhouettes (not the nebula photo from the deleted theme) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -3;
   background: 
-    /* Nebula photo */
-    url('images/nebula.jpg') center/cover no-repeat,
+    /* Classic vaporwave sunset sky */
+    linear-gradient(to bottom, #4b0082 0%, #ff69b4 35%, #ffd700 55%, #ff1493 80%, #1a0033 100%),
+    
+    /* Palm tree silhouettes */
+    radial-gradient(circle at 15% 65%, rgba(0, 255, 200, 0.25) 8%, transparent 12%),
+    radial-gradient(circle at 82% 58%, rgba(0, 255, 200, 0.22) 7%, transparent 11%),
+    
     /* Retro grid floor */
     linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px) 0 0 / 60px 60px,
     linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px) 0 0 / 60px 60px,
+    
     /* Subtle checkerboard */
     repeating-linear-gradient(45deg, transparent, transparent 30px, rgba(255,215,0,0.06) 30px, rgba(255,215,0,0.06) 60px);
+  
   background-size: cover, 300px 300px, 60px 60px, 60px 60px, 120px 120px;
   filter: contrast(1.15) saturate(1.3) hue-rotate(5deg);
   opacity: 0.95;
@@ -92,15 +100,76 @@ body::after {
   100% { transform: translate(25px, -15px) rotate(1deg); }
 }
 
-/* ====================== RETRO FLAIR ====================== */
-.tile:hover,
-.slider-card:hover,
-.scene-btn:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 0 20px var(--accent-glow) !important;
+/* ====================== CARDS & TILES ====================== */
+/* Vaporwave patterned cards — 25px grid overlay, holographic edges, glitch corners */
+.tile,
+.slider-card,
+.scene-btn {
+  background: var(--glass-bg) !important;
+  border: 2px solid var(--glass-border) !important;
+  box-shadow: 
+    0 10px 30px -6px var(--shadow-dark),
+    0 0 20px -4px var(--accent-glow),
+    inset 0 0 12px rgba(255, 255, 255, 0.12) !important;
+  
+  /* Chrome / holographic edge */
+  background-image: 
+    linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%),
+    radial-gradient(circle at 30% 30%, rgba(0, 255, 255, 0.25) 0%, transparent 60%) !important;
+  
+  position: relative;
+  overflow: hidden;
 }
 
+.tile::before,
+.slider-card::before,
+.scene-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: 
+    /* Retro grid overlay (the main "card patterning") */
+    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 25px 25px,
+    linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px) 0 0 / 25px 25px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
+}
+
+/* Corner "glitch" accents */
+.tile::after,
+.slider-card::after,
+.scene-btn::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-top: 2px solid rgba(0, 255, 255, 0.6);
+  border-right: 2px solid rgba(0, 255, 255, 0.6);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ====================== DISABLED STATES ====================== */
 .slider-card.rooftop-disabled {
   filter: brightness(0.75) saturate(0.7);
   opacity: 0.8;
+}
+
+/* ====================== THEME FLAIR ====================== */
+.tile:hover,
+.slider-card:hover,
+.scene-btn:hover {
+  box-shadow: 
+    0 15px 40px -8px var(--shadow-dark),
+    0 0 30px 8px var(--accent-glow);
+  transform: translateY(-4px) scale(1.02);
+  border-color: #00ffff;
+}
+
+.scene-btn.active {
+  box-shadow: 0 0 35px var(--accent-glow-strong) !important;
+  border-color: var(--accent-hover) !important;
 }

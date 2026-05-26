@@ -71,7 +71,13 @@ body::after {
   mix-blend-mode: screen;
 }
 
-/* ====================== VOID FLAIR ====================== */
+/* ====================== DISABLED STATES ====================== */
+.slider-card.rooftop-disabled {
+  filter: brightness(0.65) grayscale(0.6);
+  opacity: 0.75;
+}
+
+/* ====================== THEME FLAIR ====================== */
 .tile:hover,
 .slider-card:hover,
 .scene-btn:hover {
@@ -86,10 +92,4 @@ body::after {
 .slider-thumb {
   filter: none !important;
   box-shadow: none !important;
-}
-
-/* Rooftop disabled state — keep minimal unique treatment */
-.slider-card.rooftop-disabled {
-  filter: brightness(0.65) grayscale(0.6);
-  opacity: 0.75;
 }
