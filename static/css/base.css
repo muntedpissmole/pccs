@@ -89,6 +89,10 @@
   --glass-white-045: rgba(255,255,255,0.45);
   --glass-white-08: rgba(255,255,255,0.08);
   --glass-white-012-alt: rgba(255, 255, 255, 0.12);
+
+  /* Sonos progress track backgrounds */
+  --glass-white-02: rgba(255,255,255,0.09);
+  --glass-black-018: rgba(15,23,42,0.14);
 }
 
 /* ====================== LIGHT MODE ====================== */
@@ -127,6 +131,10 @@ html.light,
   --glass-inner-highlight: rgba(255, 255, 255, 0.6);
   --glass-inner-shadow: rgba(0,0,0,0.08);
   --card-hover-bg: rgba(255,255,255,0.95);
+
+  /* Sonos progress track backgrounds (light) */
+  --glass-white-02: rgba(255,255,255,0.09);
+  --glass-black-018: rgba(15,23,42,0.14);
 }
 
 /* ====================== FONTS ====================== */
@@ -304,6 +312,14 @@ body::after {
   color: var(--text-primary);
 }
 
+/* Small muted monospace labels for times/metadata inside tiles
+   (e.g. phase start times in date/time tile, elapsed/remaining in Sonos) */
+.tile-meta {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: var(--text-muted);
+}
+
 /* ====================== GAUGES & PROGRESS ====================== */
 
 /* Water Gauge */
@@ -382,12 +398,12 @@ body::after {
   stroke: var(--text-muted);
 }
 
-/* Sun / Moon circle - controlled by JS (already good) */
+/* Sun / Moon circle - position driven by JS (rAF t-interpolation) so it follows the curve */
 #sun-position,
 #sun-glow {
-  transition: fill 400ms ease, 
-              cx 800ms cubic-bezier(0.4, 0, 0.2, 1), 
-              cy 800ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: fill 350ms ease, 
+              opacity 350ms ease;
+  /* cx/cy intentionally NOT transitioned via CSS — we interpolate the Bezier parameter in JS */
 }
 
 /* Ensure light mode doesn't override JS moon color */
@@ -1059,24 +1075,20 @@ html.light .sonos-tile #sonos-playpause-btn {
 }
 
 #sonos-progress-container {
-  background: var(--glass-white-02));
+  background: var(--glass-white-02);
 }
 
 .light #sonos-progress-container {
-  background: var(--glass-black-018));
+  background: var(--glass-black-018);
 }
 
 #sonos-progress-bar {
   background: var(--text-primary);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
 }
 
 #sonos-volume-slider {
   accent-color: var(--accent-color);
-}
-
-#sonos-time-elapsed,
-#sonos-time-remaining {
-  color: var(--text-muted);
 }
 
 #sonos-playpause-btn {
