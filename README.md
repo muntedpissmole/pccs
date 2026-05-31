@@ -19,10 +19,9 @@ The Pissmole Camping Control System (PCCS) is a Raspberry Pi-based control syste
 The PCCS measures and displays environmental data including:
 - GPS derived data & time and sunset/sunrise times based on current coordinates
 - Water tank level
-- Solar generation
-- Battery voltage and State of Charge
 - Current temperature and daily min/max weather forecasts for the current location
 - GPS satellite/quality fix and scraping of closest suburb based on current co-ordinates with offline/no internet fallback for greater North-East Victoria in Australia
+- (Accurate battery + solar via upcoming Victron SmartShunt + MPPT SmartSolar BLE support)
 
 The PCCS provides a better glamping experience when installed alongside other RPI packages:
 - Network address translation (NAT) and DHCP via DNSMASQ. Upstream internet can be provided by USB tethering, 5G modem or Starlink
@@ -34,12 +33,17 @@ The PCCS provides a better glamping experience when installed alongside other RP
 
 This project has been built with support for:
 - Raspberry Pi
-- Arduino Mega 2560 and IRLZ234N mosfets to ramp LEDs and the analog inputs for measuring battery voltage, solar generation and water tank level
+- Arduino Mega 2560 and IRLZ234N mosfets to ramp LEDs and the analog input for measuring water tank level
 - Adafruit Ultimate GPS Breakout PA1616S
 - 4 channel 5VDC relay module
 - DS18B20 1-wire Temperature Sensor
 - fuel level sensor that scales from 240ohm (full) to 33ohm (empty)
-- 0-25VDC Voltage divider
+
+**Power Monitoring (Victron — replaces the removed Arduino voltage divider + CT)**
+- Victron SmartShunt (battery voltage, current, SoC, time remaining, etc.)
+- Victron SmartSolar MPPT (solar power, daily yield, charge state)
+- Connected over Bluetooth Low Energy using the `victron_ble` Python library (passive "Instant Readout" advertisements — no constant connection required)
+- See `config/pccs.conf` `[victron]` section for setup. You will need the MAC address + 32-character advertisement key from the VictronConnect app (device → gear icon → Product info → Instant readout via Bluetooth).
 
 **Frontend**
 
@@ -108,15 +112,13 @@ See /images folder for more examples.
 **Inputs**
  Pin | Channel Type           | Description                            |
 :---:|:-----------------------|:---------------------------------------|
-| A0 | Analog Input           | Battery Voltage Divider Input          |
 | A1 | Analog Input           | Water Level Sensor Input               |
-| A2 | Analog Input           | Solar Current Transformer Input        |
 
 **Notes**
 <small>
 - Arduino Mega is used as RPI PWM/I2C servo driver expansion boards don't have enough power to drive the MOSFETs
 - Breadboard circuitboard for MOSFETs and outgoing lighting circuit connections is required
-- Breadboard circuitboard for voltage injection of analog sensor inputs is also required
+- Some analog front-end (voltage divider / protection) may still be needed for the water level sender on A1
 - Blue channels of RGB lights not used in this project due to Arduino channel capacity (Green is used to soften the red)
 </small>
 

@@ -4,6 +4,7 @@ import time
 import datetime
 import logging
 import zoneinfo
+from typing import Callable
 from suntime import Sun
 
 logger = logging.getLogger("pccs")
@@ -62,6 +63,9 @@ class PhaseManager:
         self.manual_dark_mode = None        # User manually set override
 
         self.startup_time = time.time()
+
+        # Night phase listeners (used by VictronManager for daily solar reset, etc.)
+        self._night_listeners: list[Callable[[], None]] = []
 
         self.fallback_latitude = config.getfloat('gps', 'fallback_latitude')
         self.fallback_longitude = config.getfloat('gps', 'fallback_longitude')
@@ -147,10 +151,19 @@ class PhaseManager:
             toast_message = f"{emoji} It is now {new_phase}"
             _send_phase_toast(toast_message)
 
+            old_phase = self.current_phase
             self.current_phase = new_phase
             self._maybe_clear_manual_dark_mode()
             self._broadcast_phase_update()
             self._auto_update_dark_mode()
+
+            # Notify listeners when we enter Night phase (e.g. Victron daily reset)
+            if new_phase == "Night" and old_phase != "Night":
+                for cb in list(self._night_listeners):
+                    try:
+                        cb()
+                    except Exception as e:
+                        logger.error(f"Night phase listener failed: {e}")
 
     def _maybe_clear_manual_dark_mode(self):
         """Clear manual dark/light mode when the phase naturally changes to a point
@@ -375,6 +388,18 @@ class PhaseManager:
             logger.debug("🔄 clear_force called with no active force")
 
         self._update_phase()
+
+    # --------------------------- Night phase listeners (for Victron daily reset etc.) ---------------------------
+
+    def register_night_listener(self, callback: Callable[[], None]):
+        """Register a callback that will be invoked when the system enters Night phase."""
+        if callback and callback not in self._night_listeners:
+            self._night_listeners.append(callback)
+            logger.debug("🌙 Registered night phase listener")
+
+    def unregister_night_listener(self, callback: Callable[[], None]):
+        if callback in self._night_listeners:
+            self._night_listeners.remove(callback)
 
     def get_phase_times(self) -> dict:
         if not self._cached_phase_times or len(self._cached_phase_times) < 3:

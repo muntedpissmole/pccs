@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import logging
+import json
 from datetime import datetime
 import importlib.metadata
 
@@ -350,3 +351,352 @@ class SystemInfoManager:
         except:
             pass
         return ifindex
+
+    # ====================== ITERATION 2 HELPERS (Network tile) ======================
+
+    def _get_unifi_primary_ssid(self):
+        """Best-effort attempt to read the primary WiFi SSID from Unifi OS.
+        Returns None on failure / if not running Unifi OS.
+        """
+        candidates = [
+            "/data/unifi/data/sites/default/config.gateway.json",
+            "/etc/unifi/config.gateway.json",
+            "/data/unifi/data/setting/network.json",
+        ]
+        for path in candidates:
+            try:
+                if os.path.exists(path):
+                    with open(path) as f:
+                        data = json.load(f)
+                    # Common patterns in Unifi configs
+                    if isinstance(data, dict):
+                        for key in ("wlan", "wireless", "networks"):
+                            if key in data:
+                                net = data[key]
+                                if isinstance(net, list) and net:
+                                    for n in net:
+                                        if n.get("enabled") and n.get("name"):
+                                            return n["name"]
+                                elif isinstance(net, dict):
+                                    for v in net.values():
+                                        if isinstance(v, dict) and v.get("name"):
+                                            return v["name"]
+                    # Fallback: look for any "ssid" or "name" field that looks like a WiFi name
+                    def _find_ssid(obj):
+                        if isinstance(obj, dict):
+                            for k, v in obj.items():
+                                if k.lower() in ("ssid", "name") and isinstance(v, str) and len(v) > 1:
+                                    return v
+                                res = _find_ssid(v)
+                                if res:
+                                    return res
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                res = _find_ssid(item)
+                                if res:
+                                    return res
+                        return None
+                    found = _find_ssid(data)
+                    if found:
+                        return found
+            except Exception:
+                continue
+        return None
+
+    # Note: Cached ping logic currently lives in app.py (_get_cached_ping) for simplicity.
+    # If more sophisticated ping handling is needed later it can be moved here.
+
+    # ====================== Signal Quality Helpers ======================
+
+    def _get_current_signal_quality(self, iface: str | None) -> str | None:
+        """Return a human string like '92% (Good)' for the WAN quality where possible."""
+        if not iface:
+            return None
+
+        # WiFi client interfaces (house WiFi, campsite WiFi tether, future Starlink Go WiFi)
+        if self._looks_like_wireless(iface):
+            return self._get_wifi_signal_quality(iface)
+
+        # USB / RNDIS tethering from a phone — try to read the phone's cellular signal
+        if iface.startswith(("usb", "rndis")):
+            return self._get_usb_cellular_signal_quality()
+
+        # Direct Ethernet to Starlink Go (future) — we can add dedicated logic later
+        # For now fall back to None (will show as "-")
+        return None
+
+    def _looks_like_wireless(self, iface: str) -> bool:
+        try:
+            out = subprocess.check_output(
+                ["iw", "dev", iface, "info"],
+                stderr=subprocess.DEVNULL,
+                timeout=1
+            )
+            return True
+        except Exception:
+            return False
+
+    def _get_wifi_signal_quality(self, iface: str) -> str | None:
+        """Try to get RSSI from a WiFi client interface and turn it into percent + state."""
+        try:
+            # Works well for station/client mode
+            out = subprocess.check_output(
+                ["iw", "dev", iface, "station", "dump"],
+                stderr=subprocess.DEVNULL,
+                timeout=2
+            ).decode(errors="ignore")
+
+            for line in out.splitlines():
+                line = line.strip()
+                if line.startswith("signal:"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            rssi = int(parts[1])
+                            return self._rssi_to_quality_string(rssi)
+                        except ValueError:
+                            continue
+        except Exception:
+            pass
+        return None
+
+    def _rssi_to_quality_string(self, rssi: int) -> str:
+        """Map RSSI (dBm, negative) to a nice '92% (Good)' string."""
+        if rssi >= -50:
+            pct, label = 100, "Excellent"
+        elif rssi >= -60:
+            pct, label = 90, "Excellent"
+        elif rssi >= -70:
+            pct, label = 75, "Good"
+        elif rssi >= -80:
+            pct, label = 50, "Fair"
+        elif rssi >= -85:
+            pct, label = 30, "Poor"
+        else:
+            pct, label = 10, "Very Poor"
+        return f"{pct}% ({label})"
+
+    def _get_usb_cellular_signal_quality(self) -> str | None:
+        """Best-effort attempt to read cellular signal strength from a USB-tethered phone.
+
+        Many Android phones in USB tether mode expose a serial port we can send AT
+        commands to. We try common ports and common Telstra/Android commands.
+        """
+        import serial
+        import glob
+
+        # Common ports seen with Android USB tethering / modem mode
+        candidates = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
+
+        # Sort so we try lower numbers first (often the diagnostic port)
+        candidates.sort()
+
+        for port in candidates:
+            try:
+                with serial.Serial(port, 115200, timeout=1) as ser:
+                    # Wake up the modem
+                    ser.write(b"AT\r")
+                    resp = ser.read(100).decode(errors="ignore")
+                    if "OK" not in resp:
+                        continue
+
+                    # Try AT+CSQ first (most universal)
+                    ser.write(b"AT+CSQ\r")
+                    resp = ser.read(200).decode(errors="ignore")
+                    if "+CSQ:" in resp:
+                        # Format is usually +CSQ: <rssi>,<ber>
+                        try:
+                            rssi = int(resp.split("+CSQ:")[1].split(",")[0].strip())
+                            # Convert CSQ (0-31) to dBm approx: dBm = -113 + (rssi * 2)
+                            dbm = -113 + (rssi * 2)
+                            return self._rssi_to_quality_string(dbm)
+                        except Exception:
+                            pass
+
+                    # Try Telstra / newer Android: AT+CPSI?
+                    ser.write(b"AT+CPSI?\r")
+                    resp = ser.read(300).decode(errors="ignore")
+                    if "+CPSI:" in resp:
+                        # Example: +CPSI: 0,1,"46001",...
+                        # We can look for signal related fields in some responses
+                        # For many modems this gives more detailed info; fall back to CSQ if possible
+                        pass
+
+            except (serial.SerialException, OSError):
+                continue
+
+        return None
+
+    def _get_starlink_signal_quality(self) -> str | None:
+        """Try to fetch signal quality from a local Starlink dish/router."""
+        candidates = [
+            "http://192.168.100.1/api/status",
+            "http://192.168.100.1/api/v1/status",
+            "http://192.168.100.1/api/device/status",
+        ]
+        for url in candidates:
+            try:
+                import urllib.request
+                with urllib.request.urlopen(url, timeout=2) as resp:
+                    data = json.loads(resp.read().decode())
+                # Starlink v3/v4 style
+                if "signalQuality" in data:
+                    sq = data["signalQuality"]
+                    if isinstance(sq, (int, float)):
+                        pct = int(sq * 100)
+                        label = "Excellent" if pct > 85 else "Good" if pct > 65 else "Fair" if pct > 40 else "Poor"
+                        return f"{pct}% ({label})"
+                # Older / other shapes
+                if "snr" in data or "signal" in data:
+                    # rough mapping if we have dB values
+                    pass
+            except Exception:
+                continue
+        return None
+
+    # ====================== NEW: COMPACT NETWORK STATUS FOR DASHBOARD TILE ======================
+
+    _FRIENDLY_IFACE: dict = {
+        "wlan0": "WiFi",
+        "wlan1": "WiFi 2",
+        "eth0": "Ethernet",
+        "eth1": "Ethernet 2",
+        "usb0": "USB",
+        "rndis0": "USB",
+        "enp0s3": "Ethernet",
+        "ppp0": "Cellular",
+        "wwan0": "Cellular",
+    }
+
+    def _get_friendly_interface_name(self, iface: str) -> str:
+        if not iface:
+            return "Network"
+        for key, friendly in self._FRIENDLY_IFACE.items():
+            if iface == key or (key[:-1] and iface.startswith(key[:-1])):
+                return friendly
+        if iface.startswith("wlan"):
+            return "WiFi"
+        if iface.startswith("eth") or iface.startswith("en"):
+            return "Ethernet"
+        if iface.startswith("usb") or iface.startswith("rndis"):
+            return "USB"
+        if iface.startswith("ppp") or iface.startswith("wwan"):
+            return "Cellular"
+        return iface.upper()[:12]
+
+    def _get_link_speed(self, iface: str) -> int | None:
+        """Best-effort link speed in Mbps (sysfs for wired, iw for wireless)."""
+        if not iface:
+            return None
+        try:
+            speed_path = f"/sys/class/net/{iface}/speed"
+            if os.path.exists(speed_path):
+                with open(speed_path) as f:
+                    val = int(f.read().strip())
+                    if val > 0:
+                        return val
+        except Exception:
+            pass
+        try:
+            out = subprocess.check_output(
+                f'iw dev {iface} link 2>/dev/null | grep -i "tx bitrate" || true',
+                shell=True, timeout=2
+            ).decode().strip().lower()
+            if "bitrate" in out:
+                for part in out.split():
+                    if part.replace(".", "", 1).isdigit():
+                        return int(round(float(part)))
+        except Exception:
+            pass
+        return None
+
+    def _sample_throughput(self):
+        """Compute KB/s deltas. Targets the last known upstream iface when possible."""
+        now = time.time()
+        try:
+            curr = psutil.net_io_counters(pernic=True)
+        except Exception:
+            return 0.0, 0.0
+
+        prev = getattr(self, "_prev_net_io", None)
+        prev_ts = getattr(self, "_prev_net_io_ts", 0.0)
+        upstream = getattr(self, "_last_upstream_iface", None)
+        dt = now - prev_ts if prev_ts else 0.0
+
+        def _kbps(delta: int, dt: float) -> float:
+            return max(0.0, round((delta / 1024.0) / dt, 1)) if dt > 0.05 else 0.0
+
+        rx_k = tx_k = 0.0
+        if upstream and prev and upstream in curr and upstream in prev:
+            rx_k = _kbps(curr[upstream].bytes_recv - prev[upstream].bytes_recv, dt)
+            tx_k = _kbps(curr[upstream].bytes_sent - prev[upstream].bytes_sent, dt)
+        elif prev:
+            try:
+                tot = psutil.net_io_counters()
+                tot_prev = getattr(self, "_prev_tot_io", None)
+                if tot_prev:
+                    rx_k = _kbps(tot.bytes_recv - tot_prev.bytes_recv, dt)
+                    tx_k = _kbps(tot.bytes_sent - tot_prev.bytes_sent, dt)
+            except Exception:
+                pass
+
+        self._prev_net_io = curr
+        self._prev_net_io_ts = now
+        try:
+            self._prev_tot_io = psutil.net_io_counters()
+        except Exception:
+            pass
+        return rx_k, tx_k
+
+    def get_network_status(self):
+        """Compact payload for the main UI Network tile (internet half + basics)."""
+        status = {
+            "internet": {
+                "connected": False,
+                "upstream_iface": None,
+                "friendly_name": "No Internet",
+                "gateway": None,
+                "link_speed_mbps": None,
+                "rx_kbps": 0.0,
+                "tx_kbps": 0.0,
+            },
+            "last_updated": datetime.now().isoformat(),
+        }
+        via_iface = None
+        gw_ip = None
+        try:
+            output = subprocess.check_output(
+                "ip route get 8.8.8.8", shell=True, timeout=2.5
+            ).decode().strip()
+            for line in output.splitlines():
+                if "via" in line:
+                    parts = line.split()
+                    for i, p in enumerate(parts):
+                        if p == "via" and i + 1 < len(parts):
+                            gw_ip = parts[i + 1]
+                        elif p == "dev" and i + 1 < len(parts):
+                            via_iface = parts[i + 1]
+                    if gw_ip and via_iface:
+                        break
+        except Exception as e:
+            logger.debug(f"get_network_status gateway probe: {e}")
+
+        if via_iface:
+            status["internet"]["connected"] = True
+            status["internet"]["upstream_iface"] = via_iface
+            status["internet"]["friendly_name"] = self._get_friendly_interface_name(via_iface)
+            status["internet"]["gateway"] = gw_ip
+            self._last_upstream_iface = via_iface
+            spd = self._get_link_speed(via_iface)
+            if spd:
+                status["internet"]["link_speed_mbps"] = spd
+
+            # Signal quality (new)
+            sig = self._get_current_signal_quality(via_iface)
+            if sig:
+                status["internet"]["signal_quality"] = sig
+
+        rx, tx = self._sample_throughput()
+        status["internet"]["rx_kbps"] = rx
+        status["internet"]["tx_kbps"] = tx
+        return status

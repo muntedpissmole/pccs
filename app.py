@@ -433,6 +433,183 @@ def background_state_sync():
                 break
 
 
+# ====================== NETWORK TILE SUPPORT (for dashboard glanceable tile) ======================
+def build_network_status():
+    """Assemble the payload consumed by the Network tile (Iteration 2 design)."""
+    payload = {
+        "internet": {
+            "connected": False,
+            "friendly_name": "No Internet",
+            "rx_kbps": 0.0,
+            "tx_kbps": 0.0,
+            "ping_ms": None,
+            "ping_status": "unknown",   # good | slow | fail | unknown
+            "signal_quality": None,     # e.g. "87%" or "Excellent" or "Fair"
+        },
+        "right": {
+            "core_temp_c": None,
+            "uptime": None,
+            "dhcp_clients": 0,
+        },
+        "timestamp": None,
+    }
+
+    # Internet data (throughput + basic connectivity) from SystemInfoManager
+    try:
+        net = system_manager.get_network_status()
+        inet = net.get("internet", {})
+        payload["internet"].update({
+            "connected": inet.get("connected", False),
+            "friendly_name": inet.get("friendly_name", "No Internet"),
+            "rx_kbps": inet.get("rx_kbps", 0.0),
+            "tx_kbps": inet.get("tx_kbps", 0.0),
+            "signal_quality": inet.get("signal_quality"),
+        })
+        payload["timestamp"] = net.get("last_updated")
+    except Exception as e:
+        logger.debug(f"build_network_status net error: {e}")
+
+    # Pi Core Temp
+    try:
+        payload["right"]["core_temp_c"] = system_manager._get_cpu_temp()
+    except Exception:
+        pass
+
+    # DHCP clients count (already cached)
+    try:
+        payload["right"]["dhcp_clients"] = len(system_manager.dhcp_clients_cache)
+    except Exception:
+        pass
+
+    # App Uptime (labeled simply as "Uptime" in the UI)
+    try:
+        start_time = getattr(app, '_start_time', None)
+        if start_time:
+            payload["right"]["uptime"] = _format_uptime(datetime.now() - start_time)
+    except Exception:
+        pass
+
+    # Ping (lightweight + cached inside system_manager or here)
+    try:
+        ping_ms, ping_status = _get_cached_ping()
+        payload["internet"]["ping_ms"] = ping_ms
+        payload["internet"]["ping_status"] = ping_status
+    except Exception:
+        pass
+
+    return payload
+
+
+# Simple module-level ping cache (30-45s) to avoid hammering the network on every tile update
+_ping_cache = {"ts": 0, "ms": None, "status": "unknown"}
+_PING_CACHE_TTL = 35
+
+
+def _get_cached_ping():
+    """Return (ping_ms, status) using a short cache.
+    Tries real ping first, falls back to curl for latency measurement.
+    This makes it much more reliable across different environments.
+    """
+    import time as _t
+    import subprocess
+
+    now = _t.time()
+    is_first_call = _ping_cache["ts"] == 0
+
+    if not is_first_call and now - _ping_cache["ts"] < _PING_CACHE_TTL and _ping_cache["ms"] is not None:
+        return _ping_cache["ms"], _ping_cache["status"]
+
+    ms = None
+    status = "fail"
+
+    # Method 1: Try real ping (best when it works)
+    try:
+        start = _t.time()
+        subprocess.check_output(
+            ["ping", "-c", "1", "-W", "1", "1.1.1.1"],
+            stderr=subprocess.DEVNULL,
+            timeout=2.2
+        )
+        elapsed = (_t.time() - start) * 1000
+        ms = int(round(elapsed))
+    except Exception:
+        ms = None
+
+    # Method 2: Fallback using curl (very reliable on Pis and embedded systems)
+    if ms is None:
+        try:
+            start = _t.time()
+            # Capture stderr so we can see real errors on first failure
+            result = subprocess.run(
+                ["curl", "-I", "--connect-timeout", "2", "--max-time", "2", "http://1.1.1.1"],
+                capture_output=True,
+                text=True,
+                timeout=2.5
+            )
+            if result.returncode == 0:
+                elapsed = (_t.time() - start) * 1000
+                ms = int(round(elapsed))
+            else:
+                # Log the actual curl error on first attempt
+                if is_first_call:
+                    logger.warning(f"curl fallback failed: returncode={result.returncode}, stderr={result.stderr.strip()}")
+                ms = None
+        except Exception as e:
+            if is_first_call:
+                logger.warning(f"curl fallback exception: {e}")
+            ms = None
+
+    if ms is not None:
+        if ms < 50:
+            status = "good"
+        elif ms < 150:
+            status = "slow"
+        else:
+            status = "fail"
+    else:
+        status = "fail"
+
+    _ping_cache.update({"ts": now, "ms": ms, "status": status})
+
+    # Helpful one-time log so we can see if ping is actually succeeding
+    if is_first_call:
+        display_ms = ms if ms is not None else "None"
+        logger.info(f"🌐 First network ping measurement: {display_ms}ms (status={status})")
+
+    return ms, status
+
+
+def _format_uptime(delta):
+    """Convert a timedelta into a short human string like '14d 3h' or '2h 17m'."""
+    if not delta:
+        return None
+
+    total_seconds = int(delta.total_seconds())
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    minutes = (total_seconds % 3600) // 60
+
+    if days > 0:
+        return f"{days}d {hours}h"
+    elif hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
+
+
+def network_status_broadcaster():
+    """Push fresh network+component status to all clients every ~8-9s."""
+    import time as _time
+    while not shutdown_event.is_set():
+        try:
+            data = build_network_status()
+            socketio.emit("network_update", data)
+        except Exception as e:
+            if not shutdown_event.is_set():
+                logger.debug(f"network_status_broadcaster error: {e}")
+        _time.sleep(8.5)
+
+
 # ====================== ROUTES ======================
 @app.route('/')
 def index():
@@ -532,6 +709,15 @@ def get_current_dark_mode():
 @app.route('/api/system_info')
 def system_info():
     return system_manager.get_system_info()
+
+@app.route('/api/network_status')
+def network_status():
+    """Lightweight endpoint for the dashboard network tile (and diag fallback)."""
+    try:
+        return build_network_status()
+    except Exception as e:
+        logger.warning(f"network_status error: {e}")
+        return {"internet": {"connected": False, "friendly_name": "Error"}, "error": str(e)}
     
 # ====================== SOCKETIO ======================
 @socketio.on('light_change')
@@ -667,6 +853,12 @@ def handle_connect(sid=None):
         # Send disabled state so frontend knows not to show Sonos
         emit('sonos_update', {'enabled': False})
         emit('sonos_speakers', {'speakers': [], 'current': None, 'enabled': False})
+    
+    # ====================== INITIAL NETWORK TILE STATUS ======================
+    try:
+        emit('network_update', build_network_status())
+    except Exception as e:
+        logger.debug(f"Initial network_update emit failed: {e}")
     
     # ====================== GPS ======================
     if gps:
@@ -862,6 +1054,15 @@ def sonos_status():
     
     return sonos.get_current_state()
 
+
+# ====================== NETWORK TILE STATUS ======================
+@socketio.on('get_network_status')
+def handle_get_network_status():
+    """Frontend can request an immediate network status push (like Sonos)."""
+    try:
+        emit('network_update', build_network_status())
+    except Exception as e:
+        logger.debug(f"get_network_status handler error: {e}")
    
 @app.route('/api/version')
 def get_version_route():
@@ -1049,6 +1250,7 @@ if __name__ == "__main__":
         sonos = None
 
     threading.Thread(target=background_state_sync, daemon=True).start()
+    threading.Thread(target=network_status_broadcaster, daemon=True).start()
 
     logger.info("🎉🎉🎉 The Pissmole Camper Control System lives! 🎉🎉🎉")
 

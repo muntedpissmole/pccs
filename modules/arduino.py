@@ -249,3 +249,7 @@ class ArduinoManager:
                 self.ser.close()
             except Exception as e:
                 logger.error(f"Error closing serial: {e}")
+
+    def is_connected(self) -> bool:
+        """Return True if serial port is open and ready."""
+        return bool(self.ser and getattr(self.ser, "is_open", False))

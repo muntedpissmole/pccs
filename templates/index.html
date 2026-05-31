@@ -76,7 +76,7 @@
 			  
 			  <!-- Day Arc (Sunrise → Sunset) - now stretches with tile width -->
 			  <path id="day-path" 
-					d="M 62 58 Q 350 18 638 58" 
+					d="M 62 52 Q 350 12 638 52" 
 					fill="none" 
 					stroke="#fbbf24" 
 					stroke-width="3.5" 
@@ -85,7 +85,7 @@
 
 			  <!-- Night Arc (Sunset → Sunrise) - now stretches with tile width -->
 			  <path id="night-path" 
-					d="M 62 58 Q 350 18 638 58" 
+					d="M 62 52 Q 350 12 638 52" 
 					fill="none" 
 					stroke="#64748b" 
 					stroke-width="3" 
@@ -93,15 +93,15 @@
 					stroke-opacity="0.6"/>
 
 			  <!-- Sun / Moon -->
-			  <circle id="sun-position" cx="50" cy="48" r="10.5" fill="#fbbf24"/>
-			  <circle id="sun-glow" cx="50" cy="48" r="15.5" fill="#fbbf24" opacity="0.28"/>
+			  <circle id="sun-position" cx="50" cy="42" r="10.5" fill="#fbbf24"/>
+			  <circle id="sun-glow" cx="50" cy="42" r="15.5" fill="#fbbf24" opacity="0.28"/>
 			</svg>
 		  </div>
 
-		  <!-- Phase start times: full tile width (respecting p-5 padding),
-		       vertically in-line with the bottom of the bezier curve (y=58 baseline in the 72px viewBox) -->
-		  <div class="absolute left-0 right-0 flex justify-between pointer-events-none"
-			   style="top: 80.55%; transform: translateY(-50%);">
+		  <!-- Current phase boundary labels (adapts to Day / Evening / Night).
+		       Inset 10px from tile edges; vertically tuned to sit under the raised bezier ends. -->
+		  <div class="absolute left-2.5 right-2.5 flex justify-between pointer-events-none"
+			   style="top: 73%; transform: translateY(-50%);">
 			<span id="day-start-label" class="tile-meta" style="color: #fcd34d;">—</span>
 			<span id="evening-start-label" class="tile-meta" style="color: #94a3b8;">—</span>
 		  </div>
@@ -109,7 +109,7 @@
 	  </div>
 
 	  <!-- Sunrise / Sunset + Time -->
-	  <div class="flex items-center justify-between text-sm pt-2 border-t border-white/10 mt-auto">
+	  <div class="flex items-center justify-between text-sm pt-2 border-t border-[var(--glass-border)] mt-auto px-2.5">
 		<div class="flex items-center gap-2">
 		  <i class="fa-solid fa-sun text-amber-400"></i>
 		  <span id="sunrise" class="font-medium">—</span>
@@ -124,6 +124,59 @@
 	  </div>
 	</div>
 
+	  <!-- Temperature -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<!-- Current Temp - aligned to top -->
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Current Temp</p>
+			<p class="tile-value" id="outside-temp">—°C</p>
+		  </div>
+		  <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+		</div>
+
+		<!-- Fridge - aligned to center (vertically) -->
+		<div class="flex-1 flex items-center">
+		  <div>
+			<p class="tile-label">Fridge</p>
+			<p class="tile-value" id="fridge-temp">—°C</p>
+		  </div>
+		</div>
+
+		<!-- Min/Max - aligned to bottom -->
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Min/Max</p>
+			<div class="flex items-center gap-3">
+			  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+			</div>
+		  </div>
+		  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Water -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Water</p>
+			<p class="tile-value" id="water-level">—%</p>
+		  </div>
+		  <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto">
+		  <div class="relative">
+			<div class="h-3 bg-zinc-800/80 rounded-full overflow-hidden border border-[var(--glass-border)]">
+				<div id="water-fill" class="progress-fill"></div>
+			</div>
+			<div class="flex justify-between text-[10px] mt-1 px-1 font-mono scale-label">
+			  <div>0</div><div>50</div><div>100</div>
+			</div>
+		  </div>
+		  <div id="water-extra" class="text-xs text-white/50 mt-3 text-center font-mono"></div>
+		</div>
+	  </div>
+
 <!-- ==================== SONOS TILE (compact, 2-col top of Environmental) -->
 <div id="sonos-tile" class="tile environmental-tile glass p-3 flex flex-col col-span-2 lg:col-span-2 sonos-tile min-h-[148px]">
 
@@ -137,7 +190,7 @@
 
     <!-- Track + Artist -->
     <div class="mt-1 flex-1 min-h-0 flex flex-col justify-center overflow-hidden">
-      <p id="sonos-track" class="font-semibold text-[13px] leading-tight line-clamp-1 tracking-[-0.1px]">Nothing playing</p>
+      <p id="sonos-track" class="tile-value line-clamp-1 !leading-snug">Nothing playing</p>
       <p id="sonos-artist" class="text-xs truncate mt-0.5">—</p>
     </div>
 
@@ -194,80 +247,13 @@
   </div>
 </div>
 
-	  <!-- Water -->
-	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+	  <!-- Battery & Solar (2 columns) - placeholder for now -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full col-span-2 lg:col-span-2" id="power-tile">
 		<div class="flex justify-between items-start flex-shrink-0">
-		  <div>
-			<p class="tile-label">Water</p>
-			<p class="tile-value" id="water-level">—%</p>
-		  </div>
-		  <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
+		  <p class="tile-label">Battery &amp; Solar</p>
+		  <i class="fa-solid fa-bolt text-2xl accent-sky"></i>
 		</div>
-		<div class="mt-auto">
-		  <div class="relative">
-			<div class="h-3 bg-zinc-800/80 rounded-full overflow-hidden border border-white/10">
-				<div id="water-fill" class="progress-fill"></div>
-			</div>
-			<div class="flex justify-between text-[10px] mt-1 px-1 font-mono scale-label">
-			  <div>0</div><div>50</div><div>100</div>
-			</div>
-		  </div>
-		  <div id="water-extra" class="text-xs text-white/50 mt-3 text-center font-mono"></div>
-		</div>
-	  </div>
-
-	  <!-- BATTERY GAUGE TILE -->
-	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
-		<div class="flex justify-between items-start flex-shrink-0">
-		  <!-- Gauge -->
-		  <div class="relative w-20 h-20 -mt-2 -ml-1 flex-shrink-0">
-			<svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
-			  <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="12"/>
-			  <circle id="battery-gauge-progress" 
-					  class="accent-battery-ring"
-					  cx="60" cy="60" r="50" 
-					  fill="none" 
-					  stroke-width="12" 
-					  stroke-dasharray="314" 
-					  stroke-dashoffset="314" 
-					  stroke-linecap="round"/>
-			</svg>
-			<div class="absolute inset-0 flex flex-col items-center justify-center">
-			  <div id="battery-voltage" class="tile-value">— V</div>
-			</div>
-		  </div>
-		  <i class="fa-solid fa-battery-full text-2xl accent-sky"></i>
-		</div>
-
-		<!-- Bottom row -->
-		<div class="mt-auto flex justify-between items-end">
-		  <div class="text-left">
-			<p class="tile-label text-xs">Charge</p>
-		  </div>
-		  <div class="text-right">
-			<p id="battery-percent" class="tile-value">—%</p>
-		  </div>
-		</div>
-	  </div>
-
-	  <!-- Temperature -->
-	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
-		<div class="flex justify-between items-start flex-shrink-0">
-		  <div>
-			<p class="tile-label">Current Temp</p>
-			<p class="tile-value" id="outside-temp">—°C</p>
-		  </div>
-		  <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
-		</div>
-		<div class="mt-auto flex justify-between items-start">
-		  <div>
-			<p class="tile-label">Min/Max</p>
-			<div class="flex items-center gap-3">
-			  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
-			</div>
-		  </div>
-		  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
-		</div>
+		<!-- Content to be added later -->
 	  </div>
 
 	  <!-- Satellites / Location -->
@@ -285,6 +271,94 @@
 			<p class="tile-value" id="location">---</p>
 		  </div>
 		  <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- APPEARANCE / QUICK SETTINGS -->
+	  <div id="appearance-tile" class="tile environmental-tile glass p-5 flex flex-col">
+		<div class="flex justify-between items-start flex-shrink-0 mb-2">
+		  <div>
+			<p class="tile-label">Appearance</p>
+		  </div>
+		  <a href="/diag" class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
+			<i class="fa-solid fa-palette"></i>
+		  </a>
+		</div>
+
+		<div class="space-y-1.5">
+		  <div class="flex gap-1.5">
+			<button onclick="setDarkMode('dark')" id="btn-dark" class="mode-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 !text-sm rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-moon mode-icon text-sm"></i>
+			  <span class="font-medium">Dark</span>
+			</button>
+			<button onclick="setDarkMode('light')" id="btn-light" class="mode-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 !text-sm rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-sun mode-icon text-sm"></i>
+			  <span class="font-medium">Light</span>
+			</button>
+		  </div>
+
+		  <div class="pt-2">
+			<select id="quick-theme-select" onchange="changeTheme(this.value)" class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-2.5 py-1.5 !text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
+			</select>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Network (2 columns) -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full col-span-2 lg:col-span-2" id="network-tile">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <p class="tile-label">Network</p>
+		  <i class="fa-solid fa-network-wired text-2xl accent-sky"></i>
+		</div>
+
+		<!-- Two-column body: Internet (left) | Internal components (right) -->
+		<div class="flex-1 flex gap-3 min-h-0 pt-1">
+		  <!-- LEFT: Internet status + interface + speed -->
+		  <div class="flex-1 flex flex-col gap-0.5 pr-2 border-r border-[var(--glass-border)]">
+			<div class="flex items-center gap-1.5">
+			  <i id="net-inet-icon" class="fa-solid fa-globe fa-fw w-4 text-emerald-400"></i>
+			  <span id="net-inet-status" class="tile-value font-medium leading-none text-emerald-400">—</span>
+			</div>
+			<div class="text-[10px] opacity-70 mt-0.5">
+			  Via <span id="net-iface" class="font-medium">—</span>
+			</div>
+
+			<!-- Signal Quality row (styled like RHS) -->
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Signal:</span>
+			  <span id="net-signal" class="font-mono tabular-nums">—</span>
+			</div>
+
+			<!-- Speeds + Ping on one line, ping right-aligned -->
+			<div class="mt-auto flex items-center justify-between text-[10px] font-mono tabular-nums">
+			  <div class="flex items-center gap-1.5 opacity-70">
+			    <span>↓<span id="net-rx">—</span></span>
+			    <span>↑<span id="net-tx">—</span></span>
+			    <span class="opacity-50 text-[9px]">KB/s</span>
+			    <span id="net-link-speed" class="opacity-60 ml-1">—</span>
+			  </div>
+			  <div class="text-right">
+			    <span class="opacity-60">Latency</span> 
+			    <span id="net-ping" class="opacity-50">—</span>
+			  </div>
+			</div>
+		  </div>
+
+		  <!-- RIGHT: Core system info (Iteration 2) -->
+		  <div class="flex-1 flex flex-col gap-0.5 pl-1 text-sm">
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Core Temp:</span>
+			  <span id="net-core-temp" class="font-mono tabular-nums">—°C</span>
+			</div>
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Uptime:</span>
+			  <span id="net-uptime" class="font-medium">—</span>
+			</div>
+			<div class="flex justify-between items-baseline mt-auto">
+			  <span class="opacity-60">Clients:</span>
+			  <span id="net-dhcp-clients" class="font-mono tabular-nums">—</span>
+			</div>
+		  </div>
 		</div>
 	  </div>
 	  
@@ -309,116 +383,6 @@
     <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
     </div>
   </div>
-
-<!-- ====================== SYSTEM ====================== -->
-<div>
-  <div class="section-header">
-    <h2 class="section-title">System</h2>
-    <div class="section-line"></div>
-  </div>
-  
-  <!-- SYSTEM TILES -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-    <!-- NETWORK INFO -->
-    <div class="tile glass p-5 flex flex-col h-full">
-      <div class="flex justify-between items-start flex-shrink-0">
-        <div>
-          <p class="tile-label">Network</p>
-          <p class="tile-value text-emerald-400 text-2xl font-semibold" id="unifi-clients">14</p>
-          <p class="text-xs font-mono" style="color: var(--text-muted);">CLIENTS CONNECTED</p>
-        </div>
-        <i class="fa-solid fa-network-wired text-2xl accent-sky"></i>
-      </div>
-      <div class="mt-auto grid grid-cols-2 gap-y-4 text-sm">
-        <div>
-          <p class="text-xs" style="color: var(--text-muted);">WAN STATUS</p>
-          <p class="flex items-center gap-1.5 text-emerald-400 font-medium">
-            <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-            ONLINE
-          </p>
-        </div>
-        <div>
-          <p class="text-xs" style="color: var(--text-muted);">WiFi Name</p>
-          <p class="font-mono" style="color: var(--text-primary);" id="unifi-ssid">Pissmole</p>
-        </div>
-        <div>
-          <p class="text-xs" style="color: var(--text-muted);">DOWNLOAD</p>
-          <p class="font-medium" id="unifi-down">248 <span class="text-xs" style="color: var(--text-muted);">Mbps</span></p>
-        </div>
-        <div>
-          <p class="text-xs" style="color: var(--text-muted);">UPLOAD</p>
-          <p class="font-medium" id="unifi-up">38 <span class="text-xs" style="color: var(--text-muted);">Mbps</span></p>
-        </div>
-      </div>
-    </div>
-
-	<!-- SOLAR GENERATION -->
-	<div class="tile glass p-5 flex flex-col h-full">
-	  <div class="flex justify-between items-start">
-		<p class="tile-label">Solar</p>
-		<i class="fa-solid fa-sun text-2xl accent-sky"></i>
-	  </div>
-	  <div class="mt-auto">
-		<div class="flex justify-between items-end">
-		  <div>
-			<p class="text-xs" style="color: var(--text-muted);">CURRENT</p>
-			<p id="solar-current" class="text-5xl font-semibold leading-none accent-solar-current">0.0 <span class="text-2xl" style="color: var(--text-muted);">kW</span></p>
-		  </div>
-		  <div class="text-right">
-			<p class="text-xs" style="color: var(--text-muted);">TODAY</p>
-			<p id="solar-daily" class="text-2xl font-semibold">0.0 <span class="text-lg" style="color: var(--text-muted);">kWh</span></p>
-		  </div>
-		</div>
-		
-		<div class="mt-5">
-		  <div class="relative h-2 bg-white/10 rounded-full overflow-hidden">
-			<div id="solar-progress" class="solar-progress-bar"></div>
-		  </div>
-		  <div class="flex justify-between text-[10px] font-mono mt-1.5 px-1" style="color: var(--text-muted);">
-			<div>0%</div>
-			<div id="solar-percent-text">0% of expected</div>
-			<div>100%</div>
-		  </div>
-		</div>
-	  </div>
-	</div>
-
-	<!-- APPEARANCE / QUICK SETTINGS -->
-	<div id="appearance-tile" class="tile glass p-5 flex flex-col h-full col-span-1">
-	  <div class="flex justify-between items-start flex-shrink-0 mb-4">
-		<div>
-		  <p class="tile-label">Appearance</p>
-		</div>
-		<a href="/diag" class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
-		  <i class="fa-solid fa-palette"></i>
-		</a>
-	  </div>
-
-	  <div class="space-y-5 flex-1">
-		<div>
-		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Mode</p>
-		  <div class="flex gap-2">
-			<button onclick="setDarkMode('dark')" id="btn-dark" class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
-			  <i class="fa-solid fa-moon mode-icon"></i>
-			  <span class="font-medium">Dark</span>
-			</button>
-			<button onclick="setDarkMode('light')" id="btn-light" class="mode-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
-			  <i class="fa-solid fa-sun mode-icon"></i>
-			  <span class="font-medium">Light</span>
-			</button>
-		  </div>
-		</div>
-
-		<div>
-		  <p class="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2">Theme</p>
-		  <select id="quick-theme-select" onchange="changeTheme(this.value)" class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
-		  </select>
-		</div>
-	  </div>
-	</div>
-  </div>
-</div>
 
   <div id="toast-container"></div>
 
@@ -1009,10 +973,12 @@
 
     // ==================== GPS, SENSORS, WEATHER ====================
     let hasValidGPSFix = false;
+    let gpsStatusReceived = false;
 
 	function updateGPS(data) { 
 		if (!data) return;
 
+		gpsStatusReceived = true;
 		const fixQuality = parseInt(data.fix_quality || 0);
 		hasValidGPSFix = fixQuality >= 1;
 
@@ -1057,21 +1023,27 @@
     const WEATHER_INTERVAL_MS = 3600 * 1000;
 
 	function updateClock() {
-		if (hasValidGPSFix) return;
+		// Only show local browser time + * when the backend has explicitly confirmed no GPS fix.
+		// Before we hear from the backend, or when it reports a valid fix, do not show the warning asterisk.
+		if (gpsStatusReceived && hasValidGPSFix) return;
 
 		const now = new Date();
 		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
 		const day = now.getDate();
 		const month = now.toLocaleDateString('en-AU', { month: 'short' });
 		
-		document.getElementById('tile-date').textContent = `${dayName} ${day} ${month} *`;
+		const showWarning = gpsStatusReceived && !hasValidGPSFix;
+		const dateSuffix = showWarning ? ' *' : '';
+		const timeSuffix = showWarning ? ' *' : '';
+		
+		document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}${dateSuffix}`;
 		
 		let hours = now.getHours();
 		let minutes = now.getMinutes().toString().padStart(2, '0');
 		const ampm = hours >= 12 ? 'PM' : 'AM';
 		hours = hours % 12 || 12;
 		
-		document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm} *`;
+		document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}${timeSuffix}`;
 	}
 
 	function updateSensors(data) {
@@ -1115,41 +1087,6 @@
 			}
 		}
 
-		// ==================== SOLAR ====================
-		if (data.solar_kw !== undefined) {
-			const currentEl = document.getElementById('solar-current');
-			if (currentEl) {
-				currentEl.innerHTML = `${parseFloat(data.solar_kw).toFixed(1)} <span class="text-2xl" style="color: var(--text-muted);">kW</span>`;
-			}
-		}
-
-		if (data.solar_daily_kwh !== undefined) {
-			const dailyEl = document.getElementById('solar-daily');
-			if (dailyEl) {
-				dailyEl.innerHTML = `${parseFloat(data.solar_daily_kwh).toFixed(1)} <span class="text-lg" style="color: var(--text-muted);">kWh</span>`;
-			}
-		}
-
-		if (data.solar_percent_of_expected !== undefined) {
-			const progressBar = document.getElementById('solar-progress');
-			const percentText = document.getElementById('solar-percent-text');
-			
-			if (progressBar) {
-				const percent = Math.min(100, Math.max(0, data.solar_percent_of_expected));
-				
-				// Smooth animation like the water gauge
-				progressBar.style.transition = 'none';
-				// Force reflow
-				void progressBar.offsetWidth;
-				progressBar.style.transition = 'width 1000ms ease-out';
-				progressBar.style.width = `${percent}%`;
-			}
-			
-			if (percentText) {
-				percentText.textContent = `${Math.round(data.solar_percent_of_expected)}% of expected`;
-			}
-		}
-
 		// ==================== TEMPERATURE ====================
 		if (data.temp_c !== undefined && data.temp_c !== null) {
 			const tempEl = document.getElementById('outside-temp');
@@ -1158,41 +1095,15 @@
 			}
 		}
 
-		// ==================== BATTERY GAUGE ====================
-		if (data.battery_charge !== undefined) {
-			const percent = Math.max(0, Math.min(100, Math.round(data.battery_charge)));
-			
-			// Voltage
-			if (data.battery_voltage !== undefined) {
-				document.getElementById('battery-voltage').textContent = 
-					`${parseFloat(data.battery_voltage).toFixed(1)} V`;
+		if (data.fridge_temp_c !== undefined && data.fridge_temp_c !== null) {
+			const fridgeEl = document.getElementById('fridge-temp');
+			if (fridgeEl) {
+				fridgeEl.textContent = `${Math.round(data.fridge_temp_c)}°C`;
 			}
-			
-			// Percent text
-			const percentEl = document.getElementById('battery-percent');
-			if (percentEl) {
-				percentEl.textContent = `${percent}%`;
-				percentEl.className = 'tile-value text-2xl font-semibold ' + 
-					(percent < 25 ? 'text-red-400' : 
-					 percent < 50 ? 'text-amber-400' : 'text-emerald-400');
-			}
-
-			// Circular gauge
-			const progress = document.getElementById('battery-gauge-progress');
-			if (progress) {
-				const offset = 314 * (1 - percent / 100);
-				progress.style.strokeDashoffset = offset;
-
-				// Color logic
-				if (percent < 25) {
-					progress.classList.add('low');
-					progress.classList.remove('warning');
-				} else if (percent < 50) {
-					progress.classList.add('warning');
-					progress.classList.remove('low');
-				} else {
-					progress.classList.remove('low', 'warning');
-				}
+		} else {
+			const fridgeEl = document.getElementById('fridge-temp');
+			if (fridgeEl) {
+				fridgeEl.textContent = '—°C';
 			}
 		}
 	}
@@ -1203,21 +1114,36 @@
 
 		// Date
 		if (data.date) {
-			const dateObj = new Date(data.date);
-			if (!isNaN(dateObj.getTime())) {
-				const dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
-				const day = dateObj.getDate();
-				const month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+			let dayName = '', day = '', month = '';
+			const dateStr = data.date.trim();
+
+			// Try robust manual parse for known backend formats first
+			// Format 1: "Monday, 12 May 2025"
+			let m = dateStr.match(/^([A-Za-z]+),\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+			if (m) {
+				dayName = m[1].slice(0, 3);
+				day = m[2];
+				month = m[3].slice(0, 3);
+			} else {
+				// Format 2: "2025-05-12" or let Date try
+				const dateObj = new Date(dateStr);
+				if (!isNaN(dateObj.getTime())) {
+					dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
+					day = dateObj.getDate();
+					month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+				}
+			}
+			if (dayName && day && month) {
 				document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}`;
 			}
 		}
 
 		// Time
 		if (data.local_time) {
-			const dateObj = new Date(`1970-01-01 ${data.local_time}`);
-			if (!isNaN(dateObj.getTime())) {
-				let hours = dateObj.getHours();
-				const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+			const mins = parseTimeToMinutes(data.local_time);
+			if (mins !== null) {
+				let hours = Math.floor(mins / 60);
+				const minutes = (mins % 60).toString().padStart(2, '0');
 				const ampm = hours >= 12 ? 'PM' : 'AM';
 				hours = hours % 12 || 12;
 				document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}`;
@@ -1236,6 +1162,10 @@
 			if (sunsetEl) sunsetEl.textContent = sunsetTime;
 		}
 
+		// Recompute the curve inset immediately using the real rendered width of the sunrise/sunset labels.
+		// This prevents the bezier edges from overlapping the time text on narrow screens (iPhone).
+		updateCurveGeometry();
+
 		// Animate sun position (still uses raw sunrise/sunset for the arc math + coloring)
 		animateSunPosition(data.sunrise, data.sunset, data.local_time);
 	}
@@ -1252,6 +1182,82 @@
 		updatePhaseCurveLabels();
 	}
 
+	// ==================== NETWORK TILE (Iteration 2) ====================
+	function updateNetworkTile(data) {
+		if (!data) return;
+		const inet = (data.internet || {});
+		const right = (data.right || {});
+
+		// LEFT half (internet)
+		const statusEl = document.getElementById('net-inet-status');
+		const iconEl = document.getElementById('net-inet-icon');
+		const ifaceEl = document.getElementById('net-iface');
+		const rxEl = document.getElementById('net-rx');
+		const txEl = document.getElementById('net-tx');
+		const linkEl = document.getElementById('net-link-speed');
+		const pingEl = document.getElementById('net-ping');
+		const signalEl = document.getElementById('net-signal');
+
+		const connected = !!inet.connected;
+		const statusText = connected ? 'Online' : 'Offline';
+		const statusColor = connected ? 'text-emerald-400' : 'text-red-400';
+		const icon = connected ? 'fa-globe' : 'fa-exclamation-triangle';
+
+		if (statusEl) {
+			statusEl.textContent = statusText;
+			statusEl.className = `tile-value font-medium leading-none ${statusColor}`;
+		}
+		if (iconEl) {
+			iconEl.className = `fa-solid ${icon} fa-fw w-4 ${statusColor}`;
+		}
+		if (ifaceEl) {
+			ifaceEl.textContent = inet.friendly_name || '—';
+		}
+		if (signalEl) {
+			// Show whatever quality info the backend provides (e.g. "87%" or "Excellent" or "—")
+			signalEl.textContent = inet.signal_quality || '—';
+		}
+		if (rxEl) rxEl.textContent = (inet.rx_kbps != null) ? `${inet.rx_kbps}` : '—';
+		if (txEl) txEl.textContent = (inet.tx_kbps != null) ? `${inet.tx_kbps}` : '—';
+		if (linkEl) {
+			linkEl.textContent = inet.link_speed_mbps ? `${inet.link_speed_mbps}M` : '';
+		}
+
+		// Ping (left side, right-aligned in the speed row)
+		if (pingEl) {
+			const ms = inet.ping_ms;
+			const pstatus = inet.ping_status || 'unknown';
+
+			let colorClass = 'opacity-60';
+			if (pstatus === 'good') colorClass = 'text-emerald-400';
+			else if (pstatus === 'slow') colorClass = 'text-amber-400';
+			else if (pstatus === 'fail') colorClass = 'text-red-400';
+
+			if (ms != null && ms !== undefined) {
+				pingEl.innerHTML = `<span class="${colorClass}">${ms}ms</span>`;
+			} else {
+				pingEl.innerHTML = `<span class="opacity-50">—</span>`;
+			}
+		}
+
+		// RIGHT half (new Iteration 2 layout)
+		const tempEl = document.getElementById('net-core-temp');
+		const uptimeEl = document.getElementById('net-uptime');
+		const clientsEl = document.getElementById('net-dhcp-clients');
+
+		if (tempEl) {
+			const t = right.core_temp_c;
+			tempEl.textContent = (t != null) ? `${t}°C` : '—°C';
+		}
+		if (uptimeEl) {
+			uptimeEl.textContent = right.uptime || '—';
+		}
+		if (clientsEl) {
+			const c = right.dhcp_clients;
+			clientsEl.textContent = (c != null) ? c : '—';
+		}
+	}
+
 	function parseTimeToMinutes(str) {
 		if (!str || typeof str !== 'string') return null;
 		const m = str.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
@@ -1266,12 +1272,44 @@
 	}
 
 	function updatePhaseCurveLabels() {
-		const dayLabel = document.getElementById('day-start-label');
-		const eveLabel = document.getElementById('evening-start-label');
-		if (!dayLabel || !eveLabel) return;
+		const leftLabel = document.getElementById('day-start-label');
+		const rightLabel = document.getElementById('evening-start-label');
+		if (!leftLabel || !rightLabel) return;
 
-		dayLabel.textContent = stripLeadingZero(phaseInfo.day_start) || '—';
-		eveLabel.textContent = stripLeadingZero(phaseInfo.evening_start) || '—';
+		const phase = (phaseInfo.phase || 'Day').toLowerCase();
+		const dayStart = stripLeadingZero(phaseInfo.day_start) || '—';
+		const eveStart = stripLeadingZero(phaseInfo.evening_start) || '—';
+		const nightStart = stripLeadingZero(phaseInfo.night_start) || '—';
+
+		let leftText, rightText;
+		let leftColor = '#fcd34d';   // day yellow
+		let rightColor = '#94a3b8';  // evening gray
+
+		if (phase === 'day') {
+			// Day phase: left = when Day began, right = when Evening begins
+			leftText = dayStart;
+			rightText = eveStart;
+			leftColor = '#fcd34d';
+			rightColor = '#94a3b8';
+		} else if (phase === 'evening') {
+			// Evening phase: left = when the current (Evening) phase began,
+			// right = day start time (reference to the daylight arc)
+			leftText = eveStart;
+			rightText = dayStart;
+			leftColor = '#94a3b8';   // evening gray for current phase start on left
+			rightColor = '#fcd34d';  // day yellow for the day start reference on right
+		} else {
+			// Night phase: left = when Night began, right = when (next) Day begins
+			leftText = nightStart;
+			rightText = dayStart;
+			leftColor = '#64748b';
+			rightColor = '#fcd34d';
+		}
+
+		leftLabel.textContent = leftText;
+		rightLabel.textContent = rightText;
+		leftLabel.style.color = leftColor;
+		rightLabel.style.color = rightColor;
 	}
 
 	// Dynamic curve geometry so the arch doesn't look flat when the tile is wide
@@ -1307,15 +1345,25 @@
 		// Arch height that grows gently with width so it doesn't go flat
 		const archHeight = Math.min(52, Math.max(36, 28 + w * 0.045));
 
-		const inset = (w * 0.085) + 20; // bring curve in ~20px each side so it doesn't touch the time labels
+		// Compute horizontal inset for the bezier so its ends clear the sunrise/sunset time labels + icons.
+		// Critical on iPhone/narrow screens where the bottom row (with px-2.5) + time text width can otherwise be overlapped by the curve.
+		// The bottom time groups live after 10px padding; we measure the rendered group and add breathing room.
+		let minInset = 38;
+		const sunriseGroup = document.getElementById('sunrise')?.parentElement;
+		if (sunriseGroup) {
+			const groupWidth = sunriseGroup.getBoundingClientRect().width;
+			// 10px (from row's px-2.5) + actual rendered width of icon+text + 14px gap after the time block
+			minInset = 10 + groupWidth + 14;
+		}
+		const inset = Math.max(w * 0.085 + 8, minInset);
 
 		const x0 = inset;
 		const x1 = w / 2;
 		const x2 = w - inset;
 
-		const y0 = 58;
+		const y0 = 52;
 		const y1 = y0 - archHeight;
-		const y2 = 58;
+		const y2 = 52;  // lowered from 58 so the bezier sits nicely between the upper phase labels and bottom sunrise/sunset times
 
 		const viewBoxW = Math.round(w);
 		const targetParams = { x0, x1, x2, y0, y1, y2, viewBoxW, h };
@@ -1348,7 +1396,7 @@
 
 	// --- Pure helpers for curve animation (always follow the quadratic Bezier) ---
 	function getPointOnCurve(t, params) {
-		if (!params) return { x: 80, y: 48 };
+		if (!params) return { x: 80, y: 38 };  // fallback mid-curve y for the raised bezier (y0=52)
 		const { x0, y0, x1, y1, x2, y2 } = params;
 		const mt = 1 - t;
 		const x = mt * mt * x0 + 2 * mt * t * x1 + t * t * x2;
@@ -1532,9 +1580,9 @@
 		// Don't position until we know the actual curve width
 		if (!curveGeometryReady || !currentCurveParams) {
 			sun.setAttribute('cx', 80);
-			sun.setAttribute('cy', 48);
+			sun.setAttribute('cy', 38);
 			glow.setAttribute('cx', 80);
-			glow.setAttribute('cy', 48);
+			glow.setAttribute('cy', 38);
 			displayT = 0.5;
 			return;
 		}
@@ -1672,6 +1720,7 @@
     socket.on('sensor_update', updateSensors);
     socket.on('gps_update', updateGPS);
     socket.on('phase_update', updatePhaseInfo);
+    socket.on('network_update', updateNetworkTile);
 	
     // ====================== DARK MODE ======================
     socket.on('global_dark_mode_update', function(data) {
@@ -1690,6 +1739,12 @@
 		loadScenes();
 		loadVersion();
 		requestSonosState();
+		// Network tile (internet + component health)
+		socket.emit('get_network_status');
+		// Belt-and-suspenders: fetch once in case socket timing is odd on first load
+		setTimeout(() => {
+			fetch('/api/network_status').then(r => r.json()).then(updateNetworkTile).catch(() => {});
+		}, 1200);
 		// Make sure curve geometry is fresh when we get real data
 		setTimeout(updateCurveGeometry, 50);
 	});

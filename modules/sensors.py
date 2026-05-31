@@ -4,8 +4,6 @@ import time
 import logging
 import glob
 import os
-import json
-from datetime import date
 
 logger = logging.getLogger("pccs")
 logger.propagate = True
@@ -19,82 +17,48 @@ class SensorManager:
         self.running = False
         self.thread = None
 
-        # ====================== SOLAR DAILY TRACKING ======================
-        self.daily_kwh = 0.0
-        self.last_solar_kw = 0.0
-        self.last_update_ts = time.time()
-        self.today = date.today()
-        self.data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-        os.makedirs(self.data_dir, exist_ok=True)
-        self.daily_file = os.path.join(self.data_dir, 'solar_daily.json')
-        
-        self.load_daily_total()
-        # =================================================================
-
         os.system('modprobe w1-gpio')
         os.system('modprobe w1-therm')
         time.sleep(0.5)
 
         # ====================== CALIBRATION FROM CONFIG ======================
-        self.BATTERY_DIVIDER = config.getfloat('sensors', 'battery_divider')
-        self.BATTERY_FULL_V = config.getfloat('sensors', 'battery_full_voltage')
-        self.BATTERY_EMPTY_V = config.getfloat('sensors', 'battery_empty_voltage')
-
         self.WATER_R_EMPTY = config.getfloat('sensors', 'water_resistance_empty')
         self.WATER_R_FULL = config.getfloat('sensors', 'water_resistance_full')
 
-        self.SOLAR_ZERO_OFFSET = config.getfloat('sensors', 'solar_zero_offset')
-        self.SOLAR_SENSITIVITY = config.getfloat('sensors', 'solar_sensitivity')
-        self.SOLAR_NOMINAL_V = config.getfloat('sensors', 'solar_nominal_voltage')
+        # Analog pin for water level sensor (via Arduino)
+        self.WATER_PIN = config.getint('arduino analog', 'water_pin')
 
-        # Analog pins from config
-        self.BATTERY_PIN = config.getint('arduino analog', 'battery_pin')
-        self.WATER_PIN   = config.getint('arduino analog', 'water_pin')
-        self.SOLAR_PIN   = config.getint('arduino analog', 'solar_pin')
+        # 1-Wire DS18B20 sensor IDs (folder names under /sys/bus/w1/devices/, e.g. "28-3ce1d4435d5a")
+        # Leave blank to auto-detect first available 28* device.
+        self.OUTSIDE_TEMP_ID = (config.get('sensors', 'outside_temp_sensor', fallback='') or '').strip() or None
+        self.FRIDGE_TEMP_ID  = (config.get('sensors', 'fridge_temp_sensor', fallback='') or '').strip() or None
         # ========================================================
-        
-        self.solar_capacity_watts = config.getfloat('sensors', 'solar_capacity_watts', fallback=500.0)
 
-        logger.info("🔋 SensorManager initialized")
+        outside_mode = "auto" if not self.OUTSIDE_TEMP_ID else "configured"
+        fridge_mode = "configured" if self.FRIDGE_TEMP_ID else "not configured"
+        logger.info("🔋 SensorManager initialized (water + 1-wire temps only — solar CT + battery voltage divider fully removed: outside=%s, fridge=%s)",
+                    outside_mode, fridge_mode)
 
-    def load_daily_total(self):
-        """Load today's total or reset if new day"""
-        try:
-            if os.path.exists(self.daily_file):
-                with open(self.daily_file, 'r') as f:
-                    data = json.load(f)
-                    if data.get('date') == str(self.today):
-                        self.daily_kwh = float(data.get('kwh', 0.0))
-                        logger.info(f"📊 Loaded solar daily total: {self.daily_kwh:.2f} kWh")
-                        return
-        except Exception as e:
-            logger.warning(f"Failed to load solar daily file: {e}")
-
-        self.daily_kwh = 0.0
-        self.save_daily_total()
-
-    def save_daily_total(self):
-        try:
-            with open(self.daily_file, 'w') as f:
-                json.dump({
-                    'date': str(self.today),
-                    'kwh': round(self.daily_kwh, 3)
-                }, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save solar daily total: {e}")
-
-    def _read_ds18b20(self):
-        """Read DS18B20 with clear debugging"""
+    def _read_ds18b20(self, sensor_id=None):
+        """Read DS18B20. If sensor_id given (e.g. '28-xxx'), read that exact device; else first 28* found."""
         try:
             base_dir = '/sys/bus/w1/devices/'
-            device_folders = glob.glob(base_dir + '28*')
-            
-            if not device_folders:
-                logger.warning("No 1-Wire DS18B20 sensor found")
-                return None
+
+            if sensor_id:
+                device_folder = os.path.join(base_dir, sensor_id)
+                if not os.path.isdir(device_folder):
+                    logger.warning("   🌡️ Configured 1-Wire sensor not present: %s", sensor_id)
+                    return None
+                device_folders = [device_folder]
+            else:
+                device_folders = glob.glob(base_dir + '28*')
+                if not device_folders:
+                    logger.warning("No 1-Wire DS18B20 sensor found")
+                    return None
 
             device_file = device_folders[0] + '/w1_slave'
-            logger.debug("   🌡️ Reading sensor: %s", device_folders[0].split('/')[-1])
+            sensor_name = device_folders[0].split('/')[-1]
+            logger.debug("   🌡️ Reading sensor: %s", sensor_name)
             
             # Read twice for reliability
             for i in range(2):
@@ -124,10 +88,10 @@ class SensorManager:
                         time.sleep(0.3)
                         continue
                         
-                    logger.debug("   🌡️ Temperature = %.1f°C", temp_c)
+                    logger.debug("   🌡️ Temperature = %.1f°C [%s]", temp_c, sensor_name)
                     return round(temp_c, 1)
 
-            logger.error("   ⚠️ DS18B20 read failed after retries")
+            logger.error("   ⚠️ DS18B20 read failed after retries [%s]", sensor_name)
             return None
 
         except Exception as e:
@@ -172,40 +136,6 @@ class SensorManager:
         logger.warning("   ⚠️ Failed to read VCC")
         return 5.0
 
-    def _calculate_battery(self, adc, vcc):
-        if adc is None or vcc is None:
-            return 0.0, 0
-        v_a0 = adc * vcc / 1023.0
-        voltage = round(v_a0 * self.BATTERY_DIVIDER, 2)
-        soc = self._voltage_to_soc(voltage)
-        return voltage, soc
-
-    def _voltage_to_soc(self, voltage):
-        soc_table = [
-            (self.BATTERY_EMPTY_V, 0),
-            (11.8, 5),
-            (12.4, 10),
-            (12.7, 20),
-            (12.9, 30),
-            (13.0, 40),
-            (13.05, 50),
-            (13.10, 60),
-            (13.15, 70),
-            (13.20, 80),
-            (13.30, 90),
-            (self.BATTERY_FULL_V, 100)
-        ]
-        if voltage <= soc_table[0][0]:
-            return 0
-        if voltage >= soc_table[-1][0]:
-            return 100
-        for i in range(len(soc_table) - 1):
-            v1, s1 = soc_table[i]
-            v2, s2 = soc_table[i + 1]
-            if v1 <= voltage < v2:
-                return round(s1 + (s2 - s1) * (voltage - v1) / (v2 - v1))
-        return 100
-
     def _calculate_water(self, adc, vcc):
         if adc is None or vcc is None:
             return 0
@@ -216,71 +146,26 @@ class SensorManager:
         pct = (self.WATER_R_EMPTY - sensor_r) / (self.WATER_R_EMPTY - self.WATER_R_FULL) * 100
         return round(max(0, min(100, pct)))
 
-    def _calculate_solar_current(self, adc, vcc):
-        if adc is None:
-            return 0.0
-        v_a2 = adc * (vcc or 5.0) / 1023.0
-        current = (v_a2 - self.SOLAR_ZERO_OFFSET) / self.SOLAR_SENSITIVITY
-        return max(0.0, round(current, 1))
-
-    # ====================== SOLAR ENERGY ACCUMULATION ======================
-    def _accumulate_solar_energy(self, current_kw: float):
-        now = time.time()
-        delta_hours = (now - self.last_update_ts) / 3600.0
-        
-        # Trapezoidal integration
-        self.daily_kwh += (self.last_solar_kw + current_kw) / 2.0 * delta_hours
-        
-        self.last_solar_kw = current_kw
-        self.last_update_ts = now
-
-        # Midnight rollover
-        if date.today() != self.today:
-            self.today = date.today()
-            self.daily_kwh = 0.0
-            self.last_solar_kw = 0.0
-            self.save_daily_total()
-
-    # =====================================================================
-
     def update_sensors(self):
-        logger.debug("🔄 Updating sensors...")
+        logger.debug("🔄 Updating sensors (water + temperature)...")
         
-        adc_battery = self._read_analog(self.BATTERY_PIN)
         adc_water   = self._read_analog(self.WATER_PIN)
-        adc_solar   = self._read_analog(self.SOLAR_PIN)
         vcc         = self._read_vcc()
-        temp_c      = self._read_ds18b20()
+        outside_temp = self._read_ds18b20(self.OUTSIDE_TEMP_ID)
+        fridge_temp  = self._read_ds18b20(self.FRIDGE_TEMP_ID) if self.FRIDGE_TEMP_ID else None
 
-        battery_v, battery_pct = self._calculate_battery(adc_battery, vcc)
         water_pct = self._calculate_water(adc_water, vcc)
-        solar_a   = self._calculate_solar_current(adc_solar, vcc)
-        solar_kw  = round(solar_a * self.SOLAR_NOMINAL_V / 1000.0, 1)
-
-        self._accumulate_solar_energy(solar_kw)
-
-        # Calculate % of expected daily yield
-        expected_daily_kwh = (self.solar_capacity_watts / 1000.0) * 4.0
-        solar_percent = round((self.daily_kwh / expected_daily_kwh * 100), 0) if expected_daily_kwh > 0 else 0
 
         sensor_data = {
-            "battery_voltage": battery_v,
-            "battery_charge": battery_pct,
             "water_percent": water_pct,
-            "solar_kw": solar_kw,
-            "solar_a": solar_a,
-            "solar_daily_kwh": round(self.daily_kwh, 1),
-            "solar_percent_of_expected": solar_percent,
-            "temp_c": temp_c if temp_c is not None else None,
-            "temp_valid": temp_c is not None
+            "temp_c": outside_temp if outside_temp is not None else None,  # legacy key
+            "outside_temp_c": outside_temp,
+            "fridge_temp_c": fridge_temp,
+            "temp_valid": outside_temp is not None
         }
 
         logger.debug("📤 Emitting sensor data: %s", sensor_data)
         self.socketio.emit('sensor_update', sensor_data)
-
-        # Save every minute
-        if int(time.time()) % 60 == 0:
-            self.save_daily_total()
 
     def _loop(self):
         while self.running:
@@ -294,4 +179,3 @@ class SensorManager:
         self.running = False
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2)
-        self.save_daily_total()  # final save on shutdown
