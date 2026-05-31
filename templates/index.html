@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -247,13 +249,69 @@
   </div>
 </div>
 
-	  <!-- Battery & Solar (2 columns) - placeholder for now -->
-	  <div class="tile environmental-tile glass p-5 flex flex-col h-full col-span-2 lg:col-span-2" id="power-tile">
-		<div class="flex justify-between items-start flex-shrink-0">
-		  <p class="tile-label">Battery &amp; Solar</p>
-		  <i class="fa-solid fa-bolt text-2xl accent-sky"></i>
+	  <!-- Battery & Solar tile - gauge now has its own column that can stretch vertically -->
+	  <div class="tile environmental-tile glass p-2.5 flex flex-col h-full col-span-2 lg:col-span-2 min-h-[148px]" id="power-tile">
+		<!-- Very compact header -->
+		<div class="flex justify-between items-center flex-shrink-0 mb-1">
+		  <p class="tile-label text-xs">Battery &amp; Solar</p>
+		  <i class="fa-solid fa-bolt-lightning text-base accent-sky"></i>
 		</div>
-		<!-- Content to be added later -->
+
+		<!-- Main stretchy area: left = gauge (full available height), right = data -->
+		<div class="flex-1 flex gap-2.5 min-h-0">
+		  
+		  <!-- Gauge column - can expand toward the bottom of the tile -->
+		  <div class="flex items-center" style="width: 92px;">
+			<div class="relative w-[92px] h-[92px] flex-shrink-0" id="soc-gauge-container">
+			  <svg id="soc-gauge" width="92" height="92" class="w-[92px] h-[92px] -rotate-90" viewBox="0 0 92 92">
+				<!-- Background ring -->
+				<circle cx="46" cy="46" r="39" fill="none"
+						stroke="rgba(255,255,255,0.12)" stroke-width="6.5"/>
+				<!-- Progress ring -->
+				<circle id="soc-progress" cx="46" cy="46" r="39" fill="none"
+						stroke="var(--accent-color)" stroke-width="6.5" stroke-linecap="round"
+						stroke-dasharray="245.0" stroke-dashoffset="245.0"/>
+			  </svg>
+			  <!-- Big centered percentage with substantially more padding from the ring -->
+			  <div class="absolute inset-[14px] flex items-center justify-center pointer-events-none">
+				<span id="soc-percent" class="text-[24px] font-semibold tabular-nums leading-none tracking-tighter">—%</span>
+			  </div>
+			</div>
+		  </div>
+
+		  <!-- Right column: metrics + Today pinned to its own bottom -->
+		  <div class="flex-1 flex flex-col min-w-0">
+			<!-- Metrics - matches style of Network tile small data -->
+			<div class="flex-1 flex flex-col gap-0.5 text-sm">
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">V</span>
+				<span id="bat-voltage" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">TTG</span>
+				<span id="bat-ttg" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">Used</span>
+				<span id="bat-consumed" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">Solar</span>
+				<span id="sol-current" class="font-semibold font-mono">—</span>
+			  </div>
+			</div>
+
+			<!-- Today + charge state - only under the right column (secondary style) -->
+			<div class="text-[10px] font-medium border-t border-white/10 pt-1 mt-auto flex items-baseline justify-between">
+			  <div>
+				<span class="opacity-60">Today</span>
+				<span id="sol-today" class="tabular-nums font-semibold font-mono">—</span>
+			  </div>
+			  <div id="charge-state" class="opacity-50 font-normal tabular-nums">—</div>
+			</div>
+		  </div>
+
+		</div>
 	  </div>
 
 	  <!-- Satellites / Location -->
@@ -410,8 +468,6 @@
     function applyDarkMode(data) {
         const mode = data.mode;
         const isForced = data.forced === true;
-        
-        console.log('🌗 Applying dark mode:', mode, '(forced:', isForced, ')');
 
         const html = document.documentElement;
         html.classList.remove('dark', 'light');
@@ -538,14 +594,11 @@
 		
 		const currentHash = JSON.stringify(lightsConfig.map(l => l.name + l.type));
 		if (currentHash === lastRenderConfigHash && lightsConfig.length > 0) {
-			console.log('🔄 Config unchanged → only updating UI values');
 			updateUIFromState();
 			return;
 		}
 		
 		lastRenderConfigHash = currentHash;
-
-		console.log('🎨 Full re-render of lighting controls | Columns:', getCurrentColumns(), '| Lights:', lightsConfig.length);
 
 		container.innerHTML = '';
 
@@ -746,7 +799,6 @@
 		}
 		
 		container.addEventListener('click', handleLightingClick);
-		console.log('✅ Unified toggle listener attached');
 	}
 
 	function updateLightUI(name, value) {
@@ -1694,7 +1746,6 @@
 
     // ==================== SOCKET LISTENERS ====================
 	socket.on('lights_config', (config) => {
-		console.log('📋 Received lights config from backend:', config);
 		lightsConfig = config || [];
 		renderLightingControls();
 		if (Object.keys(currentState).length > 0) updateUIFromState();
@@ -1721,6 +1772,7 @@
     socket.on('gps_update', updateGPS);
     socket.on('phase_update', updatePhaseInfo);
     socket.on('network_update', updateNetworkTile);
+    socket.on('victron_update', updatePowerTile);
 	
     // ====================== DARK MODE ======================
     socket.on('global_dark_mode_update', function(data) {
@@ -1731,7 +1783,6 @@
 
     // ==================== SOCKET CONNECTION ====================
 	socket.on('connect', () => {
-		console.log('✅ Backend connected');
 		hideOfflineBanner();
 		registerThemeListener();
 		loadCurrentTheme();
@@ -1741,6 +1792,7 @@
 		requestSonosState();
 		// Network tile (internet + component health)
 		socket.emit('get_network_status');
+		socket.emit('get_victron_state');
 		// Belt-and-suspenders: fetch once in case socket timing is odd on first load
 		setTimeout(() => {
 			fetch('/api/network_status').then(r => r.json()).then(updateNetworkTile).catch(() => {});
@@ -1867,12 +1919,6 @@ function fixLastRowStretching(container) {
         loadVersion();
 		
 		startProgressUpdater();
-		
-	setTimeout(() => {
-        if (!document.fullscreenElement) {
-            toggleFullscreen();
-        }
-    }, 1200);
 
         document.querySelectorAll('.scene-btn').forEach(btn => {
             btn.addEventListener('click', () => setScene(btn.dataset.scene));
@@ -1884,7 +1930,6 @@ function fixLastRowStretching(container) {
 		function handleResizeForLighting() {
 			const newCols = getCurrentColumns();
 			if (newCols !== lastColumnCount && lightsConfig.length > 0) {
-				console.log(`🔄 Column layout changed (${lastColumnCount} → ${newCols}) → re-rendering`);
 				lastColumnCount = newCols;
 				renderLightingControls();
 			}
@@ -1895,8 +1940,6 @@ function fixLastRowStretching(container) {
         setTimeout(() => {
             lastColumnCount = getCurrentColumns();
         }, 300);
-
-        console.log("🚀 PCCS Frontend Ready – waiting for lights_config from backend");
         
     };
 	
@@ -1977,11 +2020,8 @@ function fixLastRowStretching(container) {
 
 <!-- ==================== SONOS SOCKET LISTENERS ==================== -->
 socket.on('sonos_speakers', function(data) {
-    console.log('🎵 Sonos speakers updated:', data);
-    
     if (data.current) {
         currentActiveSonosSpeaker = data.current;
-        console.log('🎵 Active speaker confirmed:', data.current);
     }
 });
 
@@ -1990,11 +2030,9 @@ socket.on('sonos_update', function(state) {
     
     // Only process updates for the currently active speaker on the main dashboard
     if (currentActiveSonosSpeaker && state.speaker !== currentActiveSonosSpeaker) {
-        console.log(`🎵 Ignored update for non-active speaker: ${state.speaker}`);
         return;
     }
 
-    console.log('🎵 Received Sonos update for active speaker:', state.speaker);
     updateSonosUI(state);
 });
 
@@ -2114,7 +2152,6 @@ function sonosVolumeChange(volume) {
 function requestSonosState() {
     if (socket.connected) {
         socket.emit('sonos_request_state');
-        console.log('🎵 Requested Sonos state + speakers');
     } else {
         setTimeout(requestSonosState, 300);
     }
@@ -2167,6 +2204,165 @@ document.getElementById('sonos-progress-container').addEventListener('click', fu
 });
 
 // ====================== FULLSCREEN TOGGLE ======================
+// ==================== VICTRON / POWER TILE (Battery + Solar) ====================
+function formatTTG(mins) {
+  if (mins === null || mins === undefined || mins <= 0) return '—';
+  if (mins >= 65000) return '∞';           // Victron "infinite / charging" sentinel
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+  return `${m}m`;
+}
+
+function updatePowerTile(data) {
+  if (!data) return;
+  const tile = document.getElementById('power-tile');
+  if (!tile) return;
+
+  const isEnabled = data.enabled !== false;
+  const isStale = !!data.stale || !isEnabled;
+
+  tile.classList.toggle('stale', isStale);
+
+  // SoC gauge + big percentage (with % unit)
+  const soc = (data.soc != null) ? Math.max(0, Math.min(100, Math.round(data.soc))) : null;
+  const socEl = document.getElementById('soc-percent');
+  const progress = document.getElementById('soc-progress');
+  if (socEl) socEl.textContent = (soc != null) ? soc + '%' : '—';
+  if (progress) {
+    const circ = 245.0; // 2 * PI * 39 (for 92px gauge, r=39)
+    const offset = (soc != null) ? circ * (1 - (soc / 100)) : circ;
+    progress.setAttribute('stroke-dashoffset', offset.toFixed(1));
+    progress.setAttribute('stroke', isStale ? 'rgba(163,163,172,0.55)' : 'var(--accent-color)');
+  }
+
+  // Voltage
+  const vEl = document.getElementById('bat-voltage');
+  if (vEl) {
+    if (data.voltage != null) {
+      vEl.textContent = `${parseFloat(data.voltage).toFixed(1)}V`;
+    } else {
+      vEl.textContent = '—';
+    }
+  }
+
+  // Time-to-go
+  const ttgEl = document.getElementById('bat-ttg');
+  if (ttgEl) ttgEl.textContent = formatTTG(data.time_to_go_mins);
+
+  // Consumed Ah (show sign, 1 decimal)
+  const consEl = document.getElementById('bat-consumed');
+  if (consEl) {
+    if (data.consumed_ah != null) {
+      const sign = data.consumed_ah > 0 ? '+' : '';
+      consEl.textContent = `${sign}${parseFloat(data.consumed_ah).toFixed(1)}Ah`;
+    } else {
+      consEl.textContent = '—';
+    }
+  }
+
+  // Solar current (the "current generated" value) — prefer solar_current_a, fall back gracefully
+  const solEl = document.getElementById('sol-current');
+  if (solEl) {
+    const a = (data.solar_current_a != null) ? data.solar_current_a : data.current_a;
+    if (a != null) {
+      solEl.textContent = `${parseFloat(a).toFixed(1)}A`;
+    } else {
+      solEl.textContent = '—';
+    }
+  }
+
+  // Total generated today (kWh from MPPT yield_today)
+  const todayEl = document.getElementById('sol-today');
+  if (todayEl) {
+    if (data.yield_today_kwh != null) {
+      todayEl.textContent = `${parseFloat(data.yield_today_kwh).toFixed(2)} kWh`;
+    } else {
+      todayEl.textContent = '—';
+    }
+  }
+
+  // Charge state (small, bottom right)
+  const csEl = document.getElementById('charge-state');
+  if (csEl) {
+    csEl.textContent = (data.charge_state && isEnabled) ? data.charge_state : (isEnabled ? '' : 'disabled');
+  }
+}
+
+// Optional: allow manual request from console or future UI button
+window.requestVictronUpdate = function() {
+  if (window.socket && window.socket.connected) {
+    window.socket.emit('get_victron_state');
+  }
+};
+
+// ==================== EASY DEMO DATA FOR POWER TILE ====================
+// Usage in console:
+//   populateVictronDemo()           → daytime solar
+//   populateVictronDemo('evening')
+//   populateVictronDemo('bulk')
+//   populateVictronDemo('full')
+//   populateVictronDemo('low')
+//   populateVictronDemo('stale')
+window.populateVictronDemo = function(preset = 'day') {
+  const payloads = {
+    day: {
+      enabled: true, stale: false,
+      soc: 87, voltage: 13.41, current_a: 4.2, consumed_ah: -8.7,
+      time_to_go_mins: 320,
+      solar_current_a: 12.8, yield_today_kwh: 2.34, charge_state: 'Absorption'
+    },
+    evening: {
+      enabled: true, stale: false,
+      soc: 64, voltage: 12.71, current_a: -3.8, consumed_ah: 31.4,
+      time_to_go_mins: 185,
+      solar_current_a: 0, yield_today_kwh: 3.87, charge_state: 'Off'
+    },
+    bulk: {
+      enabled: true, stale: false,
+      soc: 41, voltage: 12.95, current_a: 9.1, consumed_ah: 47.2,
+      time_to_go_mins: 95,
+      solar_current_a: 19.4, yield_today_kwh: 0.62, charge_state: 'Bulk'
+    },
+    full: {
+      enabled: true, stale: false,
+      soc: 100, voltage: 13.55, current_a: 0.6, consumed_ah: 0,
+      time_to_go_mins: 65535,
+      solar_current_a: 2.1, yield_today_kwh: 4.12, charge_state: 'Float'
+    },
+    low: {
+      enabled: true, stale: false,
+      soc: 19, voltage: 12.08, current_a: -7.4, consumed_ah: 68.9,
+      time_to_go_mins: 42,
+      solar_current_a: 0, yield_today_kwh: 1.05, charge_state: 'Off'
+    },
+    stale: {
+      enabled: true, stale: true,
+      soc: 73, voltage: 13.1, current_a: -1.2, consumed_ah: 22.3,
+      time_to_go_mins: 260,
+      solar_current_a: 0, yield_today_kwh: 2.8, charge_state: 'Off'
+    }
+  };
+
+  const data = payloads[preset] || payloads.day;
+
+  if (window.socket && window.socket.connected) {
+    window.socket.emit('victron_update', data);
+  }
+
+  // For demo/preview purposes we update the UI directly.
+  // (Client-to-server emit does not automatically echo back to the sender.)
+  if (typeof updatePowerTile === 'function') {
+    updatePowerTile(data);
+    console.debug('[Power Tile] Demo applied directly to UI → ' + preset, data);
+  } else {
+    console.warn('updatePowerTile function not found. Hard refresh the page (Ctrl/Cmd + Shift + R).');
+  }
+};
+
+// Also expose a shorter alias
+window.pvd = window.populateVictronDemo;
+
 function toggleFullscreen() {
   const icon = document.getElementById('fullscreen-icon');
   
@@ -2174,7 +2370,7 @@ function toggleFullscreen() {
     document.documentElement.requestFullscreen().then(() => {
       icon.classList.remove('fa-expand');
       icon.classList.add('fa-compress');
-    }).catch(err => console.log('Fullscreen failed:', err));
+    }).catch(err => console.warn('Fullscreen failed:', err));
   } else {
     document.exitFullscreen().then(() => {
       icon.classList.remove('fa-compress');

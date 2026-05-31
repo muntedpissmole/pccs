@@ -864,6 +864,33 @@ def handle_connect(sid=None):
     if gps:
         emit('gps_update', gps.get_state())
 
+    # ====================== VICTRON ======================
+    if victron:
+        emit('victron_update', victron.get_state())
+    else:
+        emit('victron_update', {'enabled': False})
+
+        # While hardware is not installed, push a nice demo payload shortly
+        # after connect so the tile is not completely blank on first load.
+        def _send_demo_victron():
+            try:
+                demo = {
+                    "enabled": True,
+                    "stale": False,
+                    "soc": 86,
+                    "voltage": 13.38,
+                    "current_a": 3.8,
+                    "consumed_ah": -7.2,
+                    "time_to_go_mins": 295,
+                    "solar_current_a": 11.4,
+                    "yield_today_kwh": 1.87,
+                    "charge_state": "Absorption"
+                }
+                socketio.emit('victron_update', demo)
+            except Exception:
+                pass
+        threading.Timer(1.3, _send_demo_victron).start()
+
 
 @socketio.on('relay_change')
 def handle_relay_change(data):
@@ -1044,8 +1071,22 @@ def handle_sonos_request_state():
     except Exception as e:
         logger.error(f"Failed to send Sonos state: {e}")
         emit('sonos_update', {'speaker': sonos.current_speaker, 'track': 'Error fetching state'})
-        
-        
+
+
+# ====================== VICTRON STATE REQUEST ======================
+@socketio.on('get_victron_state')
+def handle_get_victron_state():
+    """Frontend can request a fresh push of victron state (useful on reconnects)."""
+    if 'victron' not in globals() or not victron or not getattr(victron, 'enabled', False):
+        emit('victron_update', {'enabled': False})
+        return
+    try:
+        emit('victron_update', victron.get_state())
+    except Exception as e:
+        logger.debug(f"Failed to send victron state on request: {e}")
+        emit('victron_update', {'enabled': True, 'stale': True})
+
+
 @app.route('/api/sonos/status')
 def sonos_status():
     """Return current Sonos status for frontend diagnostics"""
@@ -1202,6 +1243,8 @@ def cleanup():
         if gpio_manager: gpio_manager.cleanup()
         if sensor_manager: sensor_manager.stop()
         if arduino: arduino.cleanup()
+        if 'victron' in globals() and victron:
+            victron.stop()
     except Exception as e:
         logger.error(f"⚠️ Error during cleanup: {e}")
     logger.info("🌙💤 Pissmole has left the campsite, goodbye!")
@@ -1248,6 +1291,20 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Failed to initialize SonosManager: {e}", exc_info=True)
         sonos = None
+
+    # ====================== VICTRON (SmartShunt + MPPT via BLE) ======================
+    global victron
+    victron = None
+    try:
+        from modules.victron import VictronManager
+        victron = VictronManager(socketio, config, phase_manager=phase_manager)
+        if victron and victron.enabled:
+            victron.start()
+            if phase_manager:
+                phase_manager.register_night_listener(victron.reset_daily_generation)
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize VictronManager: {e}", exc_info=True)
+        victron = None
 
     threading.Thread(target=background_state_sync, daemon=True).start()
     threading.Thread(target=network_status_broadcaster, daemon=True).start()
