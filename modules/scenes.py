@@ -122,7 +122,7 @@ def activate_scene(
                 continue
 
             if light_name in RGB_LIGHTS:
-                set_rgb_bug_light(light_name, 0, "white")
+                set_rgb_bug_light(light_name, 0, "white", ramp_ms)
             else:
                 send_command(f"RAMP {LIGHT_MAP.get(light_name)} 0 {ramp_ms}")
 
@@ -161,7 +161,7 @@ def activate_scene(
                 mode = setting["mode"]
 
             if light_name in RGB_LIGHTS:
-                set_rgb_bug_light(light_name, target, mode)
+                set_rgb_bug_light(light_name, target, mode, ramp_ms)
                 state[f"{light_name}_mode"] = mode
             elif light_name in LIGHT_MAP:
                 pwm = int(target * 2.55)
@@ -193,7 +193,7 @@ def activate_scene(
             mode = setting["mode"]
 
         if light_name in RGB_LIGHTS:
-            set_rgb_bug_light(light_name, target, mode)
+            set_rgb_bug_light(light_name, target, mode, ramp_ms)
             state[f"{light_name}_mode"] = mode
         elif light_name in LIGHT_MAP:
             pwm = int(target * 2.55)

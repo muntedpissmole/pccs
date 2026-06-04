@@ -1,4 +1,16 @@
-/* Glassmorphism (Default) */
+/* PCCS Base Styles – Professional Release Build
+ *
+ * Glassmorphism (Default) + component primitives for the Camper Control System UI.
+ *
+ * THEME ARCHITECTURE (best practice):
+ *   - base.css owns the COMPLETE canonical --var set (source of truth).
+ *   - themes/*.css should ONLY override the 8-15 values that create their distinct look.
+ *   - Unique visual effects (background patterns, heavy filter overrides, etc.)
+ *     MUST use [data-theme="name"] selectors instead of blanket !important.
+ *   - This eliminates ~300-400 lines of duplicated var definitions across the 7 themes.
+ *
+ * See theme-manager.js for how data-theme is applied.
+ */
 
 /* ====================== CUSTOM PROPERTIES ====================== */
 :root {

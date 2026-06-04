@@ -1,6 +1,9 @@
-/* Void */
+/* Void Theme – Professional Release Build
+ *
+ * Minimal override file. Only the tokens that actually differ from base + unique flair.
+ * All common variables are inherited from base.css.
+ */
 
-/* ====================== CUSTOM PROPERTIES ====================== */
 :root {
   --accent-color: #c070ff;
   --accent-hover: #e0a0ff;
@@ -32,7 +35,7 @@
   --toggle-knob-border: #c070ff;
 }
 
-/* ====================== LIGHT MODE ====================== */
+/* Light mode for Void (only the meaningful deltas) */
 html.light,
 .light {
   --background: #f8f9fc;
@@ -55,41 +58,42 @@ html.light,
   --toggle-knob-border: #9f5eff;
 }
 
-/* ====================== GLOBAL ====================== */
-body {
+/* Unique Void flair – scoped via data-theme (no blanket !important on everything) */
+[data-theme="void"] body {
   background: var(--background) !important;
 }
 
-body::before {
+[data-theme="void"] body::before {
   background: radial-gradient(circle at 30% 70%, rgba(160, 60, 255, 0.07), transparent 55%) !important;
 }
 
-body::after {
-  background: 
+[data-theme="void"] body::after {
+  background:
     linear-gradient(180deg, transparent 70%, rgba(80, 30, 140, 0.2)),
     repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(140, 80, 255, 0.018) 41px) !important;
   mix-blend-mode: screen;
 }
 
-/* ====================== DISABLED STATES ====================== */
-.slider-card.rooftop-disabled {
+/* Subtle hover lift (kept minimal) */
+[data-theme="void"] .tile:hover,
+[data-theme="void"] .slider-card:hover,
+[data-theme="void"] .scene-btn:hover {
+  transform: scale(1.02);
+}
+
+/* Void disables most glass effects on cards */
+[data-theme="void"] .tile,
+[data-theme="void"] .slider-card,
+[data-theme="void"] .scene-btn,
+[data-theme="void"] .toggle-pill,
+[data-theme="void"] .relay-toggle,
+[data-theme="void"] .slider-thumb {
+  filter: none;
+  box-shadow: none;
+}
+
+/* Rooftop disabled state (theme-specific tint) */
+[data-theme="void"] .slider-card.rooftop-disabled {
   filter: brightness(0.65) grayscale(0.6);
   opacity: 0.75;
-}
-
-/* ====================== THEME FLAIR ====================== */
-.tile:hover,
-.slider-card:hover,
-.scene-btn:hover {
-  transform: scale(1.02) !important;
-}
-
-.tile,
-.slider-card,
-.scene-btn,
-.toggle-pill,
-.relay-toggle,
-.slider-thumb {
-  filter: none !important;
-  box-shadow: none !important;
 }

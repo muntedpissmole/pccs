@@ -1,4 +1,9 @@
-/* Stealth Industrial */
+/* Stealth Industrial Theme – Professional Release Build
+ *
+ * TODO (post-release): Trim to only delta tokens + [data-theme] flair like void.css / minimal.css.
+ * Currently still contains full var redefinition (pre-refactor copy).
+ */
+
 /* Industrial / Stealth Tech - Dark charcoal/grays, military green accents, subtle metallic bevels, rugged practical feel */
 
 :root {

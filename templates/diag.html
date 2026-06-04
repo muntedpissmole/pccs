@@ -715,16 +715,20 @@
                     ? `ONLINE${item.latency ? ` (${item.latency}ms)` : ''}` 
                     : 'OFFLINE';
 
-                const sshStatus = item.ssh_passwordless !== undefined 
-                    ? (item.ssh_passwordless ? '✅ Passwordless SSH OK' : '⚠️ Passwordless SSH not set up')
+                const sshStatus = (item.ssh_passwordless !== undefined && item.online)
+                    ? (item.ssh_passwordless ? '✅ Passwordless SSH OK' : '❌ Passwordless SSH failed')
                     : '';
 
                 let wakeHTML = '';
                 if (item.online !== false) {
                     const stateColor = item.on ? '#60a5fa' : '#94a3b8';
+                    let stateText = item.on ? '🌞 AWAKE' : '🌙 SLEEP';
+                    if (item.brightness !== undefined && item.brightness !== null) {
+                        stateText += ` (${item.brightness})`;
+                    }
                     wakeHTML = `
                         <div style="font-size:1.05rem; font-weight:700; color:${stateColor}; margin-bottom:4px;">
-                            ${item.on ? '🌞 AWAKE' : '🌙 SLEEP'}
+                            ${stateText}
                         </div>`;
                 }
 
@@ -741,19 +745,21 @@
                                 ${connText}
                             </div>
                             ${sshStatus ? `<div style="font-size:0.85rem; opacity:0.8;">${sshStatus}</div>` : ''}
+                            ${item.ssh_error ? `<div style="font-size:0.7rem; color:#f87171; opacity:0.85; max-width:220px; word-break:break-all; margin-top:1px;">${item.ssh_error}</div>` : ''}
                         </div>
                     </div>
                     <div class="btn-group">
                         <button class="btn">🌞 Wake</button>
                         <button class="btn">🌙 Sleep</button>
-                        <button class="btn">🔍 Test</button>
+                        <button class="btn test-btn">🔍 Test</button>
                     </div>
                 `;
 
                 const btns = card.querySelectorAll('button');
                 btns[0].onclick = () => toggleScreen(name, true);
                 btns[1].onclick = () => toggleScreen(name, false);
-                btns[2].onclick = () => testSingleScreen(name);
+                const testBtnEl = card.querySelector('.test-btn');
+                if (testBtnEl) testBtnEl.onclick = () => testSingleScreen(name);
 
                 container.appendChild(card);
             });
@@ -763,14 +769,16 @@
             const card = document.querySelector(`.tile[data-name="${CSS.escape(name)}"]`);
             if (!card) return;
 
-            const testBtn = Array.from(card.querySelectorAll('button')).find(b => b.textContent.includes('Test Connection'));
+            const testBtn = card.querySelector('.test-btn');
             const statusEl = document.getElementById(`screen-conn-${name}`);
             
-            const originalBtnText = testBtn.textContent;
+            const originalBtnText = testBtn ? testBtn.textContent : '🔍 Test';
 
-            testBtn.textContent = 'Testing...';
-            testBtn.style.opacity = '0.7';
-            testBtn.disabled = true;
+            if (testBtn) {
+                testBtn.textContent = 'Testing...';
+                testBtn.style.opacity = '0.7';
+                testBtn.disabled = true;
+            }
 
             if (statusEl) {
                 statusEl.textContent = 'Testing connection...';
@@ -783,8 +791,8 @@
 
                 const data = await res.json();
 
-                if (data.screens && data.screens[name]) {
-                    screenData[name] = data.screens[name];
+                if (data.screens) {
+                    Object.assign(screenData, data.screens);
                     await new Promise(resolve => setTimeout(resolve, 600));
                     renderScreens();
                 }
@@ -796,9 +804,11 @@
                 }
             } finally {
                 setTimeout(() => {
-                    testBtn.textContent = originalBtnText;
-                    testBtn.style.opacity = '1';
-                    testBtn.disabled = false;
+                    if (testBtn) {
+                        testBtn.textContent = originalBtnText;
+                        testBtn.style.opacity = '1';
+                        testBtn.disabled = false;
+                    }
                 }, 400);
             }
         }
@@ -919,7 +929,9 @@
             fetch('/screen_json')
                 .then(r => r.json())
                 .then(data => {
-                    screenData = data.screens || {};
+                    const basic = data.screens || {};
+                    // merge, preserving any test results (ssh, latency, etc.) already present
+                    screenData = { ...basic, ...screenData };
                     renderScreens();
                 })
                 .catch(err => console.warn("Could not load screens:", err));

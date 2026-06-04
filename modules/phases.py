@@ -336,6 +336,8 @@ class PhaseManager:
                 "day_start": day_start.strftime("%I:%M %p"),
                 "evening_start": evening_start.strftime("%I:%M %p"),
                 "night_start": effective_night_start.strftime("%I:%M %p"),
+                "sunrise": sunrise.strftime("%I:%M %p"),
+                "sunset": sunset.strftime("%-I:%M %p"),
                 "day_offset_min": self.day_offset_minutes,
                 "evening_offset_min": self.evening_offset_minutes,
                 "night_fixed_hour": self.night_start_hour,
@@ -346,7 +348,7 @@ class PhaseManager:
 
         except Exception as e:
             logger.error(f"🌗 [CACHE] FAILED: {e}", exc_info=True)
-            self._cached_phase_times = {"day_start": "—", "evening_start": "—", "night_start": "—"}
+            self._cached_phase_times = {"day_start": "—", "evening_start": "—", "night_start": "—", "sunrise": "—", "sunset": "—"}
 
     # ====================== PUBLIC API ======================
     def get_phase(self) -> str:

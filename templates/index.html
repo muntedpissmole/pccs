@@ -100,7 +100,8 @@
 			</svg>
 		  </div>
 
-		  <!-- Current phase boundary labels (adapts to Day / Evening / Night).
+		  <!-- Current phase boundary labels (adapts: Day phase shows sunrise/sunset; Evening and Night phases show evening start on left + day start on right).
+		       The sun/moon travel + day/night arc highlighting on the bezier use raw sunrise/sunset times for the cycles.
 		       Inset 10px from tile edges; vertically tuned to sit under the raised bezier ends. -->
 		  <div class="absolute left-2.5 right-2.5 flex justify-between pointer-events-none"
 			   style="top: 73%; transform: translateY(-50%);">
@@ -446,7 +447,26 @@
 
 <script src="/static/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
+<!-- Foundational utilities (Phase 1 of professional refactor) -->
+<script src="{{ url_for('static', filename='js/dom-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/format-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/animation-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sun-curve.js') }}"></script>
+<!-- PCCS Frontend Application Script
+     Professional release build.
+
+     Current state:
+     - Demo/debug code removed
+     - Three small shared utilities added (dom-helpers, format-utils, animation-utils)
+     - CSS theme architecture improved
+
+     The large inline script has been reduced (sun-curve system extracted in this pass).
+     Further major extractions (lighting, tiles, etc.) are planned as post-release work.
+     See FRONTEND.md for the intended direction.
+-->
 <script>
+    'use strict';
+
     const socket = io();
     // Expose globally so extracted modules (theme-manager, future extractions) can use it
     window.socket = socket;
@@ -1048,9 +1068,9 @@
 		// NEW: Use combined function
 		updateTimeAndSun(data);
 
-		// Belt-and-suspenders: ensure curve is measured on first data
-		if (!curveGeometryReady) {
-			updateCurveGeometry();
+		// Curve module manages its own readiness
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updateCurveGeometry();
 		}
 
 		// Keep weather logic
@@ -1193,7 +1213,7 @@
 		// Time
 		if (data.local_time) {
 			const mins = parseTimeToMinutes(data.local_time);
-			if (mins !== null) {
+			if (mins != null) {
 				let hours = Math.floor(mins / 60);
 				const minutes = (mins % 60).toString().padStart(2, '0');
 				const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -1214,24 +1234,18 @@
 			if (sunsetEl) sunsetEl.textContent = sunsetTime;
 		}
 
-		// Recompute the curve inset immediately using the real rendered width of the sunrise/sunset labels.
-		// This prevents the bezier edges from overlapping the time text on narrow screens (iPhone).
-		updateCurveGeometry();
-
-		// Animate sun position (still uses raw sunrise/sunset for the arc math + coloring)
-		animateSunPosition(data.sunrise, data.sunset, data.local_time);
+		// Curve logic now lives in sun-curve.js
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updateCurveGeometry();
+			window.PCCS.sunCurve.animateSunPosition(data.sunrise, data.sunset, data.local_time);
+		}
 	}
 
-	let phaseInfo = { phase: 'Day', day_start: '—', evening_start: '—', night_start: '—' };
-
+	// Phase + curve logic now lives in static/js/sun-curve.js
 	function updatePhaseInfo(data) {
-		if (!data) return;
-		phaseInfo.phase = data.phase || 'Day';
-		if (data.day_start) phaseInfo.day_start = data.day_start;
-		if (data.evening_start) phaseInfo.evening_start = data.evening_start;
-		if (data.night_start) phaseInfo.night_start = data.night_start;
-
-		updatePhaseCurveLabels();
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updatePhaseInfo(data);
+		}
 	}
 
 	// ==================== NETWORK TILE (Iteration 2) ====================
@@ -1310,388 +1324,13 @@
 		}
 	}
 
-	function parseTimeToMinutes(str) {
-		if (!str || typeof str !== 'string') return null;
-		const m = str.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
-		if (!m) return null;
-		let h = parseInt(m[1], 10);
-		const min = parseInt(m[2], 10);
-		const ap = m[4].toUpperCase();
-		if (h < 1 || h > 12 || min < 0 || min > 59) return null;
-		if (h === 12) h = 0;
-		if (ap === 'PM') h += 12;
-		return h * 60 + min;
-	}
+	// parseTimeToMinutes moved to format-utils.js (with fallback inside sun-curve.js)
 
-	function updatePhaseCurveLabels() {
-		const leftLabel = document.getElementById('day-start-label');
-		const rightLabel = document.getElementById('evening-start-label');
-		if (!leftLabel || !rightLabel) return;
+	// updatePhaseCurveLabels now lives inside sun-curve.js
 
-		const phase = (phaseInfo.phase || 'Day').toLowerCase();
-		const dayStart = stripLeadingZero(phaseInfo.day_start) || '—';
-		const eveStart = stripLeadingZero(phaseInfo.evening_start) || '—';
-		const nightStart = stripLeadingZero(phaseInfo.night_start) || '—';
-
-		let leftText, rightText;
-		let leftColor = '#fcd34d';   // day yellow
-		let rightColor = '#94a3b8';  // evening gray
-
-		if (phase === 'day') {
-			// Day phase: left = when Day began, right = when Evening begins
-			leftText = dayStart;
-			rightText = eveStart;
-			leftColor = '#fcd34d';
-			rightColor = '#94a3b8';
-		} else if (phase === 'evening') {
-			// Evening phase: left = when the current (Evening) phase began,
-			// right = day start time (reference to the daylight arc)
-			leftText = eveStart;
-			rightText = dayStart;
-			leftColor = '#94a3b8';   // evening gray for current phase start on left
-			rightColor = '#fcd34d';  // day yellow for the day start reference on right
-		} else {
-			// Night phase: left = when Night began, right = when (next) Day begins
-			leftText = nightStart;
-			rightText = dayStart;
-			leftColor = '#64748b';
-			rightColor = '#fcd34d';
-		}
-
-		leftLabel.textContent = leftText;
-		rightLabel.textContent = rightText;
-		leftLabel.style.color = leftColor;
-		rightLabel.style.color = rightColor;
-	}
-
-	// Dynamic curve geometry so the arch doesn't look flat when the tile is wide
-	let currentCurveParams = null;
-	let curveGeometryReady = false;
-
-	// Remember the last time data so we can re-position the sun/moon after a resize
-	let lastSunriseStr = null;
-	let lastSunsetStr = null;
-	let lastCurrentTimeStr = null;
-
-	// ====================== SUN/MOON CURVE-FOLLOWING ANIMATION STATE ======================
-	// We animate the *t* (Bezier parameter) via rAF so the icon travels along the actual curve
-	// instead of taking straight-line shortcuts between positions.
-	let displayT = 0.5;           // Currently visible position on the curve (0 = left, 1 = right)
-	let displayIsDay = true;
-	let sunAnimFrame = null;      // current requestAnimationFrame handle
-	let hasSunPositioned = false; // first data arrival always snaps cleanly
-	const SUN_ANIM_DURATION = 680; // ms — feels alive but snappy with frequent GPS updates
-
-	// Curve geometry morph state (for smooth grow/shrink when the tile or window resizes)
-	let curveAnimFrame = null;
-
-	function updateCurveGeometry() {
-		const container = document.getElementById('sun-curve');
-		if (!container) return;
-
-		const w = container.clientWidth;
-		if (!w || w < 120) return;
-
-		const h = 72;
-
-		// Arch height that grows gently with width so it doesn't go flat
-		const archHeight = Math.min(52, Math.max(36, 28 + w * 0.045));
-
-		// Compute horizontal inset for the bezier so its ends clear the sunrise/sunset time labels + icons.
-		// Critical on iPhone/narrow screens where the bottom row (with px-2.5) + time text width can otherwise be overlapped by the curve.
-		// The bottom time groups live after 10px padding; we measure the rendered group and add breathing room.
-		let minInset = 38;
-		const sunriseGroup = document.getElementById('sunrise')?.parentElement;
-		if (sunriseGroup) {
-			const groupWidth = sunriseGroup.getBoundingClientRect().width;
-			// 10px (from row's px-2.5) + actual rendered width of icon+text + 14px gap after the time block
-			minInset = 10 + groupWidth + 14;
-		}
-		const inset = Math.max(w * 0.085 + 8, minInset);
-
-		const x0 = inset;
-		const x1 = w / 2;
-		const x2 = w - inset;
-
-		const y0 = 52;
-		const y1 = y0 - archHeight;
-		const y2 = 52;  // lowered from 58 so the bezier sits nicely between the upper phase labels and bottom sunrise/sunset times
-
-		const viewBoxW = Math.round(w);
-		const targetParams = { x0, x1, x2, y0, y1, y2, viewBoxW, h };
-
-		const dayPath = document.getElementById('day-path');
-		const nightPath = document.getElementById('night-path');
-		const svg = container.querySelector('svg');
-
-		// No previous geometry yet (initial page load) → snap instantly
-		if (!curveGeometryReady || !currentCurveParams) {
-			if (svg) {
-				svg.setAttribute('viewBox', `0 0 ${viewBoxW} ${h}`);
-			}
-			const d = `M ${x0.toFixed(1)} ${y0} Q ${x1.toFixed(1)} ${y1.toFixed(1)} ${x2.toFixed(1)} ${y2}`;
-			if (dayPath) dayPath.setAttribute('d', d);
-			if (nightPath) nightPath.setAttribute('d', d);
-
-			currentCurveParams = { x0, x1, x2, y0, y1, y2, viewBoxW, h };
-			curveGeometryReady = true;
-
-			if (lastSunriseStr && lastSunsetStr) {
-				applySunPosition(displayT, displayIsDay);
-			}
-			return;
-		}
-
-		// We already have a curve → smoothly morph its shape (and the sun dot riding on it)
-		startCurveMorph(currentCurveParams, targetParams, svg, dayPath, nightPath);
-	}
-
-	// --- Pure helpers for curve animation (always follow the quadratic Bezier) ---
-	function getPointOnCurve(t, params) {
-		if (!params) return { x: 80, y: 38 };  // fallback mid-curve y for the raised bezier (y0=52)
-		const { x0, y0, x1, y1, x2, y2 } = params;
-		const mt = 1 - t;
-		const x = mt * mt * x0 + 2 * mt * t * x1 + t * t * x2;
-		const y = mt * mt * y0 + 2 * mt * t * y1 + t * t * y2;
-		return { x, y };
-	}
-
-	function applySunPosition(t, isDay) {
-		const sun = document.getElementById('sun-position');
-		const glow = document.getElementById('sun-glow');
-		if (!sun || !glow || !currentCurveParams) return;
-
-		const pt = getPointOnCurve(t, currentCurveParams);
-		sun.setAttribute('cx', pt.x);
-		sun.setAttribute('cy', pt.y);
-		glow.setAttribute('cx', pt.x);
-		glow.setAttribute('cy', pt.y);
-
-		if (isDay) {
-			sun.setAttribute('fill', '#fbbf24');
-			glow.setAttribute('fill', '#fbbf24');
-			glow.setAttribute('opacity', '0.28');
-		} else {
-			sun.setAttribute('fill', '#e2e8f0');
-			glow.setAttribute('fill', '#e2e8f0');
-			glow.setAttribute('opacity', '0.45');
-		}
-
-		displayT = t;
-		displayIsDay = isDay;
-	}
-
-	function startSunAnimation(targetT, targetIsDay) {
-		// Cancel any in-flight travel animation
-		if (sunAnimFrame) {
-			cancelAnimationFrame(sunAnimFrame);
-			sunAnimFrame = null;
-		}
-
-		const sunEl = document.getElementById('sun-position');
-		if (!sunEl || !currentCurveParams) {
-			applySunPosition(targetT, targetIsDay);
-			hasSunPositioned = true;
-			return;
-		}
-
-		// First time we have real data + geometry: snap into place (no travel from the 0.5 default)
-		if (!hasSunPositioned) {
-			applySunPosition(targetT, targetIsDay);
-			hasSunPositioned = true;
-			return;
-		}
-
-		// Large jump or phase change (sun <-> moon) → snap instantly for clarity
-		const delta = Math.abs(targetT - displayT);
-		const phaseChanged = (targetIsDay !== displayIsDay);
-		if (phaseChanged || delta < 0.012) {
-			applySunPosition(targetT, targetIsDay);
-			return;
-		}
-
-		// Smoothly travel along the curve by animating the t parameter
-		const startT = displayT;
-		const startTime = performance.now();
-		const duration = SUN_ANIM_DURATION;
-
-		function step(now) {
-			const elapsed = now - startTime;
-			let p = Math.min(elapsed / duration, 1);
-			// Ease-out cubic — starts fast, settles nicely (feels natural on the arc)
-			const eased = 1 - Math.pow(1 - p, 3);
-			const current = startT + (targetT - startT) * eased;
-
-			applySunPosition(current, targetIsDay);
-
-			if (p < 1) {
-				sunAnimFrame = requestAnimationFrame(step);
-			} else {
-				sunAnimFrame = null;
-				applySunPosition(targetT, targetIsDay); // land exactly
-			}
-		}
-
-		sunAnimFrame = requestAnimationFrame(step);
-	}
-
-	// ====================== CURVE RESIZE MORPH (smooth grow/shrink) ======================
-	// When the container width changes we interpolate the quadratic control points + viewBox
-	// so the arc visually stretches or compresses instead of snapping.
-	function applyCurveParams(p, svgEl, dayEl, nightEl) {
-		if (svgEl) {
-			svgEl.setAttribute('viewBox', `0 0 ${p.viewBoxW} ${p.h || 72}`);
-		}
-		const d = `M ${p.x0.toFixed(1)} ${p.y0} Q ${p.x1.toFixed(1)} ${p.y1.toFixed(1)} ${p.x2.toFixed(1)} ${p.y2}`;
-		if (dayEl) dayEl.setAttribute('d', d);
-		if (nightEl) nightEl.setAttribute('d', d);
-	}
-
-	function startCurveMorph(from, to, svgEl, dayEl, nightEl) {
-		if (curveAnimFrame) {
-			cancelAnimationFrame(curveAnimFrame);
-			curveAnimFrame = null;
-		}
-
-		// Pause any simultaneous time-driven sun travel while the "ground" (curve) is morphing
-		if (sunAnimFrame) {
-			cancelAnimationFrame(sunAnimFrame);
-			sunAnimFrame = null;
-		}
-
-		// If the caller didn't pass a full from (rare, early resize), just snap
-		if (!from || typeof from.x0 !== 'number') {
-			currentCurveParams = { x0: to.x0, x1: to.x1, x2: to.x2, y0: to.y0, y1: to.y1, y2: to.y2, viewBoxW: to.viewBoxW, h: to.h };
-			applyCurveParams(to, svgEl, dayEl, nightEl);
-			if (lastSunriseStr && lastSunsetStr) {
-				applySunPosition(displayT, displayIsDay);
-			}
-			return;
-		}
-
-		const startTime = performance.now();
-		const duration = 310; // sweet spot: noticeable "alive" motion but finishes quickly
-
-		function step(now) {
-			const elapsed = now - startTime;
-			let pr = Math.min(elapsed / duration, 1);
-			// Same ease-out cubic used for the sun dot travel → consistent personality
-			const e = 1 - Math.pow(1 - pr, 3);
-
-			// Interpolate every control value + viewBox width
-			const ix0 = from.x0 + (to.x0 - from.x0) * e;
-			const ix1 = from.x1 + (to.x1 - from.x1) * e;
-			const ix2 = from.x2 + (to.x2 - from.x2) * e;
-			const iy0 = from.y0 + (to.y0 - from.y0) * e;
-			const iy1 = from.y1 + (to.y1 - from.y1) * e;
-			const iy2 = from.y2 + (to.y2 - from.y2) * e;
-			const ivw = Math.round(from.viewBoxW != null ? from.viewBoxW + (to.viewBoxW - from.viewBoxW) * e : to.viewBoxW);
-
-			const liveParams = { x0: ix0, x1: ix1, x2: ix2, y0: iy0, y1: iy1, y2: iy2, viewBoxW: ivw, h: 72 };
-
-			// Live-update the visible curve
-			applyCurveParams(liveParams, svgEl, dayEl, nightEl);
-
-			// Keep currentCurveParams in sync (with viewBox info) so future morphs and sun math are correct
-			currentCurveParams = liveParams;
-
-			// Make the sun/moon dot ride along the deforming curve at its current t
-			if (lastSunriseStr && lastSunsetStr) {
-				applySunPosition(displayT, displayIsDay);
-			}
-
-			if (pr < 1) {
-				curveAnimFrame = requestAnimationFrame(step);
-			} else {
-				curveAnimFrame = null;
-				// Land exactly on final geometry (preserve viewBox info for future morphs)
-				currentCurveParams = { x0: to.x0, x1: to.x1, x2: to.x2, y0: to.y0, y1: to.y1, y2: to.y2, viewBoxW: to.viewBoxW, h: to.h };
-				applyCurveParams(to, svgEl, dayEl, nightEl);
-				if (lastSunriseStr && lastSunsetStr) {
-					applySunPosition(displayT, displayIsDay);
-				}
-			}
-		}
-
-		curveAnimFrame = requestAnimationFrame(step);
-	}
-
-	function animateSunPosition(sunriseStr, sunsetStr, currentTimeStr) {
-		const sun = document.getElementById('sun-position');
-		const glow = document.getElementById('sun-glow');
-		const dayPath = document.getElementById('day-path');
-		const nightPath = document.getElementById('night-path');
-
-		if (!sun || !glow || !sunriseStr || !sunsetStr) return;
-
-		// Save for resize handling
-		lastSunriseStr = sunriseStr;
-		lastSunsetStr = sunsetStr;
-		lastCurrentTimeStr = currentTimeStr;
-
-		// Don't position until we know the actual curve width
-		if (!curveGeometryReady || !currentCurveParams) {
-			sun.setAttribute('cx', 80);
-			sun.setAttribute('cy', 38);
-			glow.setAttribute('cx', 80);
-			glow.setAttribute('cy', 38);
-			displayT = 0.5;
-			return;
-		}
-
-		const sunriseMin = parseTimeToMinutes(sunriseStr);
-		const sunsetMin = parseTimeToMinutes(sunsetStr);
-		let currentMin = parseTimeToMinutes(currentTimeStr);
-
-		if (sunriseMin === null || sunsetMin === null) return;
-		if (currentMin === null) currentMin = 12 * 60;
-
-		const DAY_MINUTES = 1440;
-		currentMin = ((currentMin % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
-
-		let targetT = 0.5;
-		let targetIsDay = true;
-
-		if (currentMin >= sunriseMin && currentMin <= sunsetMin) {
-			// DAYTIME
-			targetIsDay = true;
-			const dayLen = sunsetMin - sunriseMin;
-			targetT = (dayLen > 0) ? (currentMin - sunriseMin) / dayLen : 0.5;
-		} else {
-			// NIGHTTIME - Moon travels same arc left → right
-			targetIsDay = false;
-			let nightProgress = 0;
-			if (currentMin < sunriseMin) {
-				const prevSunset = sunsetMin - DAY_MINUTES;
-				const nightLen = sunriseMin - prevSunset;
-				nightProgress = (nightLen > 0) ? (currentMin - prevSunset) / nightLen : 0;
-			} else {
-				const nextSunrise = sunriseMin + DAY_MINUTES;
-				const nightLen = nextSunrise - sunsetMin;
-				nightProgress = (nightLen > 0) ? (currentMin - sunsetMin) / nightLen : 0;
-			}
-			targetT = nightProgress;
-		}
-
-		targetT = Math.max(0, Math.min(1, targetT));
-
-		// Drive position via curve animation (this is the key fix)
-		startSunAnimation(targetT, targetIsDay);
-
-		// Keep the nice cross-fade between the yellow day arc and gray night arc
-		if (dayPath && nightPath) {
-			dayPath.style.transition = 'stroke-opacity 1000ms ease-in-out';
-			nightPath.style.transition = 'stroke-opacity 1000ms ease-in-out';
-
-			if (targetIsDay) {
-				dayPath.setAttribute('stroke-opacity', '0.85');
-				nightPath.setAttribute('stroke-opacity', '0.1');
-			} else {
-				dayPath.setAttribute('stroke-opacity', '0.1');
-				nightPath.setAttribute('stroke-opacity', '0.6');
-			}
-		}
-	}
+	// All sun/moon curve logic (geometry, animation, phase labels) has been extracted
+	// to static/js/sun-curve.js as part of the professional refactor.
+	// Old monolithic implementation removed. See PCCS.sunCurve.* for the current code.
 	
     async function fetchWeatherForecast(lat, lon) {
         try {
@@ -1793,27 +1432,21 @@
 		// Network tile (internet + component health)
 		socket.emit('get_network_status');
 		socket.emit('get_victron_state');
-		// Belt-and-suspenders: fetch once in case socket timing is odd on first load
+		// Fallback REST fetch in case socket timing is odd on first load
 		setTimeout(() => {
 			fetch('/api/network_status').then(r => r.json()).then(updateNetworkTile).catch(() => {});
 		}, 1200);
-		// Make sure curve geometry is fresh when we get real data
-		setTimeout(updateCurveGeometry, 50);
+		// Curve module self-initializes; this is a light nudge
+		setTimeout(() => {
+			if (window.PCCS && window.PCCS.sunCurve) window.PCCS.sunCurve.updateCurveGeometry();
+		}, 50);
 	});
 
-	// Run geometry calculation as early as possible so the sun doesn't start in the wrong place
-	requestAnimationFrame(() => {
-		updateCurveGeometry();
-		// One more tick in case fonts/grid affect final width
-		requestAnimationFrame(() => updateCurveGeometry());
-	});
-
-	// Keep the curve looking good when the tile resizes (breakpoints, etc.)
-	let curveResizeTimer;
-	window.addEventListener('resize', () => {
-		clearTimeout(curveResizeTimer);
-		curveResizeTimer = setTimeout(updateCurveGeometry, 140);
-	});
+	// Sun curve module handles its own early geometry + resize listeners.
+	// We just trigger init after the module has loaded.
+	if (window.PCCS && window.PCCS.sunCurve && typeof window.PCCS.sunCurve.init === 'function') {
+		window.PCCS.sunCurve.init();
+	}
 
     socket.on('disconnect', () => showOfflineBanner());
     socket.on('connect_error', () => showOfflineBanner());
@@ -2288,80 +1921,6 @@ function updatePowerTile(data) {
     csEl.textContent = (data.charge_state && isEnabled) ? data.charge_state : (isEnabled ? '' : 'disabled');
   }
 }
-
-// Optional: allow manual request from console or future UI button
-window.requestVictronUpdate = function() {
-  if (window.socket && window.socket.connected) {
-    window.socket.emit('get_victron_state');
-  }
-};
-
-// ==================== EASY DEMO DATA FOR POWER TILE ====================
-// Usage in console:
-//   populateVictronDemo()           → daytime solar
-//   populateVictronDemo('evening')
-//   populateVictronDemo('bulk')
-//   populateVictronDemo('full')
-//   populateVictronDemo('low')
-//   populateVictronDemo('stale')
-window.populateVictronDemo = function(preset = 'day') {
-  const payloads = {
-    day: {
-      enabled: true, stale: false,
-      soc: 87, voltage: 13.41, current_a: 4.2, consumed_ah: -8.7,
-      time_to_go_mins: 320,
-      solar_current_a: 12.8, yield_today_kwh: 2.34, charge_state: 'Absorption'
-    },
-    evening: {
-      enabled: true, stale: false,
-      soc: 64, voltage: 12.71, current_a: -3.8, consumed_ah: 31.4,
-      time_to_go_mins: 185,
-      solar_current_a: 0, yield_today_kwh: 3.87, charge_state: 'Off'
-    },
-    bulk: {
-      enabled: true, stale: false,
-      soc: 41, voltage: 12.95, current_a: 9.1, consumed_ah: 47.2,
-      time_to_go_mins: 95,
-      solar_current_a: 19.4, yield_today_kwh: 0.62, charge_state: 'Bulk'
-    },
-    full: {
-      enabled: true, stale: false,
-      soc: 100, voltage: 13.55, current_a: 0.6, consumed_ah: 0,
-      time_to_go_mins: 65535,
-      solar_current_a: 2.1, yield_today_kwh: 4.12, charge_state: 'Float'
-    },
-    low: {
-      enabled: true, stale: false,
-      soc: 19, voltage: 12.08, current_a: -7.4, consumed_ah: 68.9,
-      time_to_go_mins: 42,
-      solar_current_a: 0, yield_today_kwh: 1.05, charge_state: 'Off'
-    },
-    stale: {
-      enabled: true, stale: true,
-      soc: 73, voltage: 13.1, current_a: -1.2, consumed_ah: 22.3,
-      time_to_go_mins: 260,
-      solar_current_a: 0, yield_today_kwh: 2.8, charge_state: 'Off'
-    }
-  };
-
-  const data = payloads[preset] || payloads.day;
-
-  if (window.socket && window.socket.connected) {
-    window.socket.emit('victron_update', data);
-  }
-
-  // For demo/preview purposes we update the UI directly.
-  // (Client-to-server emit does not automatically echo back to the sender.)
-  if (typeof updatePowerTile === 'function') {
-    updatePowerTile(data);
-    console.debug('[Power Tile] Demo applied directly to UI → ' + preset, data);
-  } else {
-    console.warn('updatePowerTile function not found. Hard refresh the page (Ctrl/Cmd + Shift + R).');
-  }
-};
-
-// Also expose a shorter alias
-window.pvd = window.populateVictronDemo;
 
 function toggleFullscreen() {
   const icon = document.getElementById('fullscreen-icon');

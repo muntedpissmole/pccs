@@ -264,7 +264,7 @@ class ReedManager:
         ramp_ms = self.reed_ramp_time_ms
 
         if light_name in self.RGB_LIGHTS and self.set_rgb_bug_light:
-            self.set_rgb_bug_light(light_name, brightness, mode)
+            self.set_rgb_bug_light(light_name, brightness, mode, ramp_ms)
         elif light_name in self.LIGHT_MAP and self.send_command:
             pwm = int(brightness * 2.55)
             self.send_command(f"RAMP {self.LIGHT_MAP[light_name]} {pwm} {ramp_ms}")
@@ -314,8 +314,15 @@ class ReedManager:
             else:
                 phase = self.phase_manager.get_phase().lower()
 
+        all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
+        if all_closed:
+            self.ambient_active = False
+            logger.info(f"🌙 All reeds closed → skipping ambient ramp to {phase} [{source}]")
+            self.update_ambient_lights(force=True)
+            return
+
         now = time.time() * 1000
-        is_forced = source in ("startup", "phase_change")
+        is_forced = source in ("startup", "phase change")
 
         if not is_forced and now - self.last_ambient_update < self.AMBIENT_THROTTLE_MS * 1.5:
             logger.debug(f"⏭️ Ambient ramp throttled ({source})")
@@ -393,6 +400,13 @@ class ReedManager:
     def reapply_all_open_lights(self, phase_manager):
         """Called by PhaseManager on every phase change."""
         if not self.startup_ambient_done:
+            return
+
+        all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
+        if all_closed:
+            self.ambient_active = False
+            logger.info("🌙 All reeds closed at phase change → applying all_closed_action (night scene will not activate)")
+            self.update_ambient_lights(force=True)
             return
 
         logger.info(f"🌗 Phase changed → reapplying levels for open reeds")
@@ -659,34 +673,6 @@ class ReedManager:
                         self._wake_screen(screen_name)
         return screen_trigger
 
-    def _sleep_screen(self, screen_name: str):
-        """Turn screen completely off."""
-        conf = self.screens.get(screen_name, {})
-        friendly = conf.get('friendly', screen_name)
-
-        cmd = f"ssh {conf['username']}@{conf['host']} \"echo 0 > {conf['brightness_path']}\""
-
-        try:
-            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
-            success = result.returncode == 0
-        except Exception:
-            success = False
-
-        self.screen_states[screen_name] = False
-
-        # ←←← THIS IS THE IMPORTANT PART
-        self.socketio.emit('screen_update', {
-            'name': screen_name,
-            'on': False,
-            'online': True,           # assume reachable unless we know otherwise
-            'config': conf            # send full config (friendly + icon)
-        })
-
-        if success:
-            logger.info(f"🖥️ Slept screen: {friendly}")
-        else:
-            logger.debug(f"🖥️ Sleep command sent for {friendly} (may be unreachable)")
-
     def _wake_screen(self, screen_name: str):
         """Wake + realistic connectivity check"""
         success = self._set_screen_state(screen_name, sleep=False)
@@ -708,10 +694,20 @@ class ReedManager:
         """Internal helper that returns True if SSH command succeeded."""
         conf = self.screens.get(screen_name, {})
         friendly = conf.get('friendly', screen_name)
-        value = "0" if sleep else "255"
+        bpath = conf.get('brightness_path', '')
+        # Some devices (e.g. rockchip fbdev) use /sys/.../fb0/blank where 0=awake, non-zero=sleep.
+        # Default to brightness-style (0=sleep/off, 255=awake/on).
+        is_blank = 'blank' in bpath or '/graphics/fb' in bpath
+        if sleep:
+            value = "1" if is_blank else "0"
+        else:
+            value = "0" if is_blank else "255"
         action_word = "sleep" if sleep else "wake"
 
-        cmd = f"ssh {conf['username']}@{conf['host']} \"echo {value} > {conf['brightness_path']}\""
+        # Direct write. For this to work the target sysfs file must be writable by the
+        # ssh user (joel). On many devices this requires a one-time setup on the remote
+        # (see comments in pccs.conf for rc.local example to chown/chmod at boot).
+        cmd = f"ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o IdentitiesOnly=no {conf['username']}@{conf['host']} \"echo {value} > {bpath}\""
 
         try:
             result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
@@ -724,7 +720,8 @@ class ReedManager:
                     'name': screen_name,
                     'on': not sleep,
                     'online': True,
-                    'config': conf
+                    'config': conf,
+                    'ssh_error': None
                 })
                 return True
 
@@ -737,11 +734,19 @@ class ReedManager:
                         'name': screen_name,
                         'on': not sleep,
                         'online': False,
-                        'config': conf
+                        'config': conf,
+                        'ssh_error': stderr[:200] if stderr else None
                     })
                     return False  # unreachable, but not a hard failure
                 else:
                     logger.warning(f"🖥️ Failed to {action_word} {friendly} (code {result.returncode}) - {stderr}")
+                    self.socketio.emit('screen_update', {
+                        'name': screen_name,
+                        'on': not sleep,
+                        'online': True,
+                        'config': conf,
+                        'ssh_error': stderr[:200] if stderr else f"exit {result.returncode}"
+                    })
                     return False
 
         except subprocess.TimeoutExpired:
@@ -750,7 +755,8 @@ class ReedManager:
                 'name': screen_name,
                 'on': not sleep,
                 'online': False,
-                'config': conf
+                'config': conf,
+                'ssh_error': 'SSH timeout'
             })
             return False
 
@@ -760,7 +766,8 @@ class ReedManager:
                 'name': screen_name,
                 'on': not sleep,
                 'online': False,
-                'config': conf
+                'config': conf,
+                'ssh_error': str(e)[:200]
             })
             return False
             
@@ -791,17 +798,64 @@ class ReedManager:
         except:
             pass
 
-        # 2. Test passwordless SSH (BatchMode prevents password prompt)
+        # 2. Probe actual state by reading brightness over passwordless SSH.
+        # This both verifies passwordless works (BatchMode) *and* gives us the
+        # true current on/off from the remote device (instead of just trusting
+        # local reed-derived commanded state).
+        result['brightness'] = None
+        result['on'] = None
         if result['online']:
-            try:
-                cmd = f"ssh -o BatchMode=yes -o ConnectTimeout={int(timeout)} -o StrictHostKeyChecking=no {username}@{host} 'echo SSH_OK 2>/dev/null'"
-                proc = subprocess.run(cmd, shell=True, timeout=timeout + 2, capture_output=True, text=True)
-                
-                result['ssh_passwordless'] = proc.returncode == 0 and 'SSH_OK' in proc.stdout
-            except subprocess.TimeoutExpired:
-                result['ssh_passwordless'] = False
-            except Exception:
-                result['ssh_passwordless'] = False
+            bpath = conf.get('brightness_path')
+            if bpath:
+                try:
+                    cmd = f"ssh -o BatchMode=yes -o ConnectTimeout={int(timeout)} -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o IdentitiesOnly=no {username}@{host} 'cat {bpath} 2>/dev/null'"
+                    proc = subprocess.run(cmd, shell=True, timeout=timeout + 2, capture_output=True, text=True)
+                    
+                    if proc.returncode == 0:
+                        try:
+                            val = int((proc.stdout or '').strip())
+                            result['brightness'] = val
+                            # For fb/blank style controls: 0 means awake/on, non-zero means blanked/sleep.
+                            is_blank = 'blank' in bpath or '/graphics/fb' in bpath
+                            result['on'] = (val == 0) if is_blank else (val > 0)
+                            result['ssh_passwordless'] = True
+                            result['ssh_error'] = None
+                            # Sync local state to observed reality
+                            self.screen_states[screen_name] = result['on']
+                        except (ValueError, TypeError):
+                            # cat succeeded but not a number?
+                            result['ssh_passwordless'] = True
+                            result['ssh_error'] = None
+                    else:
+                        result['ssh_passwordless'] = False
+                        err = (proc.stderr or '').strip() or (proc.stdout or '').strip()
+                        if err:
+                            result['ssh_error'] = err.splitlines()[-1][:250]
+                        else:
+                            result['ssh_error'] = f"SSH failed (exit {proc.returncode})"
+                except subprocess.TimeoutExpired:
+                    result['ssh_passwordless'] = False
+                    result['ssh_error'] = 'SSH timeout'
+                except Exception as e:
+                    result['ssh_passwordless'] = False
+                    result['ssh_error'] = str(e)[:200]
+            else:
+                # No brightness_path, fall back to simple probe
+                try:
+                    cmd = f"ssh -o BatchMode=yes -o ConnectTimeout={int(timeout)} -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o IdentitiesOnly=no {username}@{host} 'echo SSH_OK 2>/dev/null'"
+                    proc = subprocess.run(cmd, shell=True, timeout=timeout + 2, capture_output=True, text=True)
+                    result['ssh_passwordless'] = proc.returncode == 0 and 'SSH_OK' in proc.stdout
+                    if result['ssh_passwordless']:
+                        result['ssh_error'] = None
+                    else:
+                        err = (proc.stderr or '').strip() or (proc.stdout or '').strip()
+                        result['ssh_error'] = (err.splitlines()[-1][:250] if err else f"exit {proc.returncode}")
+                except subprocess.TimeoutExpired:
+                    result['ssh_passwordless'] = False
+                    result['ssh_error'] = 'SSH timeout'
+                except Exception as e:
+                    result['ssh_passwordless'] = False
+                    result['ssh_error'] = str(e)[:200]
 
         return result
 

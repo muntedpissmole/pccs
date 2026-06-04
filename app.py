@@ -185,8 +185,8 @@ state = {name: 0 for name in list(LIGHT_MAP.keys()) + list(RGB_BUG_LIGHTS.keys()
 def send_command(cmd: str):
     return arduino.send_command(cmd)
 
-def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white'):
-    return arduino.set_rgb_bug_light(name, brightness, mode)
+def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white', ramp_ms: int | None = None):
+    return arduino.set_rgb_bug_light(name, brightness, mode, ramp_ms)
 
 
 # ====================== RAMP & SAFETY ======================
@@ -325,7 +325,7 @@ def make_reed_trigger(reed_name: str):
                     continue
                 mode = desired_mode or "white"
                 if light_name in RGB_LIGHTS:
-                    set_rgb_bug_light(light_name, desired_brightness, mode)
+                    set_rgb_bug_light(light_name, desired_brightness, mode, ramp)
                 else:
                     pwm = int(desired_brightness * 2.55)
                     send_command(f"RAMP {LIGHT_MAP.get(light_name)} {pwm} {ramp}")
@@ -349,7 +349,7 @@ def make_reed_trigger(reed_name: str):
         for light_name in light_list:
             if final_closed:  # CLOSED → turn off
                 if light_name in RGB_LIGHTS:
-                    set_rgb_bug_light(light_name, 0, "white")
+                    set_rgb_bug_light(light_name, 0, "white", ramp)
                 else:
                     send_command(f"RAMP {LIGHT_MAP.get(light_name)} 0 {ramp}")
 
@@ -365,7 +365,7 @@ def make_reed_trigger(reed_name: str):
                 brightness, mode = settings
 
                 if light_name in RGB_LIGHTS:
-                    set_rgb_bug_light(light_name, brightness, mode)
+                    set_rgb_bug_light(light_name, brightness, mode, ramp)
                 else:
                     pwm = int(brightness * 2.55)
                     send_command(f"RAMP {LIGHT_MAP.get(light_name)} {pwm} {ramp}")
@@ -381,8 +381,8 @@ def make_reed_trigger(reed_name: str):
 def send_command(cmd: str):
     return arduino.send_command(cmd)
 
-def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white'):
-    return arduino.set_rgb_bug_light(name, brightness, mode)
+def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white', ramp_ms: int | None = None):
+    return arduino.set_rgb_bug_light(name, brightness, mode, ramp_ms)
 
 def read_all_states():
     arduino.read_all_states()
@@ -727,7 +727,7 @@ def handle_light_change(data):
     mode = data.get('mode', 'white') if name in RGB_LIGHTS else None
 
     if name in RGB_LIGHTS:
-        set_rgb_bug_light(name, target, mode or "white")
+        set_rgb_bug_light(name, target, mode or "white", UI_RAMP_TIME_MS)
     elif name in LIGHT_MAP:
         pwm = int(target * 2.55)
         send_command(f"RAMP {LIGHT_MAP[name]} {pwm} {UI_RAMP_TIME_MS}")
@@ -1212,11 +1212,16 @@ def screen_status_json():
     for name, conf in reed_manager.screens.items():
         conn = reed_manager.test_screen_connectivity(name)
         
+        observed_on = conn.get('on')
         result[name] = {
-            'on': reed_manager.screen_states.get(name, False),
+            'on': observed_on if observed_on is not None else reed_manager.screen_states.get(name, False),
+            'brightness': conn.get('brightness'),
             'online': conn.get('online', False),
             'latency': conn.get('latency'),
+            'ssh_passwordless': conn.get('ssh_passwordless'),
+            'ssh_error': conn.get('ssh_error'),
             'last_checked': conn.get('last_checked'),
+            'error': conn.get('error'),
             'config': {
                 'friendly': conf.get('friendly', name),
                 'icon': conf.get('icon', 'fa-display'),

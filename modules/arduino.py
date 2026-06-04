@@ -225,20 +225,27 @@ class ArduinoManager:
             except:
                 pass
 
-    def set_rgb_bug_light(self, name: str, brightness: int, mode: str = 'white') -> bool:
+    def set_rgb_bug_light(self, name: str, brightness: int, mode: str = 'white', ramp_ms: int | None = None) -> bool:
         config = self.RGB_BUG_LIGHTS.get(name)
         if not config:
             return False
 
         pwm = int(brightness * 2.55)
-        if mode == 'red':
-            self.send_command(f"RAMP {config['white']} 0 {self.RGB_RED_SWITCH_RAMP}")
-            self.send_command(f"RAMP {config['red']} {pwm} {self.RGB_MODE_SWITCH_RAMP}")
-            self.send_command(f"RAMP {config['green']} {int(pwm * 0.05)} {self.RGB_MODE_SWITCH_RAMP}")
+        if ramp_ms is not None:
+            red_ramp = ramp_ms
+            mode_ramp = ramp_ms
         else:
-            self.send_command(f"RAMP {config['white']} {pwm} {self.RGB_MODE_SWITCH_RAMP}")
-            self.send_command(f"RAMP {config['red']} 0 {self.RGB_RED_SWITCH_RAMP}")
-            self.send_command(f"RAMP {config['green']} 0 {self.RGB_RED_SWITCH_RAMP}")
+            red_ramp = self.RGB_RED_SWITCH_RAMP
+            mode_ramp = self.RGB_MODE_SWITCH_RAMP
+
+        if mode == 'red':
+            self.send_command(f"RAMP {config['white']} 0 {red_ramp}")
+            self.send_command(f"RAMP {config['red']} {pwm} {mode_ramp}")
+            self.send_command(f"RAMP {config['green']} {int(pwm * 0.05)} {mode_ramp}")
+        else:
+            self.send_command(f"RAMP {config['white']} {pwm} {mode_ramp}")
+            self.send_command(f"RAMP {config['red']} 0 {red_ramp}")
+            self.send_command(f"RAMP {config['green']} 0 {red_ramp}")
 
         self.OPTIMISTIC_LOCK[name] = time.time() + self.OPTIMISTIC_LOCK_DURATION
         return True
