@@ -57,9 +57,13 @@ if hasattr(sys, '_pccs_already_started'):
 else:
     sys._pccs_already_started = True
 
-logging.getLogger("werkzeug").setLevel(logging.WARNING)
-logging.getLogger("engineio").setLevel(logging.WARNING)
-logging.getLogger("socketio").setLevel(logging.WARNING)
+# Respect [logging] suppress_* from pccs.conf (instead of hardcoding)
+if config.getboolean('logging', 'suppress_werkzeug', fallback=True):
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+if config.getboolean('logging', 'suppress_engineio', fallback=True):
+    logging.getLogger("engineio").setLevel(logging.WARNING)
+if config.getboolean('logging', 'suppress_socketio', fallback=True):
+    logging.getLogger("socketio").setLevel(logging.WARNING)
 
 # ====================== THEME HELPER ======================
 def get_friendly_theme_name(theme_file: str) -> str:
@@ -118,8 +122,12 @@ class ConfigManager:
             logger.error(f"Failed to save config: {e}")
 
 
-theme_config = ConfigManager('active_theme.json', {'theme': 'base'})
+theme_config = ConfigManager('active_theme.json', {'theme': config.get('ui', 'default_theme', fallback='base')})
 dark_mode_config = ConfigManager('active_dark_mode.json', {'mode': 'dark'})
+
+# Pull [ui] settings (currently only used for default + whether base.css is always first)
+UI_DEFAULT_THEME = config.get('ui', 'default_theme', fallback='base')
+UI_LOAD_BASE_FIRST = config.getboolean('ui', 'load_base_first', fallback=True)
 
 # ====================== THEME ======================
 current_global_theme = theme_config.load()['theme']
@@ -131,7 +139,6 @@ logger.info(f"🎨 Loaded theme: {friendly_name} ({current_global_theme}.css)")
 # These now come from /config/pccs.conf
 UI_RAMP_TIME_MS = config.getint('lighting', 'ui_ramp_time_ms', 1000)
 BACKGROUND_SYNC_INTERVAL = config.getint('background_sync', 'sync_interval', 45)
-REED_MONITOR_INTERVAL = config.getfloat('reed_monitor', 'monitor_interval', 0.25)
 
 first_state_read_done = False
 shutdown_event = threading.Event()
@@ -150,6 +157,25 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = config.get('system', 'secret_key')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Dev-friendly settings for frontend iteration (templates + static/JS/CSS).
+# Edit config/pccs.conf to set debug = true, then restart app.py *once*.
+# After that you can edit templates/index.html or files under static/ (JS/CSS)
+# and see updates just by refreshing the browser (no more python restarts for
+# frontend-only changes).
+# For JS/CSS changes you will usually need a *hard* refresh (Ctrl+Shift+R / Cmd+Shift+R)
+# or DevTools → Network → "Disable cache", because browsers aggressively cache
+# same-URL static assets even when the server says "no-cache".
+# Set back to false for normal/production use.
+debug_mode = config.getboolean('system', 'debug', fallback=False)
+if debug_mode:
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    app.jinja_env.auto_reload = True
+    # Explicitly disable Jinja's compiled template cache so changed .html files
+    # are always re-parsed from disk on the next render_template() call.
+    app.jinja_env.cache = None
+    logger.info("🛠️ Debug mode ON — TEMPLATES_AUTO_RELOAD + static no-cache + jinja cache disabled. Edit frontend files then hard-refresh browser (Ctrl+Shift+R).")
 
 # ====================== SYSTEM INFO MANAGER ======================
 system_manager = SystemInfoManager(config, socketio, APP_VERSION)
@@ -272,8 +298,9 @@ def ramp_and_broadcast(name: str, target: int, duration_ms: int, mode: str | Non
         if i > steps:
             state[name] = target
             socketio.emit('state_update', state.copy())
-            if source:
-                log_light_change(name, target, source, mode)
+            # Logging is now done immediately at command time in the callers
+            # (handle_light_change, reed trigger, etc.) so that logs appear promptly
+            # instead of being delayed until the end of the ramp duration.
             active_ramps.pop(name, None)
             return
 
@@ -327,11 +354,16 @@ def make_reed_trigger(reed_name: str):
                 if light_name in RGB_LIGHTS:
                     set_rgb_bug_light(light_name, desired_brightness, mode, ramp)
                 else:
+                    pin = LIGHT_MAP.get(light_name)
+                    if pin is None:
+                        logger.warning(f"⚠️ No LIGHT_MAP pin for reed-controlled light '{light_name}' (reed {reed_name})")
+                        continue
                     pwm = int(desired_brightness * 2.55)
-                    send_command(f"RAMP {LIGHT_MAP.get(light_name)} {pwm} {ramp}")
+                    send_command(f"RAMP {pin} {pwm} {ramp}")
+                log_light_change(light_name, desired_brightness, "scene", mode)
                 ramp_and_broadcast(light_name, desired_brightness, ramp,
                                    mode if light_name in RGB_LIGHTS else None, 
-                                   source="scene")
+                                   source=None)
             return
 
         # ====================== NORMAL REED / PHASE / FORCE HANDLING ======================
@@ -346,17 +378,39 @@ def make_reed_trigger(reed_name: str):
 
         phase = phase_manager.get_phase()
 
+        # Use the ramp time from config (reed_ramp_time_ms for normal reed events,
+        # phase_ramp_time_ms for phase changes) for BOTH opening (to level) and
+        # closing (to 0). This ensures that when a reed closes (including interlocked
+        # dependents like kitchen_bench when kitchen_panel closes), all affected
+        # lights fade out simultaneously over the configured ramp time.
         for light_name in light_list:
             if final_closed:  # CLOSED → turn off
                 if light_name in RGB_LIGHTS:
                     set_rgb_bug_light(light_name, 0, "white", ramp)
                 else:
-                    send_command(f"RAMP {LIGHT_MAP.get(light_name)} 0 {ramp}")
+                    pin = LIGHT_MAP.get(light_name)
+                    if pin is None:
+                        logger.warning(f"⚠️ No LIGHT_MAP pin for reed-controlled light '{light_name}' (reed {reed_name})")
+                        continue
+                    send_command(f"RAMP {pin} 0 {ramp}")
 
+                log_light_change(light_name, 0, "reed" if not is_phase_change else "phase change")
                 ramp_and_broadcast(light_name, 0, ramp,
-                                   source="reed" if not is_phase_change else "phase change")
+                                   source=None)
+
+                # Real reed close transition (not a phase re-apply) clears any prior manual override
+                if not is_phase_change and reed_manager:
+                    reed_manager.clear_user_overrides([light_name])
 
             else:
+                if is_phase_change and reed_manager and reed_manager.user_overrides.get(light_name):
+                    # Phase-change / startup re-apply: do not clobber a manual user-set level.
+                    # (True phase changes pre-clear overrides in reapply_all_reed_lights.)
+                    continue
+
+                # Normal reed open (or phase re-apply without override): apply the configured
+                # "its level" for this phase. Reed open events always (re)establish the reed's
+                # defined level and clear manual overrides (the reed "chooses" the level).
                 settings = reed_manager.get_light_settings(phase, light_name)
                 if settings is None:
                     logger.debug(f"No {phase} setting for light '{light_name}' – leaving unchanged")
@@ -367,12 +421,21 @@ def make_reed_trigger(reed_name: str):
                 if light_name in RGB_LIGHTS:
                     set_rgb_bug_light(light_name, brightness, mode, ramp)
                 else:
+                    pin = LIGHT_MAP.get(light_name)
+                    if pin is None:
+                        logger.warning(f"⚠️ No LIGHT_MAP pin for reed-controlled light '{light_name}' (reed {reed_name})")
+                        continue
                     pwm = int(brightness * 2.55)
-                    send_command(f"RAMP {LIGHT_MAP.get(light_name)} {pwm} {ramp}")
+                    send_command(f"RAMP {pin} {pwm} {ramp}")
 
+                log_light_change(light_name, brightness, "reed" if not is_phase_change else "phase change", mode)
                 ramp_and_broadcast(light_name, brightness, ramp,
                                    mode if light_name in RGB_LIGHTS else None,
-                                   source="reed" if not is_phase_change else "phase change")
+                                   source=None)
+
+                # Real reed open transition (physical or force) clears override (the reed action chose the level)
+                if not is_phase_change and reed_manager:
+                    reed_manager.clear_user_overrides([light_name])
 
     return trigger
 
@@ -405,14 +468,9 @@ reed_manager = ReedManager(
     toast_manager=toast_manager
 )
 
-# ====================== GPIO INITIALIZATION ======================
-gpio_manager.init_devices()
-
-reed_manager.register_event_handlers()
-
-logger.debug(f"🚪 Registered event handlers for {len(gpio_manager.reeds)} reeds")
-for name in sorted(gpio_manager.reeds.keys()):
-    logger.debug(f"   → {name} handler attached")
+# Note: gpio device init and event handler registration is now done later in the
+# __main__ block (after light-control triggers are registered) for better ordering
+# and reliability of runtime reed events.
 
 gps = None
 phase_manager = None
@@ -444,7 +502,7 @@ def build_network_status():
             "tx_kbps": 0.0,
             "ping_ms": None,
             "ping_status": "unknown",   # good | slow | fail | unknown
-            "signal_quality": None,     # e.g. "87%" or "Excellent" or "Fair"
+            "signal_quality": None,     # e.g. "87%" or "—"
         },
         "right": {
             "core_temp_c": None,
@@ -613,11 +671,11 @@ def network_status_broadcaster():
 # ====================== ROUTES ======================
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', load_base_first=UI_LOAD_BASE_FIRST)
 
 @app.route('/diag')
 def diagnostics():
-    return render_template('diag.html')
+    return render_template('diag.html', load_base_first=UI_LOAD_BASE_FIRST)
 
 @app.route('/gps_json')
 def gps_json():
@@ -654,6 +712,20 @@ def reed_json():
     return {
         'states': reed_manager.get_states(),
         'forced': reed_manager.get_forced_states()
+    }
+
+@app.route('/reeds/resync', methods=['POST'])
+def reeds_resync():
+    """Trigger a hardware re-sample of all reed pins. Returns the names that changed state.
+    Use this (or the socket 'resync_reeds') when the UI state for a reed does not match
+    the physical switch — the logs will include `pinctrl get` output for each pin so you
+    can compare the kernel electrical level against what the app sees."""
+    if not reed_manager:
+        return {'error': 'no reed_manager'}, 500
+    changed = reed_manager.resync_reed_states()
+    return {
+        'changed': changed,
+        'states': reed_manager.get_states()
     }
 
 @app.route('/api/themes')
@@ -726,13 +798,32 @@ def handle_light_change(data):
     target = max(0, min(100, int(data.get('brightness', 0))))
     mode = data.get('mode', 'white') if name in RGB_LIGHTS else None
 
+    # Clamp *before* any hardware command so rooftop interlock (and future safeties)
+    # prevent turning on lights that should be locked out. The prior send-then-clamp
+    # order could leave hardware on even when model said closed.
+    target = apply_safety_constraints(name, target, "user interface")
+
+    # For manual UI sets (sliders, toggle pills, etc.), always use the configured
+    # ui_ramp_time_ms from pccs.conf. Previously there was a special case forcing
+    # 150ms for target==0 to make "toggle off" feel snappier, but that bypassed the
+    # user-configured ramp time.
+    ramp_ms = UI_RAMP_TIME_MS
+
     if name in RGB_LIGHTS:
-        set_rgb_bug_light(name, target, mode or "white", UI_RAMP_TIME_MS)
+        set_rgb_bug_light(name, target, mode or "white", ramp_ms)
     elif name in LIGHT_MAP:
         pwm = int(target * 2.55)
-        send_command(f"RAMP {LIGHT_MAP[name]} {pwm} {UI_RAMP_TIME_MS}")
+        send_command(f"RAMP {LIGHT_MAP[name]} {pwm} {ramp_ms}")
 
-    ramp_and_broadcast(name, target, UI_RAMP_TIME_MS, mode, source="user interface")
+    # Log immediately (command has been issued to hardware). This makes light level
+    # change logs appear promptly instead of being deferred until the end of the
+    # ramp duration inside ramp_and_broadcast.
+    log_light_change(name, target, "user interface", mode)
+
+    ramp_and_broadcast(name, target, ramp_ms, mode, source=None)
+
+    if reed_manager:
+        reed_manager.set_user_override(name, target, mode)
 
     if name in RGB_LIGHTS and mode:
         state[f"{name}_mode"] = mode
@@ -751,6 +842,25 @@ def handle_force_reed(data):
             reed_manager.clear_force(name)
     else:
         reed_manager.force_state(name, bool(closed))
+
+
+@socketio.on('get_reeds')
+def handle_get_reeds():
+    if reed_manager:
+        emit('reed_update', {
+            'states': reed_manager.get_states(),
+            'forced': reed_manager.get_forced_states()
+        })
+
+@socketio.on('resync_reeds')
+def handle_resync_reeds():
+    if reed_manager:
+        changed = reed_manager.resync_reed_states()
+        emit('reed_update', {
+            'states': reed_manager.get_states(),
+            'forced': reed_manager.get_forced_states()
+        })
+        logger.info(f"🔄 Client requested reed hardware resync; changed: {changed}")
 
 
 @socketio.on('force_phase')
@@ -882,6 +992,7 @@ def handle_connect(sid=None):
                     "current_a": 3.8,
                     "consumed_ah": -7.2,
                     "time_to_go_mins": 295,
+                    "battery_temp": 24.5,
                     "solar_current_a": 11.4,
                     "yield_today_kwh": 1.87,
                     "charge_state": "Absorption"
@@ -1256,28 +1367,51 @@ def cleanup():
 
 if __name__ == "__main__":
     logger.info("✅ System starting...")
+    logger.info(f"🛠️ Debug mode: {debug_mode} (set debug=true in config/pccs.conf, restart once; then frontend edits should appear on browser refresh/hard-refresh without further restarts)")
     
     arduino.init_serial()
 
+    # Create phase objects (cheap), attach. Light-control triggers are now registered
+    # after GPIO init (see below) so that the apply_initial_ambient_state etc. see the real reeds.
+    # The full closed+open sync + poll backup ensures reed changes drive the lights promptly.
+    # Arduino serial is ready early so sends from triggers work.
+    gps = GPSModule(config, socketio)
+
+    phase_manager = PhaseManager(config, gps, socketio, dark_mode_config)
+    phase_manager.reed_manager = reed_manager
+    reed_manager.phase_manager = phase_manager
+
     sensor_manager = SensorManager(config, arduino.send_command, socketio)
 
-    for reed_name in list(gpio_manager.reeds.keys()):
+    # ====================== GPIO DEVICES + HARDWARE REED EVENTS + LIGHT TRIGGERS ======================
+    # Init GPIO hardware first -- this populates reed_states with the real 5 reeds (and creates Buttons).
+    gpio_manager.init_devices()
+
+    # Now register light-control triggers -- now the list will have the 5 reeds.
+    for reed_name in list(gpio_manager.reed_states.keys()):
         reed_manager.register_trigger(reed_name, make_reed_trigger(reed_name))
+    logger.debug(f"💡 Registered light-control triggers for {len(gpio_manager.reed_states)} logical reeds "
+                 "(hardware or virtual for force/UI)")
 
-    reed_manager.start_monitor(interval=REED_MONITOR_INTERVAL)
-    sensor_manager.start()
+    # Attach gpiozero edge handlers (when_pressed etc). The light cbs are now registered so _apply will have targets.
+    reed_manager.register_event_handlers()
+    logger.info(f"🚪 Registered event handlers for {len(gpio_manager.reeds)} reeds")
+    for name in sorted(gpio_manager.reeds.keys()):
+        logger.debug(f"   → {name} handler attached")
 
-    gps = GPSModule(config, socketio)
+    # Poll backup for reliability.
+    reed_manager._start_reed_monitor()
+
+    # Heavy init after cbs registered (events now drive lights...).
     gps.init_gps()
     gps.init_geolocator()
+
+    sensor_manager.start()
     
     app._start_time = datetime.now()
     
     system_manager.get_dhcp_clients()
 
-    phase_manager = PhaseManager(config, gps, socketio, dark_mode_config)
-    phase_manager.reed_manager = reed_manager
-    reed_manager.phase_manager = phase_manager
     phase_manager.start()
     
     reed_manager.apply_initial_ambient_state()
@@ -1286,7 +1420,12 @@ if __name__ == "__main__":
     if getattr(gps, 'serial', None):
         gps.start_reader()
 
-    # ====================== SONOS ======================
+    threading.Thread(target=background_state_sync, daemon=True).start()
+    threading.Thread(target=network_status_broadcaster, daemon=True).start()
+
+    logger.info("🎉🎉🎉 The Pissmole Camper Control System lives! 🎉🎉🎉")
+
+    # ====================== SONOS (optional, can take a few seconds for discovery) ======================
     global sonos
     sonos = None
     try:
@@ -1297,7 +1436,7 @@ if __name__ == "__main__":
         logger.error(f"❌ Failed to initialize SonosManager: {e}", exc_info=True)
         sonos = None
 
-    # ====================== VICTRON (SmartShunt + MPPT via BLE) ======================
+    # ====================== VICTRON (SmartShunt + MPPT via BLE) (optional) ======================
     global victron
     victron = None
     try:
@@ -1311,19 +1450,14 @@ if __name__ == "__main__":
         logger.error(f"❌ Failed to initialize VictronManager: {e}", exc_info=True)
         victron = None
 
-    threading.Thread(target=background_state_sync, daemon=True).start()
-    threading.Thread(target=network_status_broadcaster, daemon=True).start()
-
-    logger.info("🎉🎉🎉 The Pissmole Camper Control System lives! 🎉🎉🎉")
-
     # ====================== START SOCKETIO ======================
     try:
         socketio.run(
             app,
             host=config.get('system', 'host', fallback='0.0.0.0'),
             port=config.getint('system', 'port', fallback=5000),
-            debug=config.getboolean('system', 'debug', fallback=False),
-            use_reloader=False,
+            debug=debug_mode,
+            use_reloader=debug_mode,   # enables file watcher + restart on code changes when debug=true
             allow_unsafe_werkzeug=True
         )
     except (KeyboardInterrupt, SystemExit):

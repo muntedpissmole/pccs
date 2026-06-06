@@ -154,7 +154,8 @@ class ArduinoManager:
         logger.warning("⚠️ No Arduino hardware found")
         return False
 
-    def send_command(self, cmd: str) -> str | None:
+    def send_command(self, cmd: str, expect: str = None) -> str | None:
+        """Send cmd, optionally wait for a response line starting with `expect`."""
         if not self.ser or not self.ser.is_open:
             return None
 
@@ -165,18 +166,44 @@ class ArduinoManager:
                 self.ser.flush()
                 time.sleep(self.COMMAND_DELAY)
 
-                if self.ser.in_waiting:
-                    response = self.ser.readline().decode('utf-8').strip()
-                    if response:
-                        return response
+                if expect is None:
+                    # RAMP/SET etc. do not produce responses from the Arduino.
+                    # Avoid blocking on readline (which would timeout after 0.5s per attempt).
+                    return None
 
-                time.sleep(self.RESPONSE_DELAY)
-                if self.ser.in_waiting:
-                    response = self.ser.readline().decode('utf-8').strip()
-                    if response:
-                        return response
+                # Read lines (respecting port timeout) until we get one that
+                # matches the expected prefix (if given) or any non-empty.
+                # Tolerate occasional glued/stale responses from high baud serial
+                # by searching inside the blob for the expected token.
+                for _ in range(5):
+                    blob = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not blob:
+                        continue
+                    if blob.startswith(expect):
+                        return blob
+                    # search inside (e.g. "....VCC 5023" or previous reply glued)
+                    idx = blob.find(expect)
+                    if idx != -1:
+                        return blob[idx:]
+                    # otherwise discard and try next read
+                    logger.debug("Discarded unexpected serial response while waiting for %s: %s", expect, blob)
 
+            except serial.SerialException as se:
+                msg = str(se)
+                if "readiness to read but returned no data" in msg or "multiple access" in msg:
+                    # Transient (device reset, contention, or USB serial glitch after open).
+                    # Return None so callers (VCC/ANALOG) can retry or fallback; avoid log spam.
+                    return None
+                logger.error(f"Serial error sending '{cmd}': {se}")
+                try:
+                    self.ser.reset_input_buffer()
+                except:
+                    pass
             except Exception as e:
+                msg = str(e)
+                # Transient during shutdown, port close races, or USB serial glitches — don't spam ERROR
+                if any(x in msg for x in ("NoneType", "closed", "not open", "EBADF", "Bad file descriptor")):
+                    return None
                 logger.error(f"Serial error sending '{cmd}': {e}")
                 try:
                     self.ser.reset_input_buffer()
@@ -199,7 +226,7 @@ class ArduinoManager:
         for name, pin in self.LIGHT_MAP.items():
             if self.should_ignore_for_optimistic(name):
                 continue
-            resp = self.send_command(f"GET {pin}")
+            resp = self.send_command(f"GET {pin}", expect="VALUE")
             if resp and resp.startswith("VALUE"):
                 try:
                     pwm = int(resp.split()[2])
@@ -211,8 +238,8 @@ class ArduinoManager:
             if self.should_ignore_for_optimistic(name):
                 continue
             try:
-                red_resp = self.send_command(f"GET {pins['red']}")
-                white_resp = self.send_command(f"GET {pins['white']}")
+                red_resp = self.send_command(f"GET {pins['red']}", expect="VALUE")
+                white_resp = self.send_command(f"GET {pins['white']}", expect="VALUE")
                 red_pwm = int(red_resp.split()[2]) if red_resp and red_resp.startswith("VALUE") else 0
                 white_pwm = int(white_resp.split()[2]) if white_resp and white_resp.startswith("VALUE") else 0
 
@@ -238,14 +265,24 @@ class ArduinoManager:
             red_ramp = self.RGB_RED_SWITCH_RAMP
             mode_ramp = self.RGB_MODE_SWITCH_RAMP
 
+        # Use a consistent ramp time for crossfading the channels during mode switch.
+        # This ensures white/red (or bug color) fade in/out overlap properly instead of
+        # one completing before the other starts, and avoids different rates causing
+        # both channels to be partially on for a noticeable time.
+        # We unify on mode_ramp for the transition (when ramp_ms provided they are equal anyway).
+        xfade_ramp = mode_ramp
+
         if mode == 'red':
-            self.send_command(f"RAMP {config['white']} 0 {red_ramp}")
-            self.send_command(f"RAMP {config['red']} {pwm} {mode_ramp}")
-            self.send_command(f"RAMP {config['green']} {int(pwm * 0.05)} {mode_ramp}")
+            # Send "in" channels first so the bug color starts appearing while white is still up,
+            # then kill the white. With same duration this gives crossfade.
+            self.send_command(f"RAMP {config['red']} {pwm} {xfade_ramp}")
+            self.send_command(f"RAMP {config['green']} {int(pwm * 0.05)} {xfade_ramp}")
+            self.send_command(f"RAMP {config['white']} 0 {xfade_ramp}")
         else:
-            self.send_command(f"RAMP {config['white']} {pwm} {mode_ramp}")
-            self.send_command(f"RAMP {config['red']} 0 {red_ramp}")
-            self.send_command(f"RAMP {config['green']} 0 {red_ramp}")
+            # Kill the bug color first, then bring white up. Same duration → clean crossfade.
+            self.send_command(f"RAMP {config['red']} 0 {xfade_ramp}")
+            self.send_command(f"RAMP {config['green']} 0 {xfade_ramp}")
+            self.send_command(f"RAMP {config['white']} {pwm} {xfade_ramp}")
 
         self.OPTIMISTIC_LOCK[name] = time.time() + self.OPTIMISTIC_LOCK_DURATION
         return True

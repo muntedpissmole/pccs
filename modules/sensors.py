@@ -34,6 +34,9 @@ class SensorManager:
         self.FRIDGE_TEMP_ID  = (config.get('sensors', 'fridge_temp_sensor', fallback='') or '').strip() or None
         # ========================================================
 
+        self._last_analog_warn = 0.0
+        self._last_vcc_warn = 0.0
+
         outside_mode = "auto" if not self.OUTSIDE_TEMP_ID else "configured"
         fridge_mode = "configured" if self.FRIDGE_TEMP_ID else "not configured"
         logger.info("🔋 SensorManager initialized (water + 1-wire temps only — solar CT + battery voltage divider fully removed: outside=%s, fridge=%s)",
@@ -112,7 +115,7 @@ class SensorManager:
 
     def _read_analog(self, pin):
         for attempt in range(3):
-            resp = self.send_command(f"ANALOG {pin}")
+            resp = self.send_command(f"ANALOG {pin}", expect="ANALOG")
             if resp and resp.startswith("ANALOG"):
                 try:
                     value = float(resp.split()[2])
@@ -121,19 +124,27 @@ class SensorManager:
                 except:
                     pass
             time.sleep(0.05)
-        logger.warning("   ⚠️ Failed to read ANALOG %d", pin)
+        now = time.time()
+        if now - self._last_analog_warn > 60:
+            logger.warning("   ⚠️ Failed to read ANALOG %d", pin)
+            self._last_analog_warn = now
         return None
 
     def _read_vcc(self):
-        resp = self.send_command("GETVCC")
-        if resp and resp.startswith("VCC"):
-            try:
-                v = float(resp.split()[1]) / 1000.0
-                logger.debug("   VCC = %.3fV", v)
-                return v
-            except:
-                pass
-        logger.warning("   ⚠️ Failed to read VCC")
+        for attempt in range(3):
+            resp = self.send_command("GETVCC", expect="VCC")
+            if resp and resp.startswith("VCC"):
+                try:
+                    v = float(resp.split()[1]) / 1000.0
+                    logger.debug("   VCC = %.3fV", v)
+                    return v
+                except:
+                    pass
+            time.sleep(0.05)
+        now = time.time()
+        if now - self._last_vcc_warn > 60:
+            logger.warning("   ⚠️ Failed to read VCC")
+            self._last_vcc_warn = now
         return 5.0
 
     def _calculate_water(self, adc, vcc):

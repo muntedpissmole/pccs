@@ -799,6 +799,7 @@
 		const newBrightness = isOn ? 0 : (parseInt(wrapper?.dataset.lastBrightness) || 100);
 
 		updateLightUI(name, newBrightness);
+		currentState[name] = newBrightness;  // keep model in sync with just-set value
 		socket.emit('light_change', { name, brightness: newBrightness });
 	}
 
@@ -915,7 +916,6 @@
 		let isDragging = false;
 		let startX = 0;
 		let startY = 0;
-		let lastSent = 0;
 
 		function updatePosition(clientX) {
 			const rect = inner.getBoundingClientRect();
@@ -928,16 +928,12 @@
 			if (thumb) thumb.style.left = `${percent}%`;
 			if (valueEl) valueEl.textContent = `${percent}%`;
 
-			const now = Date.now();
-			if (now - lastSent > 50) {
-				lastSent = now;
-				const light = lightsConfig.find(l => l.name === name);
-				const payload = { name, brightness: percent };
-				if (light?.has_mode && currentModes[name]) {
-					payload.mode = currentModes[name];
-				}
-				socket.emit('light_change', payload);
-			}
+			// NOTE: We intentionally do *not* emit during drag.
+			// Only local visual update here (instant, no transition).
+			// The final committed value is emitted exactly once in endDrag.
+			// This prevents the "chunked ramps" problem where every intermediate
+			// drag position starts its own 1000ms ramp, making the total change
+			// take much longer than the configured UI ramp time.
 		}
 
 		function startDrag() {
@@ -946,6 +942,8 @@
 			wrapper.classList.add('dragging');
 			currentlyDragging.add(name);
 			userJustSet.delete(name);
+
+			// (no live emit during drag anymore; final value only on endDrag)
 
 			if (fill) fill.style.transition = 'none';
 			if (thumb) thumb.style.transition = 'none';
@@ -959,6 +957,17 @@
 
 			const final = parseInt(wrapper.dataset.value) || 0;
 			updateLightUI(name, final);
+			currentState[name] = final;  // keep the model in sync with the just-set value
+
+			// Always emit the exact final value on release. This guarantees the
+			// user-chosen level is commanded even if the last throttled move didn't
+			// trigger an emit (prevents "stuck at previous" and ensures prompt response).
+			const light = lightsConfig.find(l => l.name === name);
+			const payload = { name, brightness: final };
+			if (light?.has_mode && currentModes[name]) {
+				payload.mode = currentModes[name];
+			}
+			socket.emit('light_change', payload);
 
 			userJustSet.add(name);
 			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
@@ -1029,7 +1038,7 @@
         const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
         if (!tentCard) return;
         
-        const isClosed = !!currentReeds.rooftop_tent;
+        const isClosed = currentReeds.rooftop_tent !== false;
         
         if (isClosed) {
             tentCard.classList.add('rooftop-disabled');
@@ -1040,7 +1049,7 @@
     }
 
     function isRooftopTentPhysicallyClosed() {
-        return !!currentReeds.rooftop_tent;
+        return currentReeds.rooftop_tent !== false;
     }
 
     // ==================== GPS, SENSORS, WEATHER ====================
@@ -1387,12 +1396,24 @@
 	socket.on('lights_config', (config) => {
 		lightsConfig = config || [];
 		renderLightingControls();
+		// Belt-and-suspenders: ensure we have the latest reed states (for
+		// rooftop tent interlock etc.) right after the lighting DOM exists.
+		socket.emit('get_reeds');
 		if (Object.keys(currentState).length > 0) updateUIFromState();
 	});
 
     socket.on('state_update', (newState) => {
-        currentState = newState;
-        
+        // Protect lights that the user just manually set (via drag or toggle) from being
+        // overwritten by server state pushes (e.g. from other connects, background sync,
+        // or in-flight previous ramps). This prevents the "optimistic set, then reset to old,
+        // then slow ramp" behavior.
+        const protectedLights = new Set([...currentlyDragging, ...userJustSet]);
+        Object.keys(newState).forEach(k => {
+            if (!protectedLights.has(k)) {
+                currentState[k] = newState[k];
+            }
+        });
+
         lightsConfig.forEach(light => {
             if (light.has_mode && newState[`${light.name}_mode`]) {
                 currentModes[light.name] = newState[`${light.name}_mode`];
@@ -1432,6 +1453,7 @@
 		// Network tile (internet + component health)
 		socket.emit('get_network_status');
 		socket.emit('get_victron_state');
+		socket.emit('get_reeds');
 		// Fallback REST fetch in case socket timing is odd on first load
 		setTimeout(() => {
 			fetch('/api/network_status').then(r => r.json()).then(updateNetworkTile).catch(() => {});

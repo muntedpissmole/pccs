@@ -75,7 +75,10 @@ class GPIODeviceManager:
                     continue
 
                 pull_up = len(parts) > 2 and parts[2].lower() != 'false'
-                bounce = float(parts[3]) if len(parts) > 3 else 0.5
+                # Default bounce_time reduced from 0.5s (was too long; could make a reed appear "stuck"
+                # after seeing a release edge, even if the line later goes active again). The per-reed
+                # software debounce (reed_debounce_ms=50) still coalesces logs/rapid reactions.
+                bounce = float(parts[3]) if len(parts) > 3 else 0.05
 
                 # ==================== CONTROLS FIELD PARSING ====================
                 controls = [name]
@@ -88,18 +91,45 @@ class GPIODeviceManager:
                     elif last_field:
                         controls = [last_field]
 
+                # Always populate the logical reed (state + light map) from config.
+                # Default to closed (safe for lights off + interlocks). This ensures
+                # reed-driven lights, force_reed, and phase sync work even if the
+                # hardware Button() fails (common with lgpio "GPIO busy" after unclean
+                # kills / multiple instances). Physical events only work for successful
+                # hardware reeds.
+                self.reed_to_light_map[name] = controls
+                self.reed_states[name] = True  # conservative default
+
                 try:
                     button = Button(pin, pull_up=pull_up, bounce_time=bounce)
                     self.devices[name] = button
                     self.reeds[name] = button
-                    self.reed_states[name] = button.is_pressed
-                    self.reed_to_light_map[name] = controls
-
+                    self.reed_states[name] = button.is_pressed  # real hardware state at creation
                     logger.debug(f"🚪 Reed: {name} → {friendly} controls {controls} (GPIO {pin})")
-                except Exception as e:
-                    logger.error(f"Failed to create reed {name}: {e}")
 
-        logger.info(f"🏭 GPIO initialized → {len(self.relays)} relay(s), {len(self.reeds)} reed(s)")
+                    # Diagnostics: log the kernel's view of the pin (via pinctrl) alongside gpiozero's reading.
+                    # Useful to confirm the electrical level on the pin matches the logical state.
+                    try:
+                        import subprocess
+                        pinfo = subprocess.check_output(
+                            ['pinctrl', 'get', str(pin)],
+                            text=True, stderr=subprocess.DEVNULL, timeout=0.8
+                        ).strip().splitlines()[0]
+                        logger.info(f"🚪 Reed {name} (GPIO{pin}) pinctrl: {pinfo} | is_pressed={button.is_pressed}")
+                    except Exception:
+                        logger.info(f"🚪 Reed {name} (GPIO{pin}) is_pressed={button.is_pressed} (pinctrl not available for diagnostics)")
+                except Exception as e:
+                    logger.error(f"Failed to create reed {name}: {e} "
+                                 "(using default closed; physical events disabled until GPIO freed)")
+
+        configured_reeds = len(self.reed_states)
+        hardware_reeds = len(self.reeds)
+        logger.info(f"🏭 GPIO initialized → {len(self.relays)} relay(s), "
+                    f"{hardware_reeds}/{configured_reeds} reed(s) hardware")
+        if hardware_reeds < configured_reeds:
+            logger.warning("⚠️ Some reeds failed hardware init (GPIO busy?). "
+                           "They will default to closed (lights off) and support force/UI control, "
+                           "but physical open/close events won't work until the GPIO chip is free.")
 
     def get_device(self, name: str):
         return self.devices.get(name)
@@ -116,4 +146,5 @@ class GPIODeviceManager:
         self.devices.clear()
         self.relays.clear()
         self.reeds.clear()
+        self.reed_states.clear()
         self.reed_to_light_map.clear()

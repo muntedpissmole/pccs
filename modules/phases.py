@@ -424,7 +424,7 @@ class PhaseManager:
                 self.current_phase is not None and 
                 self.current_phase != self._last_broadcast_phase):
                 
-                self.reed_manager.reapply_all_open_lights(self)
+                self.reed_manager.reapply_all_reed_lights(self)
                 self._last_broadcast_phase = self.current_phase
 
         except Exception as e:

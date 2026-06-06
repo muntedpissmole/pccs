@@ -40,12 +40,8 @@ class ReedManager:
         self.send_command = send_command
         self.ramp_and_broadcast = ramp_and_broadcast
 
-        self.stop_event = threading.Event()
-        self.monitor_thread: threading.Thread | None = None
-
         # Configuration from pccs.conf
         self.reed_ramp_time_ms = config.getint('lighting', 'reed_ramp_time_ms')
-        self.interval: float = config.getfloat('reed_monitor', 'monitor_interval')
 
         self.ambient_locked = False
         self.current_ambient_phase = None
@@ -59,6 +55,9 @@ class ReedManager:
         # Force states
         self.forced_states: Dict[str, dict] = {}
         self.force_lock = threading.Lock()
+
+        # User manual overrides for reed/ambient lights: stick until phase change or the controlling reed closes.
+        self.user_overrides: Dict[str, Tuple[int, Optional[str]]] = {}
         
         self.last_ambient_update = 0
         self.last_broadcast = 0
@@ -237,6 +236,9 @@ class ReedManager:
         self.registered = False
         self.last_change_time: Dict[str, float] = {}
 
+        self._reed_monitor_running = False
+        self._reed_monitor_thread = None
+
         logger.info("🚪 ReedManager initialized")
 
     def get_light_settings(self, phase: str, light_name: str) -> Optional[Tuple[int, str]]:
@@ -322,7 +324,7 @@ class ReedManager:
             return
 
         now = time.time() * 1000
-        is_forced = source in ("startup", "phase change")
+        is_forced = source in ("startup", "phase change", "scene")
 
         if not is_forced and now - self.last_ambient_update < self.AMBIENT_THROTTLE_MS * 1.5:
             logger.debug(f"⏭️ Ambient ramp throttled ({source})")
@@ -334,14 +336,14 @@ class ReedManager:
         logger.info(f"🌟 Ramping ambient lights to {phase} [{source}]")
 
         for light_name in self.ambient_lights:
-            settings = self.get_light_settings(phase, light_name)
-            b, m = settings if settings else (0, "white")
+            override = self.user_overrides.get(light_name)
+            if override:
+                b, m = override
+                m = m or "white"
+            else:
+                settings = self.get_light_settings(phase, light_name)
+                b, m = settings if settings else (0, "white")
             self._set_ambient_light(light_name, b, m, source=source)
-
-        # Handle open reed-controlled lights
-        for reed_name in list(self.gpio.reed_states.keys()):
-            if not self.get_effective_state(reed_name):
-                self._apply_light_for_reed(reed_name, is_phase_change=True)
 
     # ====================== CENTRAL LIGHT APPLICATION ======================
     def _apply_light_for_reed(self, reed_name: str, is_phase_change: bool = False):
@@ -385,6 +387,22 @@ class ReedManager:
             phase = "evening"
             logger.warning(f"⚠️ No valid phase after {timeout}s → using fallback '{phase}'")
 
+        # Re-sync current is_pressed for any hardware reeds right before deciding light levels.
+        # Force the read at this late time (after inits) to ensure we use the current hardware
+        # state for initial light application, even if it matches the creation-time value.
+        # This makes startup lights reliably reflect the reed states at apply time.
+        for name, button in list(self.gpio.reeds.items()):
+            try:
+                current = bool(button.is_pressed)
+                old = self.gpio.reed_states.get(name)
+                self.gpio.reed_states[name] = current
+                if old != current:
+                    logger.debug(f"🔄 Re-synced reed {name} initial state from hardware: {current}")
+            except Exception:
+                pass
+
+        logger.debug(f"Reed states after initial re-sync: {self.gpio.reed_states}")
+
         all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
 
         self.last_all_closed_state = all_closed
@@ -396,25 +414,44 @@ class ReedManager:
             self.ambient_active = False
             logger.info("🌙 All closed at startup")
             self.update_ambient_lights(force=True)
+
+        # Sync *all* reed-controlled lights at startup according to their current (effective) state.
+        # Closed reeds get forced to 0; open reeds get their phase-configured level (unless UI override).
+        # This ensures the invariant "reed closed => its light off" even if the reed was already closed
+        # at boot or its close event occurred before light-control callbacks/serial were ready.
+        for name in list(self.gpio.reed_states.keys()):
+            self._apply_light_for_reed(name, is_phase_change=True)
+
+        # Final hardware truth pass: adopt whatever the pins actually read *right now*
+        # (after serial, poll thread, callbacks etc are fully live). This ensures
+        # in-memory states match the live Button readings.
+        try:
+            self.resync_reed_states()
+        except Exception as e:
+            logger.debug(f"final resync_reed_states at startup skipped: {e}")
             
-    def reapply_all_open_lights(self, phase_manager):
-        """Called by PhaseManager on every phase change."""
+    def reapply_all_reed_lights(self, phase_manager):
+        """Called by PhaseManager on every phase change. Re-syncs all reed lights (closed->off, open->phase level)."""
         if not self.startup_ambient_done:
             return
+
+        # Phase change is one of the events that resets manual light overrides
+        self.clear_user_overrides()
 
         all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
         if all_closed:
             self.ambient_active = False
             logger.info("🌙 All reeds closed at phase change → applying all_closed_action (night scene will not activate)")
             self.update_ambient_lights(force=True)
-            return
+        else:
+            self.ramp_ambient_lights(source="phase change")
 
-        logger.info(f"🌗 Phase changed → reapplying levels for open reeds")
-        self.ramp_ambient_lights(source="phase change")
-        
+        # Re-sync *all* reed-controlled lights (not just opens) after phase change + override clear.
+        # Ensures closed reeds are off (0) and open reeds are at the new phase's configured level.
+        # (Previously only opens were re-applied, which could leave closed-reed lights on after
+        # a phase change if they had been manually lit while closed.)
         for name in list(self.gpio.reed_states.keys()):
-            if not self.get_effective_state(name):   # if open
-                self._apply_light_for_reed(name, is_phase_change=True)
+            self._apply_light_for_reed(name, is_phase_change=True)
                 
     def apply_initial_screen_states(self):
         """Evaluate current reed states and set all linked touchscreens accordingly at startup."""
@@ -435,7 +472,7 @@ class ReedManager:
 
             action = "sleep" if effective_closed else "wake"
 
-            ok = self._set_screen_state(screen_name, sleep=effective_closed)
+            ok = self._set_screen_state(screen_name, sleep=effective_closed, ssh_timeout=2, connect_timeout=2)
 
             if ok:
                 success += 1
@@ -447,7 +484,7 @@ class ReedManager:
                 failed += 1
                 logger.warning(f"🖥️ Failed to {action} {friendly} during initial setup")
 
-            time.sleep(0.15)
+            time.sleep(0.05)
 
         total = len(self.screens)
         if failed == 0:
@@ -521,6 +558,30 @@ class ReedManager:
             if reed_name in self.forced_states:
                 return self.forced_states[reed_name]['state']
         return self.gpio.reed_states.get(reed_name)
+
+    # ====================== USER OVERRIDE TRACKING (for reed/ambient lights) ======================
+    # Manual UI sets "stick" and prevent reed/phase re-syncs from resetting the level.
+    # Cleared on real reed close/open transitions (reed open "chooses" its configured level),
+    # phase changes, and scenes.
+    def set_user_override(self, light_name: str, brightness: int, mode: Optional[str] = None):
+        if mode:
+            mode = mode.lower()
+        self.user_overrides[light_name] = (max(0, min(100, int(brightness))), mode)
+        logger.debug(f"✋ User override recorded for {light_name}: {brightness}%{' ' + mode if mode else ''}")
+
+    def clear_user_overrides(self, lights: Optional[list[str]] = None):
+        if lights is None:
+            if self.user_overrides:
+                logger.debug(f"🧹 Cleared all user light overrides ({len(self.user_overrides)})")
+                self.user_overrides.clear()
+        else:
+            for ln in list(lights):
+                if ln in self.user_overrides:
+                    del self.user_overrides[ln]
+                    logger.debug(f"🧹 Cleared user override for {ln}")
+
+    def get_user_override(self, light_name: str) -> Optional[Tuple[int, Optional[str]]]:
+        return self.user_overrides.get(light_name)
         
     # ====================== INTERLOCK HELPERS ======================
     def is_interlock_satisfied(self, reed_name: str) -> bool:
@@ -553,13 +614,20 @@ class ReedManager:
         logger.debug(f"Reed event received: {name} → {'Closed' if closed else 'Open'}")
         now = time.time()
         delta_ms = (now - self.last_change_time.get(name, 0)) * 1000
-        
-        if delta_ms < self.REED_DEBOUNCE_MS:
-            logger.debug(f"Reed {name} debounced")
-            return
 
+        # Always update raw state from the event so that memory + diag + effective
+        # stay in sync with hardware, even for rapid or "bounced" events.
+        # The debounce only suppresses duplicate logging + full ambient reaction.
         self.gpio.reed_states[name] = closed
         self.last_change_time[name] = now
+
+        if delta_ms < self.REED_DEBOUNCE_MS:
+            logger.debug(f"Reed {name} debounced (state updated, light synced)")
+            effective_closed = self.get_effective_state(name)
+            for light_name in self.get_affected_lights(name):
+                self._apply_light_for_reed(light_name)
+            self.broadcast_update()
+            return
 
         effective_closed = self.get_effective_state(name)
         action = "CLOSED" if effective_closed else "OPEN"
@@ -572,61 +640,49 @@ class ReedManager:
 
         self._throttled_broadcast_and_ambient()
 
-    # ====================== MONITOR FALLBACK ======================
-    def start_monitor(self, interval: float = None):
-        if interval is not None:
-            self.interval = interval
-        self.monitor_thread = threading.Thread(
-            target=self._monitor_loop, daemon=True, name="ReedMonitor"
+    def _start_reed_monitor(self):
+        """Start a lightweight background poll that detects reed state changes
+        as a backup to gpiozero edge events (which can occasionally be missed
+        due to bounce settings, lgpio timing, long init periods before the
+        app is fully live, etc.). When a change is seen, it calls the exact
+        same _on_reed_event path so lights, logs, broadcasts etc. all work.
+        """
+        if getattr(self, '_reed_monitor_running', False):
+            return
+        self._reed_monitor_running = True
+        self._reed_monitor_thread = threading.Thread(
+            target=self._reed_poll_loop, daemon=True, name="ReedStatePoll"
         )
-        self.monitor_thread.start()
+        self._reed_monitor_thread.start()
+        logger.debug("🚪 Started reed state poll backup thread (200ms)")
 
-    def _monitor_loop(self):
-        logger.debug("🚪 Reed monitor started in POLLING mode")
-
-        last_physical = {
-            name: self.gpio.reeds[name].is_pressed 
-            for name in self.gpio.reed_states
-        }
-
-        while not self.stop_event.is_set():
-            changed = False
-            now = time.time()
-
-            for name in list(self.gpio.reed_states.keys()):
-                try:
-                    device = self.gpio.reeds.get(name)
-                    if not device:
-                        continue
-
-                    real_closed = device.is_pressed
-
-                    if real_closed != last_physical.get(name):
-                        self.gpio.reed_states[name] = real_closed
-                        last_physical[name] = real_closed
-                        changed = True
-
-                        effective_closed = self.get_effective_state(name)
-                        action = "Closed" if effective_closed else "Open"
-
-                        logger.info(f"🚪 Reed {name} → {action}")
-
-                        for light_name in self.get_affected_lights(name):
-                            self._apply_light_for_reed(light_name)
-
-                except Exception as e:
-                    logger.debug(f"Monitor error on {name}: {e}")
-                    continue
-
-            if changed:
-                self._throttled_broadcast_and_ambient()
-
-            self.stop_event.wait(self.interval)
+    def _reed_poll_loop(self):
+        while self._reed_monitor_running:
+            try:
+                for name, button in list(self.gpio.reeds.items()):
+                    try:
+                        current = bool(button.is_pressed)
+                        last = self.gpio.reed_states.get(name)
+                        # Always keep the in-memory state in sync with the live hardware read.
+                        # This ensures get_states() / effective state / UI etc. match what a direct
+                        # Button.is_pressed read would return (same as the bare diagnostic did).
+                        self.gpio.reed_states[name] = current
+                        if last is not None and last != current:
+                            logger.debug(f"🔄 Poll-detected reed change: {name} → {current}")
+                            # Drive the normal event path for logging, light application,
+                            # ambient updates, broadcasts, etc.
+                            self._on_reed_event(name, closed=current)
+                    except Exception as e:
+                        logger.debug(f"Reed poll read error for {name}: {e}")
+            except Exception as e:
+                logger.debug(f"Reed poll loop error: {e}")
+            time.sleep(0.2)  # 200 ms — low overhead, catches manual panel changes promptly
 
     def stop(self):
-        self.stop_event.set()
-        if self.monitor_thread and self.monitor_thread.is_alive():
-            self.monitor_thread.join(timeout=1.5)
+        """No-op after removal of the periodic reed monitor (reeds are now purely event-driven via gpiozero)."""
+        self._reed_monitor_running = False
+        # Note: we keep a tiny poll as reliability backup; it exits quickly.
+        pass
 
     def register_trigger(self, reed_name: str, callback: Callable):
         self.on_reed_change[reed_name].append(callback)
@@ -641,12 +697,16 @@ class ReedManager:
             logger.warning(f"Failed to emit reed_update: {e}")
             
     def _throttled_broadcast_and_ambient(self):
+        # Always broadcast on debounced reed events. This ensures frontends
+        # (and thus rooftop tent lighting disable interlock etc.) always see
+        # the latest states. The 80ms window only rate-limits ambient logic.
+        self.broadcast_update()
+
         now = time.time() * 1000
         if now - self.last_broadcast < self.BROADCAST_THROTTLE_MS:
+            self.last_broadcast = now
             return
         self.last_broadcast = now
-
-        self.broadcast_update()
 
         all_closed = all(bool(self.get_effective_state(name)) for name in self.gpio.reed_states)
 
@@ -658,19 +718,82 @@ class ReedManager:
     def get_states(self) -> Dict:
         return self.gpio.reed_states.copy()
 
+    def resync_reed_states(self):
+        """Force re-sample is_pressed from all live hardware Buttons and adopt as truth.
+
+        Any state that differs from our in-memory value will drive the normal
+        _on_reed_event path (debounce, light apply, broadcast, ambient reaction).
+        This lets operators or UIs correct a desynced reed (e.g. missed edge at boot
+        or long bounce) without requiring a physical transition to occur.
+
+        Also logs pinctrl output for each pin during the resync so you can compare
+        the kernel view of the pin level against what gpiozero's Button reports.
+        """
+        changed = []
+        for name, button in list(self.gpio.reeds.items()):
+            try:
+                current = self._get_current_closed(name)
+                last = self.gpio.reed_states.get(name)
+
+                # Surface the kernel pin view on every resync (compare against gpiozero).
+                try:
+                    import subprocess
+                    pin = self._get_reed_pin(name)
+                    if pin > 0:
+                        pinfo = subprocess.check_output(
+                            ['pinctrl', 'get', str(pin)],
+                            text=True, stderr=subprocess.DEVNULL, timeout=0.8
+                        ).strip().splitlines()[0]
+                        logger.info(f"🔄 resync {name} (GPIO{pin}): pinctrl={pinfo} | is_pressed={current}")
+                except Exception:
+                    pass
+
+                if last != current:
+                    self.gpio.reed_states[name] = current
+                    changed.append(name)
+                    # Drive the usual side-effects (lights, logs at INFO if not debounced, etc.)
+                    self._on_reed_event(name, closed=current)
+            except Exception as e:
+                logger.debug(f"resync_reed_states read error for {name}: {e}")
+        if changed:
+            logger.info(f"🔄 resync_reed_states adopted hardware for: {changed}")
+        else:
+            logger.info("🔄 resync_reed_states: no state changes (hardware matched memory for all reeds)")
+        try:
+            self.broadcast_update()
+        except Exception:
+            pass
+        return changed
+
+    def _get_reed_pin(self, name: str) -> int:
+        """Best-effort lookup of the configured BCM pin for a reed (for pinctrl diagnostics)."""
+        try:
+            if self.config.has_section('reeds'):
+                line = self.config.get('reeds', name, fallback=None)
+                if line:
+                    parts = [p.strip() for p in str(line).split('|')]
+                    if len(parts) > 1:
+                        return int(parts[1])
+        except Exception:
+            pass
+        return -1
+
     def get_reed_ramp_time(self) -> int:
         return self.reed_ramp_time_ms
 
     # ====================== TOUCHSCREEN CONTROL ======================
     def _make_screen_trigger(self, reed_name: str):
-        """Create callback for screen control when linked reed changes."""
+        """Create callback for screen control when linked reed changes.
+        Screen SSH operations can be slow (timeouts, unreachable hosts, etc.) so
+        we run them in daemon threads so they don't block reed event processing
+        and the associated light ramp logic (which must stay responsive and
+        simultaneous for interlocked lights).
+        """
         def screen_trigger(is_closed: bool, is_phase_change: bool = False):
             for screen_name, conf in self.screens.items():
                 if conf['linked_reed'] == reed_name:
-                    if is_closed:
-                        self._sleep_screen(screen_name)
-                    else:
-                        self._wake_screen(screen_name)
+                    target = self._sleep_screen if is_closed else self._wake_screen
+                    threading.Thread(target=target, args=(screen_name,), daemon=True).start()
         return screen_trigger
 
     def _wake_screen(self, screen_name: str):
@@ -690,8 +813,11 @@ class ReedManager:
         else:
             logger.debug(f"🖥️ Sleep command sent but screen unreachable")
         
-    def _set_screen_state(self, screen_name: str, sleep: bool) -> bool:
-        """Internal helper that returns True if SSH command succeeded."""
+    def _set_screen_state(self, screen_name: str, sleep: bool, ssh_timeout: float = 5, connect_timeout: int = 5) -> bool:
+        """Internal helper that returns True if SSH command succeeded.
+        ssh_timeout: overall subprocess timeout (seconds)
+        connect_timeout: ssh -o ConnectTimeout (seconds) -- use smaller for startup init
+        """
         conf = self.screens.get(screen_name, {})
         friendly = conf.get('friendly', screen_name)
         bpath = conf.get('brightness_path', '')
@@ -707,10 +833,10 @@ class ReedManager:
         # Direct write. For this to work the target sysfs file must be writable by the
         # ssh user (joel). On many devices this requires a one-time setup on the remote
         # (see comments in pccs.conf for rc.local example to chown/chmod at boot).
-        cmd = f"ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o IdentitiesOnly=no {conf['username']}@{conf['host']} \"echo {value} > {bpath}\""
+        cmd = f"ssh -o BatchMode=yes -o ConnectTimeout={connect_timeout} -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o IdentitiesOnly=no {conf['username']}@{conf['host']} \"echo {value} > {bpath}\""
 
         try:
-            result = subprocess.run(cmd, shell=True, timeout=5, capture_output=True, text=True)
+            result = subprocess.run(cmd, shell=True, timeout=ssh_timeout, capture_output=True, text=True)
 
             if result.returncode == 0:
                 logger.debug(f"🖥️ {action_word.capitalize()} command succeeded for {friendly}")

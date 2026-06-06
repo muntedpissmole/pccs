@@ -81,6 +81,8 @@ class GPSModule:
         self._last_fix_toast_time = 0.0
         self._toast_cooldown = config.getfloat('gps', 'toast_cooldown')
 
+        self._gps_port_unhealthy_warned = False
+
         logger.debug("📍 GPSModule initialized")
 
     # ==================================================================
@@ -176,8 +178,21 @@ class GPSModule:
                 continue
 
             try:
-                with self._serial_lock:
-                    line_bytes = self.serial.readline()
+                try:
+                    with self._serial_lock:
+                        line_bytes = self.serial.readline()
+                except serial.SerialException as se:
+                    msg = str(se)
+                    if "readiness to read but returned no data" in msg or "multiple access" in msg:
+                        # Common when port is console, no GPS attached, or contended.
+                        # Back off to avoid log spam; reader will keep trying.
+                        if not self._gps_port_unhealthy_warned:
+                            port = getattr(self.serial, 'port', 'unknown')
+                            logger.warning("🛰️ GPS port %s opened but immediately reports no data (device disconnected / multiple access / serial console still enabled?). Will keep retrying silently. Check wiring, power to GPS, raspi-config serial console, and [gps] serial_ports order.", port)
+                            self._gps_port_unhealthy_warned = True
+                        time.sleep(1.0)
+                        continue
+                    raise
 
                 if not line_bytes:
                     time.sleep(0.05)
