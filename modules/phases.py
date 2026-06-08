@@ -33,6 +33,7 @@ class PhaseManager:
         self.gps = gps_module
         self.socketio = socketio
         self.reed_manager = None
+        self.on_phase_change = None  # optional callback(phase, forced_phase, invalidate)
         self.dark_mode_config = dark_mode_config
         
         self.fallback_latitude, self.fallback_longitude = self.gps.get_fallback_coords()
@@ -368,6 +369,13 @@ class PhaseManager:
             return self.manual_dark_mode
         return self.current_dark_mode
 
+    def _emit_phase_diag(self):
+        if self.socketio:
+            try:
+                self.socketio.emit('phase_diag_update', {'forced': self.is_forced()})
+            except Exception:
+                pass
+
     def force_phase(self, phase: str):
         if self.force_timer:
             self.force_timer.cancel()
@@ -376,6 +384,7 @@ class PhaseManager:
         self.forced_phase = str(phase).strip().title()
         logger.debug(f"🔧 Phase forced → {self.forced_phase}")
         self._update_phase()
+        self._emit_phase_diag()
 
     def clear_force(self):
         old = self.forced_phase
@@ -390,6 +399,7 @@ class PhaseManager:
             logger.debug("🔄 clear_force called with no active force")
 
         self._update_phase()
+        self._emit_phase_diag()
 
     # --------------------------- Night phase listeners (for Victron daily reset etc.) ---------------------------
 
@@ -413,18 +423,23 @@ class PhaseManager:
             times = self.get_phase_times()
             payload = {
                 'phase': self.get_phase(),
-                'forced': self.is_forced(),
                 'using_fallback': self._using_fallback,
                 'waiting_for_gps': self.current_phase is None,
                 **times
             }
             self.socketio.emit('phase_update', payload)
+            self.socketio.emit('phase_diag_update', {'forced': self.is_forced()})
 
-            if (self.reed_manager and 
-                self.current_phase is not None and 
+            if (self.current_phase is not None and
                 self.current_phase != self._last_broadcast_phase):
-                
-                self.reed_manager.reapply_all_reed_lights(self)
+                if self.on_phase_change:
+                    self.on_phase_change(
+                        self.get_phase(),
+                        self.forced_phase,
+                        True,
+                    )
+                elif self.reed_manager:
+                    self.reed_manager.reapply_all_reed_lights(self)
                 self._last_broadcast_phase = self.current_phase
 
         except Exception as e:

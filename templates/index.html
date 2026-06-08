@@ -1427,7 +1427,7 @@
     });
 
     socket.on('reed_update', (payload) => {
-        currentReeds = { ...(payload.states || {}), ...(payload.forced || {}) };
+        currentReeds = payload.states || {};
         updateRooftopTentControls();
     });
 

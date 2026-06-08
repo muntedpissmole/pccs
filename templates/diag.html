@@ -864,14 +864,17 @@
         }
 
         // PHASES
+        function updatePhaseForced(data) {
+            document.getElementById('phase-forced').innerHTML = data.forced
+                ? `<span style="color:#fbbf24;">🔧 FORCED</span>`
+                : 'Automatic';
+        }
+
         function updatePhase(data) {
             document.getElementById('current-phase').innerHTML = `
                 ${data.phase === 'Day' ? '🌞' : data.phase === 'Evening' ? '🌅' : '🌙'} 
                 ${data.phase || 'Unknown'}
             `;
-            document.getElementById('phase-forced').innerHTML = data.forced 
-                ? `<span style="color:#fbbf24;">🔧 FORCED</span>` 
-                : 'Automatic';
 
             let timingsHTML = data.day_start ? `
                 <div class="status-row"><span>Day starts</span><span>${data.day_start}</span></div>
@@ -909,8 +912,9 @@
 
         // Socket listeners
         socket.on('gps_update', updateGPS);
-        socket.on('reed_update', updateReeds);
+        socket.on('reed_diag_update', updateReeds);
         socket.on('phase_update', updatePhase);
+        socket.on('phase_diag_update', updatePhaseForced);
         socket.on('screen_update', (data) => {
             if (!data.name) return;
             if (!screenData[data.name]) screenData[data.name] = {};
