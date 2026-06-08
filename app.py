@@ -66,6 +66,20 @@ if config.getboolean('logging', 'suppress_socketio', fallback=True):
     logging.getLogger("socketio").setLevel(logging.WARNING)
 
 # ====================== THEME HELPER ======================
+def _extract_css_friendly_name(filepath: str, fallback: str) -> str:
+    """Read first line of CSS; return content of /* ... */ comment if present, else fallback."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            first = f.readline().strip()
+            if first.startswith('/*') and first.endswith('*/'):
+                comment = first[2:-2].strip()
+                if comment:
+                    return comment
+    except Exception:
+        pass
+    return fallback
+
+
 def get_friendly_theme_name(theme_file: str) -> str:
     """Extract friendly name from CSS comment or fallback to pretty filename"""
     if not theme_file:
@@ -80,16 +94,10 @@ def get_friendly_theme_name(theme_file: str) -> str:
     ]
     
     for path in paths:
-        try:
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    first_line = f.readline().strip()
-                    if first_line.startswith('/*') and first_line.endswith('*/'):
-                        comment = first_line[2:-2].strip()
-                        if comment:
-                            return comment
-        except:
-            continue
+        if os.path.exists(path):
+            name = _extract_css_friendly_name(path, theme_file.replace('-', ' ').replace('_', ' ').title())
+            if name:
+                return name
     
     # Fallback
     return theme_file.replace('-', ' ').replace('_', ' ').title()
@@ -149,7 +157,7 @@ from modules.gpio import GPIODeviceManager
 from modules.reeds import ReedManager
 from modules.phases import PhaseManager
 from modules.sensors import SensorManager
-from modules.arduino import ArduinoManager
+from modules.arduino import ArduinoManager, brightness_to_pwm
 from modules.toasts import ToastManager, toast_manager
 from modules.system import SystemInfoManager
 
@@ -158,24 +166,14 @@ app.config['SECRET_KEY'] = config.get('system', 'secret_key')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Dev-friendly settings for frontend iteration (templates + static/JS/CSS).
-# Edit config/pccs.conf to set debug = true, then restart app.py *once*.
-# After that you can edit templates/index.html or files under static/ (JS/CSS)
-# and see updates just by refreshing the browser (no more python restarts for
-# frontend-only changes).
-# For JS/CSS changes you will usually need a *hard* refresh (Ctrl+Shift+R / Cmd+Shift+R)
-# or DevTools → Network → "Disable cache", because browsers aggressively cache
-# same-URL static assets even when the server says "no-cache".
-# Set back to false for normal/production use.
+# debug=true in pccs.conf enables TEMPLATES_AUTO_RELOAD etc (see docs in pccs.conf).
 debug_mode = config.getboolean('system', 'debug', fallback=False)
 if debug_mode:
     app.config['TEMPLATES_AUTO_RELOAD'] = True
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
     app.jinja_env.auto_reload = True
-    # Explicitly disable Jinja's compiled template cache so changed .html files
-    # are always re-parsed from disk on the next render_template() call.
     app.jinja_env.cache = None
-    logger.info("🛠️ Debug mode ON — TEMPLATES_AUTO_RELOAD + static no-cache + jinja cache disabled. Edit frontend files then hard-refresh browser (Ctrl+Shift+R).")
+    logger.info("🛠️ Debug mode ON (see pccs.conf for details on editing templates/static).")
 
 # ====================== SYSTEM INFO MANAGER ======================
 system_manager = SystemInfoManager(config, socketio, APP_VERSION)
@@ -186,16 +184,6 @@ import modules.toasts
 modules.toasts.toast_manager = toast_manager
 
 logger = setup_logging(config, toast_manager=toast_manager)
-
-# ====================== ERROR & WARNING TOAST HELPERS ======================
-def send_error_toast(message: str, title: str = "Error"):
-    """Log error → automatically becomes persistent toast"""
-    logger.error(message)
-
-
-def send_warning_toast(message: str, title: str = "Warning"):
-    """Log warning → becomes toast"""
-    logger.warning(message)
 
 # ====================== ARDUINO + GPIO ======================
 arduino = ArduinoManager(config)
@@ -213,6 +201,11 @@ def send_command(cmd: str):
 
 def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white', ramp_ms: int | None = None):
     return arduino.set_rgb_bug_light(name, brightness, mode, ramp_ms)
+
+def read_all_states():
+    arduino.read_all_states()
+    socketio.emit('state_update', state.copy())
+    logger.debug(f"Final synced state: {state}")
 
 
 # ====================== RAMP & SAFETY ======================
@@ -334,6 +327,7 @@ def log_light_change(name: str, value: int | bool, source: str | None = None, mo
 # ====================== UNIFIED REED TRIGGER ======================
 def make_reed_trigger(reed_name: str):
     def trigger(is_closed: bool, is_phase_change: bool = False,
+                is_reed_transition: bool = False,
                 desired_brightness: int = None, desired_mode: str = None):
         
         if not phase_manager or not reed_manager:
@@ -358,7 +352,7 @@ def make_reed_trigger(reed_name: str):
                     if pin is None:
                         logger.warning(f"⚠️ No LIGHT_MAP pin for reed-controlled light '{light_name}' (reed {reed_name})")
                         continue
-                    pwm = int(desired_brightness * 2.55)
+                    pwm = brightness_to_pwm(desired_brightness)
                     send_command(f"RAMP {pin} {pwm} {ramp}")
                 log_light_change(light_name, desired_brightness, "scene", mode)
                 ramp_and_broadcast(light_name, desired_brightness, ramp,
@@ -399,24 +393,32 @@ def make_reed_trigger(reed_name: str):
                                    source=None)
 
                 # Real reed close transition (not a phase re-apply) clears any prior manual override
-                if not is_phase_change and reed_manager:
+                if not is_phase_change and is_reed_transition and reed_manager:
                     reed_manager.clear_user_overrides([light_name])
 
             else:
-                if is_phase_change and reed_manager and reed_manager.user_overrides.get(light_name):
-                    # Phase-change / startup re-apply: do not clobber a manual user-set level.
-                    # (True phase changes pre-clear overrides in reapply_all_reed_lights.)
-                    continue
+                brightness = None
+                mode = "white"
+                log_source = "reed" if not is_phase_change else "phase change"
 
-                # Normal reed open (or phase re-apply without override): apply the configured
-                # "its level" for this phase. Reed open events always (re)establish the reed's
-                # defined level and clear manual overrides (the reed "chooses" the level).
-                settings = reed_manager.get_light_settings(phase, light_name)
-                if settings is None:
-                    logger.debug(f"No {phase} setting for light '{light_name}' – leaving unchanged")
-                    continue
+                # Honour manual UI levels while the reed stays open (poll bounce, ambient
+                # re-sync, etc.). Phase changes pre-clear overrides in reapply_all_reed_lights.
+                if not is_phase_change and reed_manager:
+                    override = reed_manager.get_user_override(light_name)
+                    if override:
+                        brightness, mode = override
+                        mode = mode or "white"
+                        log_source = "user override"
 
-                brightness, mode = settings
+                if brightness is None:
+                    settings = reed_manager.get_light_settings(phase, light_name)
+                    if settings is None:
+                        logger.debug(f"No {phase} setting for light '{light_name}' – leaving unchanged")
+                        continue
+                    brightness, mode = settings
+                    # Physical open after close: reed chooses its configured phase level
+                    if not is_phase_change and is_reed_transition and reed_manager:
+                        reed_manager.clear_user_overrides([light_name])
 
                 if light_name in RGB_LIGHTS:
                     set_rgb_bug_light(light_name, brightness, mode, ramp)
@@ -425,32 +427,15 @@ def make_reed_trigger(reed_name: str):
                     if pin is None:
                         logger.warning(f"⚠️ No LIGHT_MAP pin for reed-controlled light '{light_name}' (reed {reed_name})")
                         continue
-                    pwm = int(brightness * 2.55)
+                    pwm = brightness_to_pwm(brightness)
                     send_command(f"RAMP {pin} {pwm} {ramp}")
 
-                log_light_change(light_name, brightness, "reed" if not is_phase_change else "phase change", mode)
+                log_light_change(light_name, brightness, log_source, mode)
                 ramp_and_broadcast(light_name, brightness, ramp,
                                    mode if light_name in RGB_LIGHTS else None,
                                    source=None)
 
-                # Real reed open transition (physical or force) clears override (the reed action chose the level)
-                if not is_phase_change and reed_manager:
-                    reed_manager.clear_user_overrides([light_name])
-
     return trigger
-
-
-# ====================== WRAPPERS ======================
-def send_command(cmd: str):
-    return arduino.send_command(cmd)
-
-def set_rgb_bug_light(name: str, brightness: int, mode: str = 'white', ramp_ms: int | None = None):
-    return arduino.set_rgb_bug_light(name, brightness, mode, ramp_ms)
-
-def read_all_states():
-    arduino.read_all_states()
-    socketio.emit('state_update', state.copy())
-    logger.debug(f"Final synced state: {state}")
 
 
 # ====================== INSTANCES ======================
@@ -467,10 +452,6 @@ reed_manager = ReedManager(
     ramp_and_broadcast=ramp_and_broadcast,
     toast_manager=toast_manager
 )
-
-# Note: gpio device init and event handler registration is now done later in the
-# __main__ block (after light-control triggers are registered) for better ordering
-# and reliability of runtime reed events.
 
 gps = None
 phase_manager = None
@@ -493,7 +474,7 @@ def background_state_sync():
 
 # ====================== NETWORK TILE SUPPORT (for dashboard glanceable tile) ======================
 def build_network_status():
-    """Assemble the payload consumed by the Network tile (Iteration 2 design)."""
+    """Assemble the payload for the Network tile."""
     payload = {
         "internet": {
             "connected": False,
@@ -564,75 +545,46 @@ _PING_CACHE_TTL = 35
 
 
 def _get_cached_ping():
-    """Return (ping_ms, status) using a short cache.
-    Tries real ping first, falls back to curl for latency measurement.
-    This makes it much more reliable across different environments.
-    """
+    """Return (ping_ms, status) using a short cache. Tries ping then curl fallback."""
     import time as _t
     import subprocess
 
     now = _t.time()
-    is_first_call = _ping_cache["ts"] == 0
+    is_first = _ping_cache["ts"] == 0
 
-    if not is_first_call and now - _ping_cache["ts"] < _PING_CACHE_TTL and _ping_cache["ms"] is not None:
+    if not is_first and now - _ping_cache["ts"] < _PING_CACHE_TTL and _ping_cache["ms"] is not None:
         return _ping_cache["ms"], _ping_cache["status"]
 
     ms = None
     status = "fail"
 
-    # Method 1: Try real ping (best when it works)
     try:
         start = _t.time()
-        subprocess.check_output(
-            ["ping", "-c", "1", "-W", "1", "1.1.1.1"],
-            stderr=subprocess.DEVNULL,
-            timeout=2.2
-        )
-        elapsed = (_t.time() - start) * 1000
-        ms = int(round(elapsed))
+        subprocess.check_output(["ping", "-c", "1", "-W", "1", "1.1.1.1"], stderr=subprocess.DEVNULL, timeout=2.2)
+        ms = int(round((_t.time() - start) * 1000))
     except Exception:
-        ms = None
+        pass
 
-    # Method 2: Fallback using curl (very reliable on Pis and embedded systems)
     if ms is None:
         try:
             start = _t.time()
-            # Capture stderr so we can see real errors on first failure
-            result = subprocess.run(
-                ["curl", "-I", "--connect-timeout", "2", "--max-time", "2", "http://1.1.1.1"],
-                capture_output=True,
-                text=True,
-                timeout=2.5
-            )
+            result = subprocess.run(["curl", "-I", "--connect-timeout", "2", "--max-time", "2", "http://1.1.1.1"], capture_output=True, text=True, timeout=2.5)
             if result.returncode == 0:
-                elapsed = (_t.time() - start) * 1000
-                ms = int(round(elapsed))
-            else:
-                # Log the actual curl error on first attempt
-                if is_first_call:
-                    logger.warning(f"curl fallback failed: returncode={result.returncode}, stderr={result.stderr.strip()}")
-                ms = None
+                ms = int(round((_t.time() - start) * 1000))
+            elif is_first:
+                logger.warning(f"curl fallback failed: {result.returncode}")
         except Exception as e:
-            if is_first_call:
-                logger.warning(f"curl fallback exception: {e}")
-            ms = None
+            if is_first:
+                logger.warning(f"curl fallback error: {e}")
 
     if ms is not None:
-        if ms < 50:
-            status = "good"
-        elif ms < 150:
-            status = "slow"
-        else:
-            status = "fail"
+        status = "good" if ms < 50 else ("slow" if ms < 150 else "fail")
     else:
         status = "fail"
 
     _ping_cache.update({"ts": now, "ms": ms, "status": status})
-
-    # Helpful one-time log so we can see if ping is actually succeeding
-    if is_first_call:
-        display_ms = ms if ms is not None else "None"
-        logger.info(f"🌐 First network ping measurement: {display_ms}ms (status={status})")
+    if is_first:
+        logger.info(f"🌐 First network ping: {ms}ms ({status})")
 
     return ms, status
 
@@ -746,16 +698,8 @@ def get_themes():
             return
         seen.add(base_name)
 
-        display_name = base_name.replace('-', ' ').replace('_', ' ').title()
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                first = f.readline().strip()
-                if first.startswith('/*') and first.endswith('*/'):
-                    comment = first[2:-2].strip()
-                    if comment:
-                        display_name = comment
-        except Exception:
-            pass
+        fallback = base_name.replace('-', ' ').replace('_', ' ').title()
+        display_name = _extract_css_friendly_name(filepath, fallback)
 
         themes.append({'file': base_name, 'name': display_name})
 
@@ -790,6 +734,53 @@ def network_status():
     except Exception as e:
         logger.warning(f"network_status error: {e}")
         return {"internet": {"connected": False, "friendly_name": "Error"}, "error": str(e)}
+
+# ====================== WIFI CLIENT (diag page tile) ======================
+@app.route('/api/wifi/scan')
+def wifi_scan():
+    """Return discovered WiFi networks + current connection (for the diag WiFi tile)."""
+    try:
+        networks = system_manager.wifi_scan() if system_manager else []
+        current = system_manager.get_current_wifi() if system_manager else {"connected": False}
+        return {"networks": networks, "current": current}
+    except Exception as e:
+        logger.warning(f"wifi_scan error: {e}")
+        return {"networks": [], "current": {"connected": False}, "error": str(e)}
+
+@app.route('/api/wifi/connect', methods=['POST'])
+def wifi_connect():
+    """Connect to a chosen WiFi network (optionally with password).
+    Password is never logged.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        ssid = (data.get('ssid') or '').strip()
+        password = data.get('password')  # may be None or empty string for open networks
+
+        if not ssid:
+            return {"success": False, "message": "SSID is required"}, 400
+
+        # IMPORTANT: do not include password (or even its presence) in log messages
+        logger.info(f"📶 WiFi connect requested for SSID: {ssid} (password provided: {bool(password)})")
+
+        result = system_manager.wifi_connect(ssid, password if password else None) if system_manager else \
+                 {"success": False, "message": "System manager unavailable", "ssid": ssid}
+
+        # Surface a toast to connected clients (including the diag page) for visibility
+        try:
+            if toast_manager:
+                title = "WiFi"
+                if result.get("success"):
+                    toast_manager.send_toast(title, f"Connected to {ssid}", "success", 4500)
+                else:
+                    toast_manager.send_toast(title, result.get("message", "Connection failed"), "error", 6000)
+        except Exception:
+            pass
+
+        return result
+    except Exception as e:
+        logger.error(f"wifi_connect route error: {e}")
+        return {"success": False, "message": str(e)}, 500
     
 # ====================== SOCKETIO ======================
 @socketio.on('light_change')
@@ -803,21 +794,14 @@ def handle_light_change(data):
     # order could leave hardware on even when model said closed.
     target = apply_safety_constraints(name, target, "user interface")
 
-    # For manual UI sets (sliders, toggle pills, etc.), always use the configured
-    # ui_ramp_time_ms from pccs.conf. Previously there was a special case forcing
-    # 150ms for target==0 to make "toggle off" feel snappier, but that bypassed the
-    # user-configured ramp time.
     ramp_ms = UI_RAMP_TIME_MS
 
     if name in RGB_LIGHTS:
         set_rgb_bug_light(name, target, mode or "white", ramp_ms)
     elif name in LIGHT_MAP:
-        pwm = int(target * 2.55)
+        pwm = brightness_to_pwm(target)
         send_command(f"RAMP {LIGHT_MAP[name]} {pwm} {ramp_ms}")
 
-    # Log immediately (command has been issued to hardware). This makes light level
-    # change logs appear promptly instead of being deferred until the end of the
-    # ramp duration inside ramp_and_broadcast.
     log_light_change(name, target, "user interface", mode)
 
     ramp_and_broadcast(name, target, ramp_ms, mode, source=None)

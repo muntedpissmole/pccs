@@ -2,6 +2,8 @@
 import logging
 from typing import Dict, Any
 
+from .arduino import brightness_to_pwm
+
 logger = logging.getLogger("pccs")
 
 VALID_PHASES = {"day", "evening", "night"}
@@ -164,7 +166,7 @@ def activate_scene(
                 set_rgb_bug_light(light_name, target, mode, ramp_ms)
                 state[f"{light_name}_mode"] = mode
             elif light_name in LIGHT_MAP:
-                pwm = int(target * 2.55)
+                pwm = brightness_to_pwm(target)
                 send_command(f"RAMP {LIGHT_MAP[light_name]} {pwm} {ramp_ms}")
 
             ramp_and_broadcast(

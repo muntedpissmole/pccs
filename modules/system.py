@@ -106,6 +106,9 @@ class SystemInfoManager:
                 "connected_clients": self._get_connected_clients(),
                 "process_count": len(psutil.pids()),
                 "top_processes": self._get_top_processes(),
+
+                # WiFi client connection status (for diag WiFi tile + Network Details)
+                "current_wifi": self.get_current_wifi(),
             }
 
             return data
@@ -354,62 +357,13 @@ class SystemInfoManager:
 
     # ====================== ITERATION 2 HELPERS (Network tile) ======================
 
-    def _get_unifi_primary_ssid(self):
-        """Best-effort attempt to read the primary WiFi SSID from Unifi OS.
-        Returns None on failure / if not running Unifi OS.
-        """
-        candidates = [
-            "/data/unifi/data/sites/default/config.gateway.json",
-            "/etc/unifi/config.gateway.json",
-            "/data/unifi/data/setting/network.json",
-        ]
-        for path in candidates:
-            try:
-                if os.path.exists(path):
-                    with open(path) as f:
-                        data = json.load(f)
-                    # Common patterns in Unifi configs
-                    if isinstance(data, dict):
-                        for key in ("wlan", "wireless", "networks"):
-                            if key in data:
-                                net = data[key]
-                                if isinstance(net, list) and net:
-                                    for n in net:
-                                        if n.get("enabled") and n.get("name"):
-                                            return n["name"]
-                                elif isinstance(net, dict):
-                                    for v in net.values():
-                                        if isinstance(v, dict) and v.get("name"):
-                                            return v["name"]
-                    # Fallback: look for any "ssid" or "name" field that looks like a WiFi name
-                    def _find_ssid(obj):
-                        if isinstance(obj, dict):
-                            for k, v in obj.items():
-                                if k.lower() in ("ssid", "name") and isinstance(v, str) and len(v) > 1:
-                                    return v
-                                res = _find_ssid(v)
-                                if res:
-                                    return res
-                        elif isinstance(obj, list):
-                            for item in obj:
-                                res = _find_ssid(item)
-                                if res:
-                                    return res
-                        return None
-                    found = _find_ssid(data)
-                    if found:
-                        return found
-            except Exception:
-                continue
-        return None
-
-    # Note: Cached ping logic currently lives in app.py (_get_cached_ping) for simplicity.
+    # Note: some ping logic lives in app.py for the tile broadcaster.
     # If more sophisticated ping handling is needed later it can be moved here.
 
     # ====================== Signal Quality Helpers ======================
 
     def _get_current_signal_quality(self, iface: str | None) -> str | None:
-        """Return a human string like '92% (Good)' for the WAN quality where possible."""
+        """Return a human string like '92%' for the WAN quality where possible (no parenthetical description)."""
         if not iface:
             return None
 
@@ -461,20 +415,35 @@ class SystemInfoManager:
         return None
 
     def _rssi_to_quality_string(self, rssi: int) -> str:
-        """Map RSSI (dBm, negative) to a nice '92% (Good)' string."""
+        """Map RSSI (dBm, negative) to a nice '92%' string (no parenthetical description, to keep network tile compact)."""
         if rssi >= -50:
-            pct, label = 100, "Excellent"
+            pct = 100
         elif rssi >= -60:
-            pct, label = 90, "Excellent"
+            pct = 90
         elif rssi >= -70:
-            pct, label = 75, "Good"
+            pct = 75
         elif rssi >= -80:
-            pct, label = 50, "Fair"
+            pct = 50
         elif rssi >= -85:
-            pct, label = 30, "Poor"
+            pct = 30
         else:
-            pct, label = 10, "Very Poor"
-        return f"{pct}% ({label})"
+            pct = 10
+        return f"{pct}%"
+
+    def _rssi_dbm_to_percent(self, rssi: int) -> int:
+        """Map RSSI (dBm, negative) to 0-100 percent. Used by iw-based WiFi scans."""
+        if rssi >= -50:
+            return 100
+        elif rssi >= -60:
+            return 90
+        elif rssi >= -70:
+            return 75
+        elif rssi >= -80:
+            return 50
+        elif rssi >= -85:
+            return 30
+        else:
+            return 10
 
     def _get_usb_cellular_signal_quality(self) -> str | None:
         """Best-effort attempt to read cellular signal strength from a USB-tethered phone.
@@ -544,8 +513,7 @@ class SystemInfoManager:
                     sq = data["signalQuality"]
                     if isinstance(sq, (int, float)):
                         pct = int(sq * 100)
-                        label = "Excellent" if pct > 85 else "Good" if pct > 65 else "Fair" if pct > 40 else "Poor"
-                        return f"{pct}% ({label})"
+                        return f"{pct}%"
                 # Older / other shapes
                 if "snr" in data or "signal" in data:
                     # rough mapping if we have dB values
@@ -553,6 +521,281 @@ class SystemInfoManager:
             except Exception:
                 continue
         return None
+
+    # ====================== WIFI CLIENT MANAGEMENT (for /diag WiFi chooser tile) ======================
+    # Uses nmcli (NetworkManager) as the primary, robust tool for scanning and connecting.
+    # Falls back with clear errors if nmcli is unavailable (common on systems using
+    # only wpa_supplicant + dhcpcd). All subprocess calls use list form (never shell=True
+    # when a password may be involved).
+
+    def get_current_wifi(self) -> dict | None:
+        """Return basic info about the current WiFi client connection, if any.
+        Used both for the passive Network Details and to seed the WiFi tile.
+        """
+        try:
+            # Prefer nmcli for the active connection name on wlan interfaces
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+                stderr=subprocess.DEVNULL,
+                timeout=3
+            ).decode(errors="ignore")
+
+            for line in out.splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split(":")
+                if len(parts) >= 3 and "wifi" in parts[1].lower():
+                    name = parts[0] or "Unknown"
+                    dev = parts[2] or "wlan0"
+                    # Try to get IP for that dev
+                    ip = None
+                    try:
+                        ip_out = subprocess.check_output(
+                            f"ip -4 addr show {dev} 2>/dev/null | grep -oP '(?<=inet\\s)[0-9.]+'",
+                            shell=True, timeout=2
+                        ).decode().strip()
+                        if ip_out:
+                            ip = ip_out
+                    except Exception:
+                        pass
+                    return {"ssid": name, "iface": dev, "ip": ip, "connected": True}
+        except FileNotFoundError:
+            # nmcli not present — fall back to iw + ip for best-effort info
+            pass
+        except Exception:
+            pass
+
+        # Fallback: look for a wlan* interface that is associated
+        for iface in ("wlan0", "wlan1"):
+            try:
+                link = subprocess.check_output(
+                    ["iw", "dev", iface, "link"],
+                    stderr=subprocess.DEVNULL,
+                    timeout=2
+                ).decode(errors="ignore")
+                if "SSID" in link:
+                    ssid = None
+                    for ln in link.splitlines():
+                        if "SSID:" in ln:
+                            ssid = ln.split("SSID:", 1)[1].strip()
+                            break
+                    ip = None
+                    try:
+                        ip_out = subprocess.check_output(
+                            f"ip -4 addr show {iface} 2>/dev/null | grep -oP '(?<=inet\\s)[0-9.]+'",
+                            shell=True, timeout=2
+                        ).decode().strip()
+                        if ip_out:
+                            ip = ip_out
+                    except Exception:
+                        pass
+                    return {"ssid": ssid or "Associated", "iface": iface, "ip": ip, "connected": True}
+            except Exception:
+                continue
+
+        return {"ssid": None, "connected": False}
+
+    def _scan_with_iw(self, iface: str) -> list[dict]:
+        """Best-effort WiFi scan using `iw` as a supplement to nmcli.
+
+        This often discovers iPhone/Android personal hotspots (and other APs on
+        alternate channels/bands) that `nmcli device wifi list` misses, especially
+        right after the system is associated to house WiFi (radio may stay on the
+        house channel for a while; NM's view can lag).
+        """
+        results: list[dict] = []
+        try:
+            out = subprocess.check_output(
+                ["iw", "dev", iface, "scan"],
+                stderr=subprocess.DEVNULL,
+                timeout=10
+            ).decode(errors="ignore")
+        except Exception:
+            return []
+
+        current = None
+        for raw in out.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if line.startswith("BSS "):
+                if current and current.get("ssid"):
+                    results.append(current)
+                current = {
+                    "ssid": None,
+                    "signal": None,
+                    "security": "open",
+                    "in_use": False,
+                }
+                continue
+            if current is None:
+                continue
+            if line.startswith("SSID:"):
+                ssid = line.split("SSID:", 1)[1].strip()
+                # Hidden networks often show empty or nulled SSID; skip (UX + no way to pick name)
+                if ssid and not ssid.startswith("\x00"):
+                    current["ssid"] = ssid
+            elif line.startswith("signal:"):
+                try:
+                    val = line.split("signal:", 1)[1].strip().split()[0]  # "-57.00"
+                    dbm = int(float(val))
+                    current["signal"] = self._rssi_dbm_to_percent(dbm)
+                except Exception:
+                    pass
+            elif line.startswith("capability:"):
+                if "Privacy" in line:
+                    current["security"] = "secured"
+            elif "RSN:" in line:
+                if current.get("security") != "open":
+                    current["security"] = "WPA2"
+            elif "WPA:" in line and current.get("security") not in ("open", "WPA2"):
+                current["security"] = "WPA"
+        if current and current.get("ssid"):
+            results.append(current)
+        return results
+
+    def wifi_scan(self) -> list[dict]:
+        """Scan for available WiFi networks.
+        Returns list of dicts: {ssid, signal (int 0-100 or None), security (str), in_use (bool)}
+        Primary: nmcli (terse). Falls back/supplements with `iw` scan to reliably pick up
+        iPhone and other mobile hotspots that are often missed by NM's cached view.
+        """
+        networks = []
+        try:
+            # Explicit rescan + short settle time dramatically improves visibility of
+            # phone hotspots (iPhone personal hotspot, work iPhone, Android, etc.).
+            # These often live on different channels than the house AP you're currently
+            # associated to; NM can lag until it does a background scan.
+            try:
+                subprocess.run(
+                    ["nmcli", "device", "wifi", "rescan"],
+                    capture_output=True, timeout=5, stderr=subprocess.DEVNULL
+                )
+                time.sleep(1.0)
+            except Exception:
+                pass
+
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list", "--rescan", "auto"],
+                stderr=subprocess.DEVNULL,
+                timeout=15
+            ).decode(errors="ignore")
+        except FileNotFoundError:
+            logger.warning("nmcli not found — WiFi scan requires NetworkManager. Install with: sudo apt install network-manager")
+            return []
+        except subprocess.TimeoutExpired:
+            logger.warning("WiFi scan timed out")
+            return []
+        except Exception as e:
+            logger.debug(f"nmcli wifi scan failed: {e}")
+            return []
+
+        for line in out.strip().split("\n"):
+            if not line.strip():
+                continue
+            # SSID can contain ":", so take the last 3 fields as SIGNAL:SECURITY:IN-USE
+            parts = line.rsplit(":", 3)
+            if len(parts) != 4:
+                continue
+            ssid, signal_str, security, in_use_str = parts
+            ssid = ssid.strip()
+            if not ssid:
+                # nmcli sometimes emits an empty SSID line for hidden networks; skip for UX
+                continue
+
+            try:
+                signal = int(signal_str) if signal_str.strip().isdigit() else None
+            except Exception:
+                signal = None
+
+            security = security.strip() or "open"
+            in_use = in_use_str.strip().lower() in ("yes", "*")
+
+            # Normalise a few common security labels for the frontend
+            sec_lower = security.lower()
+            if "--" in sec_lower or sec_lower in ("", "open"):
+                security = "open"
+            elif "wpa3" in sec_lower:
+                security = "WPA3"
+            elif "wpa2" in sec_lower or "wpa" in sec_lower:
+                security = "WPA2"
+            elif "wep" in sec_lower:
+                security = "WEP"
+            else:
+                security = security or "secured"
+
+            networks.append({
+                "ssid": ssid,
+                "signal": signal,
+                "security": security,
+                "in_use": in_use
+            })
+
+        # Supplement with networks discovered via direct `iw` scans on common WiFi ifaces.
+        # This is the key fix for iPhone (and "kiphone") personal hotspots not appearing
+        # in the selection list even though house WiFi does.
+        for iface in ("wlan0", "wlan1"):
+            for n in self._scan_with_iw(iface):
+                if n.get("ssid"):
+                    networks.append(n)
+
+        # De-dupe by SSID while preferring the in-use / strongest entry
+        seen = {}
+        for n in networks:
+            key = n["ssid"]
+            if key not in seen or (n["in_use"] and not seen[key]["in_use"]) or (n.get("signal") or 0) > (seen[key].get("signal") or 0):
+                seen[key] = n
+        result = list(seen.values())
+        result.sort(key=lambda x: (not x["in_use"], -(x["signal"] or 0)))
+        return result
+
+    def wifi_connect(self, ssid: str, password: str | None = None) -> dict:
+        """Attempt to connect to the given SSID.
+        Returns {"success": bool, "message": str, "ssid": str}
+        Never logs the password. Uses list-form subprocess.
+        """
+        if not ssid:
+            return {"success": False, "message": "No SSID provided", "ssid": None}
+
+        cmd = ["nmcli", "device", "wifi", "connect", ssid]
+        if password:
+            cmd += ["password", password]
+
+        try:
+            # Capture both stdout and stderr for useful error messages
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=25
+            )
+            out = (proc.stdout or "") + (proc.stderr or "")
+            out = out.strip()
+
+            if proc.returncode == 0:
+                logger.info(f"📶 WiFi connect succeeded for SSID: {ssid}")
+                return {"success": True, "message": f"Connected to {ssid}", "ssid": ssid}
+
+            # Common friendly messages from nmcli
+            msg = out or "Connection failed"
+            if "Secrets were required" in msg or "password" in msg.lower():
+                msg = "Password required or incorrect"
+            elif "No network with SSID" in msg or "not found" in msg.lower():
+                msg = f"No network found with SSID '{ssid}'"
+            elif "Device" in msg and "not ready" in msg.lower():
+                msg = "WiFi device is not ready"
+
+            logger.warning(f"📶 WiFi connect failed for SSID '{ssid}': {msg[:200]}")
+            return {"success": False, "message": msg, "ssid": ssid}
+
+        except FileNotFoundError:
+            logger.warning("nmcli not found — cannot perform WiFi connect (NetworkManager required)")
+            return {"success": False, "message": "nmcli (NetworkManager) is not installed on this system", "ssid": ssid}
+        except subprocess.TimeoutExpired:
+            return {"success": False, "message": "Connection attempt timed out", "ssid": ssid}
+        except Exception as e:
+            logger.error(f"Unexpected error during wifi_connect for {ssid}: {e}")
+            return {"success": False, "message": str(e), "ssid": ssid}
 
     # ====================== NEW: COMPACT NETWORK STATUS FOR DASHBOARD TILE ======================
 

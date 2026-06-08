@@ -92,6 +92,15 @@ html.light,
   box-shadow: none;
 }
 
+/* Bug mode still affects border/color even if shadows disabled */
+[data-theme="void"] .slider-fill.bug-mode {
+  box-shadow: 0 0 30px var(--bug-fill-glow) !important;
+}
+
+[data-theme="void"] .slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+}
+
 /* Rooftop disabled state (theme-specific tint) */
 [data-theme="void"] .slider-card.rooftop-disabled {
   filter: brightness(0.65) grayscale(0.6);

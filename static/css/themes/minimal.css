@@ -97,6 +97,17 @@ body::after {
 
 .slider-fill.bug-mode {
   background: linear-gradient(to right, var(--bug-color), #f43f5e) !important;
+  box-shadow: 0 0 8px var(--bug-fill-glow) !important;
+}
+
+.slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px var(--slider-thumb-inner-light),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark),
+    0 0 0 4px var(--bug-mode-glow) !important;
 }
 
 /* ====================== TOGGLES (extremely clean but precise) ====================== */

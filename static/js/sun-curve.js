@@ -6,7 +6,9 @@
  * - Smooth morphing on resize
  * - Sun/moon position calculation based on sunrise/sunset + current time
  * - Animated travel along the actual curve (not straight lines)
- * - Phase boundary labels: for Day use sunrise/sunset; for Evening/Night use evening + day phase starts (adapts); sun/moon position + arcs use raw astro sunrise/sunset for cycles (not phase offsets for day)
+ * - Phase boundary labels: always day phase start time (left, day-start-label) + evening phase start time (right, evening-start-label)
+ *   for consistent logical display on the date/time tile (day start is always the morning-ish phase start).
+ *   Sun/moon position + arcs use raw astro sunrise/sunset.
  *
  * This was extracted from the monolithic index.html script for the release.
  * All original behavior preserved.
@@ -84,36 +86,21 @@
     const rightLabel = dom.$ ? dom.$('evening-start-label') : document.getElementById('evening-start-label');
     if (!leftLabel || !rightLabel) return;
 
-    const phase = (phaseInfo.phase || 'Day').toLowerCase();
     const strip = format.stripLeadingZero || (s => s ? s.replace(/^0/, '') : s);
     const dayStart = strip(phaseInfo.day_start) || '—';
     const eveStart = strip(phaseInfo.evening_start) || '—';
+    // sunrise/sunset kept for sun/moon positioning and bottom labels (raw astro)
     const sunriseStr = strip(phaseInfo.sunrise || phaseInfo.day_start) || '—';
     const sunsetStr = strip(phaseInfo.sunset || phaseInfo.evening_start) || '—';
 
-    let leftText, rightText;
+    // Always show day phase start time on the left of the curve and evening phase start time on the right.
+    // This matches the label element IDs and the expected layout for the date/time tile (day start left, evening right).
+    // The previous phase-adaptive swap (eve left / day right for evening/night) was causing the reversal
+    // during day phase. The curve geometry + sun/moon animation still use raw sunrise/sunset.
+    let leftText = dayStart;
+    let rightText = eveStart;
     let leftColor = '#fcd34d';
     let rightColor = '#94a3b8';
-
-    if (phase === 'day') {
-      // Day cycle labels use actual sunrise/sunset (per requirement: not the phase day/evening starts)
-      leftText = sunriseStr;
-      rightText = sunsetStr;
-      leftColor = '#fcd34d';
-      rightColor = '#94a3b8';
-    } else if (phase === 'evening') {
-      // Evening phase: evening start on left, day start on right
-      leftText = eveStart;
-      rightText = dayStart;
-      leftColor = '#94a3b8';
-      rightColor = '#fcd34d';
-    } else {
-      // Night phase (like evening): evening start on left, day start on right
-      leftText = eveStart;
-      rightText = dayStart;
-      leftColor = '#94a3b8';
-      rightColor = '#fcd34d';
-    }
 
     leftLabel.textContent = leftText;
     rightLabel.textContent = rightText;

@@ -100,8 +100,10 @@
 			</svg>
 		  </div>
 
-		  <!-- Current phase boundary labels (adapts: Day phase shows sunrise/sunset; Evening and Night phases show evening start on left + day start on right).
-		       The sun/moon travel + day/night arc highlighting on the bezier use raw sunrise/sunset times for the cycles.
+		  <!-- Current phase boundary labels: always day phase start time on left (day-start-label),
+		       evening phase start time on right (evening-start-label). This is the logical layout for the
+		       date/time tile at all times (including day phase, where the day start is a morning time).
+		       Sun/moon travel + arcs use raw astro sunrise/sunset.
 		       Inset 10px from tile edges; vertically tuned to sit under the raised bezier ends. -->
 		  <div class="absolute left-2.5 right-2.5 flex justify-between pointer-events-none"
 			   style="top: 73%; transform: translateY(-50%);">
@@ -138,9 +140,9 @@
 		  <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
 		</div>
 
-		<!-- Fridge - aligned to center (vertically) -->
+		<!-- Fridge - on the line below (as original), but value to the right of the "Fridge" text (horizontal, not stacked) -->
 		<div class="flex-1 flex items-center">
-		  <div>
+		  <div class="flex justify-between w-full items-center">
 			<p class="tile-label">Fridge</p>
 			<p class="tile-value" id="fridge-temp">—°C</p>
 		  </div>
@@ -239,11 +241,12 @@
         </button>
         
         <input type="range" id="sonos-volume-slider" 
-               min="0" max="100" value="30"
+               min="0" max="100" value="0"
                class="flex-1 cursor-pointer"
-               oninput="sonosVolumeChange(this.value)">
+               oninput="sonosVolumeChange(this.value)"
+               disabled>
         
-        <div id="sonos-volume-value" class="w-7 text-right font-mono text-[10px] font-medium tabular-nums">30%</div>
+        <div id="sonos-volume-value" class="w-7 text-right font-mono text-[10px] font-medium tabular-nums">—</div>
       </div>
     </div>
 
@@ -1681,10 +1684,11 @@ socket.on('sonos_speakers', function(data) {
 });
 
 socket.on('sonos_update', function(state) {
-    if (!state || !state.speaker) return;
+    if (!state) return;
     
     // Only process updates for the currently active speaker on the main dashboard
-    if (currentActiveSonosSpeaker && state.speaker !== currentActiveSonosSpeaker) {
+    // Allow through states without speaker (e.g. no devices) so we can disable volume etc.
+    if (currentActiveSonosSpeaker && state.speaker && state.speaker !== currentActiveSonosSpeaker) {
         return;
     }
 
@@ -1704,10 +1708,23 @@ function formatTime(seconds) {
 }
 
 function updateSonosUI(state) {
-    if (!state || !state.speaker) return;
-    
     currentSonosState = state || {};
 
+    const hasSpeaker = !!(state && state.speaker);
+    const isEnabled = !!(state && state.enabled !== false);
+
+    if (!hasSpeaker || !isEnabled) {
+        // No devices or disabled: show disabled volume, leave other fields at initial '—' / 'Nothing playing' etc.
+        const volSlider = document.getElementById('sonos-volume-slider');
+        const volValue = document.getElementById('sonos-volume-value');
+        if (volSlider) {
+            volSlider.disabled = true;
+            volSlider.value = 0;
+        }
+        if (volValue) volValue.textContent = '—';
+        return;
+    }
+    
   const hasAlbumArt = !!(state && state.album_art && state.album_art.trim() !== '');
 
   // Album Art + Overlay
@@ -1739,9 +1756,16 @@ function updateSonosUI(state) {
   // Volume
   const volSlider = document.getElementById('sonos-volume-slider');
   const volValue = document.getElementById('sonos-volume-value');
-  if (volSlider && state.volume !== undefined) {
-    volSlider.value = state.volume;
-    if (volValue) volValue.textContent = `${state.volume}%`;
+  if (volSlider) {
+    if (state.volume !== undefined && state.volume !== null) {
+      volSlider.disabled = false;
+      volSlider.value = state.volume;
+      if (volValue) volValue.textContent = `${state.volume}%`;
+    } else {
+      volSlider.disabled = true;
+      volSlider.value = 0;
+      if (volValue) volValue.textContent = '—';
+    }
   }
 
   // Mute

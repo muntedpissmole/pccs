@@ -97,3 +97,12 @@ body::before {
 .scene-btn:hover {
   transform: translateY(-1px) !important;
 }
+
+/* Bug mode slider glow support (red) */
+.slider-fill.bug-mode {
+  box-shadow: 0 0 28px var(--bug-fill-glow) !important;
+}
+
+.slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+}

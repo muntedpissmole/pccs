@@ -178,3 +178,18 @@ body::after {
   box-shadow: 0 0 35px var(--accent-glow-strong) !important;
   border-color: var(--accent-hover) !important;
 }
+
+/* Bug mode slider glow (red) */
+.slider-fill.bug-mode {
+  box-shadow: 0 0 28px var(--bug-fill-glow) !important;
+}
+
+.slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+}
+
+/* Title icon red in bug mode */
+.slider-card.bug-mode .slider-card-title i {
+  color: var(--bug-color) !important;
+  filter: drop-shadow(0 0 6px var(--bug-fill-glow)) !important;
+}

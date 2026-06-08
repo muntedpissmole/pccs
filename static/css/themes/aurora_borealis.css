@@ -63,6 +63,27 @@ body {
   overflow: hidden;
 }
 
+/* ====================== SLIDERS (bug mode red glow) ====================== */
+.slider-fill.bug-mode {
+  box-shadow: 0 0 28px var(--bug-fill-glow) !important;
+}
+
+.slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+  box-shadow: 
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px var(--slider-thumb-inner-light),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark),
+    0 0 0 4px var(--bug-mode-glow) !important;
+}
+
+/* Title icon red in bug mode */
+.slider-card.bug-mode .slider-card-title i {
+  color: var(--bug-color) !important;
+  filter: drop-shadow(0 0 6px var(--bug-fill-glow)) !important;
+}
+
 /* ====================== AURORA BOREALIS BACKGROUND ====================== */
 /* Real high-quality aurora photograph + moving glow */
 body::before {

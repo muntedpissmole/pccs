@@ -78,11 +78,12 @@ class SonosManager:
         try:
             logger.debug(f"[Discovery] Running on interface {self.interface_addr or 'auto'}")
 
-            devices = list(discover(
+            discovered = discover(
                 timeout=self.discovery_timeout, 
                 include_invisible=False,
                 interface_addr=self.interface_addr
-            ))
+            )
+            devices = list(discovered) if discovered else []
 
             new_speakers = {}
             for device in devices:
@@ -116,7 +117,9 @@ class SonosManager:
             self._last_speaker_count = new_count
 
         except Exception as e:
-            logger.warning(f"Sonos discovery failed: {e}")
+            # Downgrade to debug when no devices are present/expected to avoid
+            # spamming warning toasts for users with no Sonos on the network.
+            logger.debug(f"Sonos discovery failed: {e}")
             if initial:
                 logger.info("🎵 0 Sonos speaker(s) detected (discovery error)")
 
@@ -230,6 +233,8 @@ class SonosManager:
         return state
 
     def _poll_current_state(self):
+        if not self.current_speaker or self.current_speaker not in self.speakers:
+            return
         device = self.speakers[self.current_speaker]
 
         try:
@@ -404,8 +409,9 @@ class SonosManager:
                 'track': 'Nothing playing',
                 'artist': '',
                 'is_playing': False,
-                'volume': 30,
-                'mute': False
+                'volume': None,
+                'mute': False,
+                'enabled': self.enabled
             }
             self.socketio.emit('sonos_update', empty_state)
 
@@ -420,9 +426,6 @@ class SonosManager:
             'speaker': self.current_speaker,
             'speakers': list(self.speakers.keys()),
             'enabled': self.enabled,
-            'is_playing': False
+            'is_playing': False,
+            'volume': None
         }
-        
-    def _should_auto_select(self):
-        """Only allow auto-selection on initial startup"""
-        return not self._manual_override and not self.current_speaker

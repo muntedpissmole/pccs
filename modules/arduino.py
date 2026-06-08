@@ -8,6 +8,16 @@ import logging
 logger = logging.getLogger("pccs")
 
 
+def brightness_to_pwm(brightness: int) -> int:
+    """Convert 0-100 brightness percent to 0-255 PWM value for Arduino."""
+    return int(max(0, min(100, brightness)) * 2.55)
+
+
+def pwm_to_brightness(pwm: int) -> int:
+    """Convert 0-255 PWM to nearest 0-100 brightness percent (for state reads)."""
+    return round(max(0, min(255, pwm)) / 2.55)
+
+
 class ArduinoManager:
     def __init__(self, config):
         self.config = config
@@ -230,7 +240,7 @@ class ArduinoManager:
             if resp and resp.startswith("VALUE"):
                 try:
                     pwm = int(resp.split()[2])
-                    self.state[name] = round(pwm / 2.55)
+                    self.state[name] = pwm_to_brightness(pwm)
                 except:
                     pass
 
@@ -244,10 +254,10 @@ class ArduinoManager:
                 white_pwm = int(white_resp.split()[2]) if white_resp and white_resp.startswith("VALUE") else 0
 
                 if red_pwm > white_pwm:
-                    self.state[name] = round(red_pwm / 2.55)
+                    self.state[name] = pwm_to_brightness(red_pwm)
                     self.state[f"{name}_mode"] = "red"
                 else:
-                    self.state[name] = round(white_pwm / 2.55)
+                    self.state[name] = pwm_to_brightness(white_pwm)
                     self.state[f"{name}_mode"] = "white"
             except:
                 pass
@@ -257,7 +267,7 @@ class ArduinoManager:
         if not config:
             return False
 
-        pwm = int(brightness * 2.55)
+        pwm = brightness_to_pwm(brightness)
         if ramp_ms is not None:
             red_ramp = ramp_ms
             mode_ramp = ramp_ms
