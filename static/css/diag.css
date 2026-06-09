@@ -1,0 +1,324 @@
+:root {
+			--accent-color: #4fc3f7;
+		}
+		body {
+			padding: 12px 8px;
+			background: var(--background);
+			color: var(--text-primary);
+			font-family: 'Satoshi', system-ui, sans-serif;
+			min-height: 100vh;
+		}
+		.diag-container {
+			max-width: 1280px;
+			margin: 0 auto;
+			padding: 0 8px;
+			box-sizing: border-box;
+		}
+
+		/* ====================== HEADER ====================== */
+		.header {
+			position: relative;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 28px;
+			padding-right: 140px;
+		}
+
+		.header-left {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.header-left h1 {
+			margin: 0;
+			font-size: 2.2rem;
+		}
+
+		.header-left p {
+			margin: 4px 0 0 0;
+			opacity: 0.7;
+			font-size: 1rem;
+		}
+
+		.back-btn {
+			position: absolute;
+			top: 0;
+			right: 0;
+			padding: 10px 20px;
+			border-radius: 9999px;
+			background: rgba(255,255,255,0.1);
+			border: 1px solid var(--glass-border);
+			color: var(--text-primary);
+			font-weight: 600;
+			font-size: 1rem;
+			cursor: pointer;
+			transition: all 0.25s ease;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			white-space: nowrap;
+			min-width: 130px;
+			justify-content: center;
+			z-index: 10;
+		}
+
+		.back-btn:hover {
+			background: rgba(255,255,255,0.25);
+			transform: translateY(-1px);
+		}
+
+		/* Mobile: Shrink back button to icon only */
+		@media (max-width: 640px) {
+			.header {
+				padding-right: 60px;
+			}
+			
+			.back-btn {
+				min-width: auto;
+				padding: 10px 14px;
+				font-size: 1.1rem;
+			}
+			
+			.back-btn .text {
+				display: none;
+			}
+			
+			.header-left h1 {
+				font-size: 1.9rem;
+			}
+			
+			.header-left p {
+				font-size: 0.95rem;
+			}
+		}
+
+		/* ====================== SECTIONS & TILES ====================== */
+		.section {
+			background: var(--glass-bg);
+			border-radius: 20px;
+			padding: 24px;
+			margin-bottom: 32px;
+			border: 1px solid var(--glass-border);
+			box-shadow: var(--glass-shadow);
+			overflow: hidden;
+			width: 100%;
+			box-sizing: border-box;
+		}
+		.section h2 {
+			margin-top: 0;
+			font-size: 1.75rem;
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.grid-2 {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			gap: 20px;
+		}
+		.tile {
+			background: var(--control-bg);
+			border-radius: 16px;
+			padding: 18px;
+			border: 1px solid var(--glass-border);
+			box-shadow: var(--glass-shadow);
+			width: 100%;
+			box-sizing: border-box;
+		}
+
+		.btn-group {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+
+		.btn-group .btn {
+			flex: 1 1 0px;
+			min-width: 110px;
+			padding: 11px 16px;
+			text-align: center;
+			justify-content: center;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			font-size: 0.94rem;
+		}
+
+		@media (max-width: 640px) {
+			.btn-group .btn {
+				min-width: 100px;
+				flex: 1 1 auto;
+			}
+			
+			.btn-group .btn:last-child {
+				flex: 1 1 100%;
+			}
+		}
+		/* GPS Status Rows */
+		.status-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 12px 0;
+			gap: 12px;
+		}
+		.status-row:not(:last-child) {
+			border-bottom: 1px solid rgba(255,255,255,0.08);
+		}
+		.light .status-row:not(:last-child) {
+			border-bottom: 1px solid rgba(0,0,0,0.08);
+		}
+		.status-row span:first-child {
+			flex-shrink: 0;
+			min-width: 100px;
+			opacity: 0.8;
+		}
+		.status-row span:last-child {
+			text-align: right;
+			word-break: break-all;
+			flex: 1;
+		}
+
+		#gps-raw {
+			background: #0f172a;
+			color: #94a3b8;
+			padding: 14px;
+			border-radius: 12px;
+			font-size: 0.8rem;
+			overflow-x: auto;
+			overflow-y: auto;
+			max-height: 320px;
+			white-space: pre-wrap;
+			word-break: break-all;
+			word-wrap: break-word;
+			font-family: monospace;
+			width: 100%;
+			box-sizing: border-box;
+			margin-top: 12px;
+			line-height: 1.4;
+		}
+
+		.light #gps-raw {
+			background: #f1f5f9;
+			color: #334155;
+		}
+		
+		.section h3 {
+			margin-top: 0;
+		}
+
+		/* Buttons */
+		.btn {
+			padding: 10px 18px;
+			border-radius: 9999px;
+			background: rgba(255,255,255,0.1);
+			border: 1px solid var(--glass-border);
+			color: var(--text-primary);
+			cursor: pointer;
+			font-weight: 600;
+			transition: all 0.25s ease;
+			font-family: inherit;
+			font-size: 0.96rem;
+			letter-spacing: 0.4px;
+			min-width: 120px;
+			text-align: center;
+		}
+		.btn:hover {
+			background: rgba(255,255,255,0.25);
+			transform: translateY(-1px);
+		}
+		.btn.success {
+			background: rgba(16, 185, 129, 0.2);
+			color: #4ade80;
+			border-color: rgba(16, 185, 129, 0.4);
+		}
+		.btn.danger {
+			background: rgba(244, 63, 94, 0.2);
+			color: #f87171;
+			border-color: rgba(244, 63, 94, 0.4);
+		}
+
+		/* Toast */
+		.toast-input-group {
+			margin-bottom: 16px;
+		}
+		.toast-input-group label {
+			display: block;
+			margin-bottom: 6px;
+			opacity: 0.8;
+		}
+		.toast-input-group input,
+		.toast-input-group textarea {
+			width: 100%;
+			padding: 12px;
+			border-radius: 12px;
+			background: var(--control-bg);
+			border: 1px solid var(--glass-border);
+			color: var(--text-primary);
+			box-sizing: border-box;
+		}
+		
+		.grid-sonos {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			gap: 20px;
+		}
+
+		.grid-sonos .tile {
+			max-width: 420px;
+			width: 100%;
+			box-sizing: border-box;
+		}
+
+		/* Mobile Adjustments */
+		@media (max-width: 640px) {
+			.header {
+				flex-direction: column;
+				align-items: stretch;
+			}
+			.header-right {
+				display: flex;
+				justify-content: flex-end;
+			}
+			.section { 
+				padding: 20px 16px; 
+				margin-bottom: 24px; 
+				border-radius: 18px;
+			}
+			.tile { 
+				padding: 16px; 
+			}
+			.status-row span:first-child {
+				min-width: 90px;
+			}
+			.grid-2 { 
+				grid-template-columns: 1fr; 
+			}
+			.header-left h1 {
+				font-size: 1.9rem;
+			}
+			.btn, .back-btn {
+				min-width: auto;
+				flex: 1;
+			}
+		}
+		
+		.status-row-container {
+			line-height: 1.75;
+		}
+
+		.status-row-container .status-row {
+			padding: 10px 0;
+		}
+
+		.status-row-container .status-row:not(:last-child) {
+			border-bottom: 1px solid rgba(255,255,255,0.08);
+		}
+
+		.light .status-row-container .status-row:not(:last-child) {
+			border-bottom: 1px solid rgba(0,0,0,0.08);
+		}
+
+		html { scroll-behavior: smooth; }
