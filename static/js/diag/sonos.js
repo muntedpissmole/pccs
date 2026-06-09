@@ -1,13 +1,11 @@
 /**
  * PCCS Diagnostics — Sonos diagnostics
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const D = PCCS.diag;
-  const S = D.state;
-  function getSocket() { return PCCS.getSocket(); }
-  const formatTime = PCCS.format.time;
+import { PCCS, getSocket } from '../namespace.js';
+
+const D = PCCS.diag;
+const S = D.state;
+const formatTime = PCCS.format.time;
 
   // ====================== SONOS DIAGNOSTICS ======================
       function renderPlayers(speakers, active) {
@@ -111,5 +109,4 @@
           if (name) getSocket().emit('sonos_switch_speaker', { name });
       }
 
-  D.sonos = { renderPlayers, command, setVolume, toggleMute, switchActive };
-})();
+D.sonos = { renderPlayers, command, setVolume, toggleMute, switchActive };

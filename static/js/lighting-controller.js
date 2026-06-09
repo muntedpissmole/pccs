@@ -2,11 +2,9 @@
  * PCCS Lighting Controller
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS, getSocket } from './namespace.js';
+
+const S = PCCS.state;
 
   function emitLightChange(payload) {
     const socket = getSocket();
@@ -641,4 +639,3 @@ function getCurrentColumns() {
       setTimeout(() => { lastColumnCount = getCurrentColumns(); }, 300);
     },
   };
-})();

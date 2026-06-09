@@ -2,11 +2,7 @@
  * PCCS Victron Power Tile
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS } from './namespace.js';
 
 // ==================== VICTRON / POWER TILE (Battery + Solar) ====================
 function formatTTG(mins) {
@@ -88,5 +84,4 @@ function updatePowerTile(data) {
   }
 }
 
-  PCCS.victron = { updatePowerTile };
-})();
+PCCS.victron = { updatePowerTile };

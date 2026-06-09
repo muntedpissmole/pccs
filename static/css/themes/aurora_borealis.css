@@ -1,10 +1,6 @@
-/* Aurora Borealis Theme – Professional Release Build
- *
- * TODO (post-release): Trim to only delta tokens + [data-theme] flair like void.css / minimal.css.
- * Currently still contains full var redefinition (pre-refactor copy).
+/* Aurora Borealis Theme
+ * Token deltas + scoped flair only — components inherit from base.css.
  */
-
-/* Authentic Northern Lights Photo Background + Subtle Frost Cards */
 
 :root {
   --accent-color: #22d3ee;
@@ -36,7 +32,6 @@
   --bug-fill-glow: rgba(244, 63, 94, 0.9);
 }
 
-/* ====================== LIGHT MODE ====================== */
 html.light,
 .light {
   --background: #f0f9ff;
@@ -56,49 +51,24 @@ html.light,
   --toggle-knob-border: #22d3ee;
 }
 
-/* ====================== GLOBAL ====================== */
-body {
+[data-theme="aurora_borealis"] body {
   background: var(--background) !important;
   position: relative;
   overflow: hidden;
 }
 
-/* ====================== SLIDERS (bug mode red glow) ====================== */
-.slider-fill.bug-mode {
-  box-shadow: 0 0 28px var(--bug-fill-glow) !important;
-}
-
-.slider-thumb.bug-mode {
-  border-color: var(--bug-color) !important;
-  box-shadow: 
-    4px 4px 8px var(--shadow-dark),
-    -4px -4px 8px var(--shadow-light),
-    inset 3px 3px 8px var(--slider-thumb-inner-light),
-    inset -3px -3px 8px var(--slider-thumb-inner-dark),
-    0 0 0 4px var(--bug-mode-glow) !important;
-}
-
-/* Title icon red in bug mode */
-.slider-card.bug-mode .slider-card-title i {
-  color: var(--bug-color) !important;
-  filter: drop-shadow(0 0 6px var(--bug-fill-glow)) !important;
-}
-
-/* ====================== AURORA BOREALIS BACKGROUND ====================== */
-/* Real high-quality aurora photograph + moving glow */
-body::before {
+[data-theme="aurora_borealis"] body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -3;
-  background: 
-    linear-gradient(rgba(5, 7, 15, 0.45), rgba(5, 7, 15, 0.65)), /* Dark overlay for readability */
+  background:
+    linear-gradient(rgba(5, 7, 15, 0.45), rgba(5, 7, 15, 0.65)),
     url('images/aurora_borealis.jpeg') center/cover no-repeat;
   filter: contrast(1.15) brightness(0.85) saturate(1.2);
 }
 
-/* Optional soft moving aurora glow overlay */
-body::after {
+[data-theme="aurora_borealis"] body::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -114,15 +84,32 @@ body::after {
   100% { opacity: 0.95; transform: translateX(5%); }
 }
 
-/* ====================== DISABLED STATES ====================== */
-.slider-card.rooftop-disabled {
+[data-theme="aurora_borealis"] .slider-fill.bug-mode {
+  box-shadow: 0 0 28px var(--bug-fill-glow) !important;
+}
+
+[data-theme="aurora_borealis"] .slider-thumb.bug-mode {
+  border-color: var(--bug-color) !important;
+  box-shadow:
+    4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light),
+    inset 3px 3px 8px var(--slider-thumb-inner-light),
+    inset -3px -3px 8px var(--slider-thumb-inner-dark),
+    0 0 0 4px var(--bug-mode-glow) !important;
+}
+
+[data-theme="aurora_borealis"] .slider-card.bug-mode .slider-card-title i {
+  color: var(--bug-color) !important;
+  filter: drop-shadow(0 0 6px var(--bug-fill-glow)) !important;
+}
+
+[data-theme="aurora_borealis"] .slider-card.rooftop-disabled {
   filter: brightness(0.75) contrast(0.85);
   opacity: 0.8;
 }
 
-/* ====================== THEME FLAIR ====================== */
-.tile:hover,
-.slider-card:hover,
-.scene-btn:hover {
+[data-theme="aurora_borealis"] .tile:hover,
+[data-theme="aurora_borealis"] .slider-card:hover,
+[data-theme="aurora_borealis"] .scene-btn:hover {
   transform: translateY(-2px) !important;
 }

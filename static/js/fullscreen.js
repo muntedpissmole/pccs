@@ -2,15 +2,11 @@
  * PCCS Fullscreen Toggle
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS } from './namespace.js';
 
 function toggleFullscreen() {
   const icon = document.getElementById('fullscreen-icon');
-  
+
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen().then(() => {
       icon.classList.remove('fa-expand');
@@ -39,5 +35,4 @@ document.addEventListener('fullscreenchange', () => {
   }
 });
 
-  PCCS.fullscreen = { toggleFullscreen };
-})();
+PCCS.fullscreen = { toggleFullscreen };

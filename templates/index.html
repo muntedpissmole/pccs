@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Pissmole Camper Control System</title>
 
-  <script src="{{ url_for('static', filename='tailwind.min.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
 
@@ -450,24 +450,7 @@
 
 
 <script src="/static/socket.io.min.js"></script>
-<script src="{{ url_for('static', filename='js/pccs-namespace.js') }}"></script>
-<script src="{{ url_for('static', filename='js/dom-helpers.js') }}"></script>
-<script src="{{ url_for('static', filename='js/format-utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/animation-utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/state.js') }}"></script>
-<script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
-<script src="{{ url_for('static', filename='js/sun-curve.js') }}"></script>
-<script src="{{ url_for('static', filename='js/offline.js') }}"></script>
-<script src="{{ url_for('static', filename='js/version.js') }}"></script>
-<script src="{{ url_for('static', filename='js/lighting-controller.js') }}"></script>
-<script src="{{ url_for('static', filename='js/tile-updaters.js') }}"></script>
-<script src="{{ url_for('static', filename='js/scenes.js') }}"></script>
-<script src="{{ url_for('static', filename='js/dark-mode.js') }}"></script>
-<script src="{{ url_for('static', filename='js/toasts.js') }}"></script>
-<script src="{{ url_for('static', filename='js/sonos-controller.js') }}"></script>
-<script src="{{ url_for('static', filename='js/victron-tile.js') }}"></script>
-<script src="{{ url_for('static', filename='js/fullscreen.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pccs-app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bundle/dashboard.js') }}"></script>
 
 </body>
 </html>

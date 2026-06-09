@@ -1,12 +1,10 @@
 /**
  * PCCS Diagnostics — Touchscreens
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const D = PCCS.diag;
-  const S = D.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS, getSocket } from '../namespace.js';
+
+const D = PCCS.diag;
+const S = D.state;
 
   // TOUCHSCREENS
           function renderScreens() {
@@ -148,5 +146,4 @@
               setTimeout(() => testSingleScreen(name), 1000);
           }
 
-  D.screens = { renderScreens, loadScreensWithStatus };
-})();
+D.screens = { renderScreens, loadScreensWithStatus };

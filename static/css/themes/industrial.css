@@ -1,44 +1,34 @@
-/* Stealth Industrial Theme – Professional Release Build
- *
- * TODO (post-release): Trim to only delta tokens + [data-theme] flair like void.css / minimal.css.
- * Currently still contains full var redefinition (pre-refactor copy).
+/* Stealth Industrial Theme
+ * Token deltas + scoped flair only — components inherit from base.css.
  */
 
-/* Industrial / Stealth Tech - Dark charcoal/grays, military green accents, subtle metallic bevels, rugged practical feel */
-
 :root {
-  /* Core Accent - Military/Tactical Green */
   --accent-color: #6b9e4e;
   --accent-hover: #7eb85f;
   --accent-light: #8ac96a;
   --accent-glow: rgba(107, 158, 78, 0.65);
   --accent-glow-strong: rgba(107, 158, 78, 0.85);
 
-  /* Backgrounds & Surfaces - Deep charcoal/void with stealth minimalism */
   --background: #0c0c0f;
   --glass-bg: rgba(28, 29, 32, 0.82);
   --glass-border: rgba(78, 82, 88, 0.45);
   --control-bg: rgba(22, 23, 27, 0.92);
   --slider-bg: rgba(55, 60, 65, 0.35);
 
-  /* Metallic Bevels & Shadows */
   --shadow-dark: #050505;
   --shadow-light: #3a3f44;
 
-  /* Text */
   --text-primary: #e8e9eb;
   --text-secondary: #b8c9a8;
   --text-muted: #8a9387;
   --text-on-accent: #0f120d;
 
-  /* Toggles */
   --toggle-bg-off: rgba(22, 23, 27, 0.92);
   --toggle-handle: #d1d5db;
   --toggle-checked-color: #6b9e4e;
   --toggle-knob-border: #6b9e4e;
 }
 
-/* ====================== LIGHT MODE ====================== */
 html.light,
 .light {
   --background: #f1f5f9;
@@ -58,51 +48,46 @@ html.light,
   --toggle-knob-border: #6b9e4e;
 }
 
-/* ====================== GLOBAL ====================== */
-body {
+[data-theme="industrial"] body {
   background: var(--background) !important;
 }
 
-/* Optional subtle industrial texture overlay (restored to match original) */
-body::before {
+[data-theme="industrial"] body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: 
-    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 60px 60px;
   pointer-events: none;
   z-index: -1;
   opacity: 0.6;
 }
 
-.light body::before {
-  background: 
-    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
+html.light[data-theme="industrial"] body::before {
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
   background-size: 60px 60px;
   opacity: 0.5;
 }
 
-/* ====================== DISABLED STATES ====================== */
-.slider-card.rooftop-disabled {
+[data-theme="industrial"] .slider-card.rooftop-disabled {
   filter: brightness(0.7) contrast(0.85);
   opacity: 0.8;
 }
 
-/* ====================== THEME FLAIR ====================== */
-.tile:hover,
-.slider-card:hover,
-.scene-btn:hover {
+[data-theme="industrial"] .tile:hover,
+[data-theme="industrial"] .slider-card:hover,
+[data-theme="industrial"] .scene-btn:hover {
   transform: translateY(-1px) !important;
 }
 
-/* Bug mode slider glow support (red) */
-.slider-fill.bug-mode {
+[data-theme="industrial"] .slider-fill.bug-mode {
   box-shadow: 0 0 28px var(--bug-fill-glow) !important;
 }
 
-.slider-thumb.bug-mode {
+[data-theme="industrial"] .slider-thumb.bug-mode {
   border-color: var(--bug-color) !important;
 }

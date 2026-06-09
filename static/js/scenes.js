@@ -2,11 +2,9 @@
  * PCCS Scene Buttons
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS, getSocket } from './namespace.js';
+
+const S = PCCS.state;
 
 // ==================== DYNAMIC SCENES ====================
 
@@ -131,4 +129,3 @@ function fixLastRowStretching(container) {
     fixLastRowStretching,
     setScene,
   };
-})();

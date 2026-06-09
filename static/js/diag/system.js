@@ -1,12 +1,10 @@
 /**
  * PCCS Diagnostics — System info & WiFi
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const D = PCCS.diag;
-  const S = D.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS } from '../namespace.js';
+
+const D = PCCS.diag;
+const S = D.state;
 
   // ====================== PCCS CORE INFORMATION ======================
   	function renderCoreInfo(data) {
@@ -325,5 +323,4 @@
   		}
   	}
 
-  D.system = { renderCoreInfo, loadCoreInfo, scanWifi, onWifiChanged, connectWifi };
-})();
+D.system = { renderCoreInfo, loadCoreInfo, scanWifi, onWifiChanged, connectWifi };

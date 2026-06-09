@@ -2,11 +2,7 @@
  * PCCS Sonos Controller
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS, getSocket } from './namespace.js';
 
 let currentActiveSonosSpeaker = null;
 let currentSonosState = {};
@@ -211,4 +207,3 @@ function toggleSonosMute() {
       });
     },
   };
-})();

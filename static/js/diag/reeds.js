@@ -1,13 +1,11 @@
 /**
  * PCCS Diagnostics — Reed switches
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const D = PCCS.diag;
-  const S = D.state;
-  function getSocket() { return PCCS.getSocket(); }
-  const toTitleCase = D.utils.toTitleCase;
+import { PCCS, getSocket } from '../namespace.js';
+
+const D = PCCS.diag;
+const S = D.state;
+const toTitleCase = D.utils.toTitleCase;
 
   // REED SWITCHES
           function updateReeds(data) {
@@ -122,5 +120,4 @@
               getSocket().emit('force_reed', { name, closed: null });
           }
 
-  D.reeds = { updateReeds, renderReeds };
-})();
+D.reeds = { updateReeds, renderReeds };

@@ -1,13 +1,13 @@
-/* Neumorphism */
+/* Neumorphism Theme
+ * Token deltas + scoped flair only — components inherit from base.css.
+ */
 
-/* ====================== CUSTOM PROPERTIES ====================== */
 :root {
   --accent-color: #4FC3F7;
   --accent-hover: #67e8f9;
   --accent-light: #a5f3fc;
   --accent-glow: rgba(34, 211, 238, 0.6);
 
-  /* Gentler backgrounds */
   --background: #121212;
   --glass-bg: rgba(32, 32, 32, 0.9);
   --control-bg: rgba(30, 30, 30, 0.86);
@@ -17,7 +17,6 @@
   --glass-frost: rgba(255, 255, 255, 0.10);
   --glass-blur: blur(20px);
 
-  /* Enhanced shadows */
   --shadow-dark: rgba(0, 0, 0, 0.55);
   --shadow-light: rgba(255, 255, 255, 0.08);
 
@@ -25,7 +24,6 @@
   --glass-highlight-2: rgba(255, 255, 255, 0.05);
 }
 
-/* ====================== LIGHT MODE ====================== */
 html.light,
 .light {
   --background: #f5f5f5;
@@ -47,66 +45,61 @@ html.light,
   --text-on-accent: #ffffff;
 }
 
-/* ====================== GLOBAL ====================== */
-body {
+[data-theme="neuglass"] body {
   background: var(--background) !important;
 }
 
-/* Enhanced background layers */
-body::before {
-  background: 
+[data-theme="neuglass"] body::before {
+  background:
     radial-gradient(circle at 30% 20%, rgba(79, 195, 247, 0.08) 0%, transparent 55%),
     radial-gradient(circle at 80% 70%, rgba(79, 195, 247, 0.06) 0%, transparent 65%),
-    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px) !important;
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px) !important;
   background-size: 100% 100%, 100% 100%, 80px 80px, 80px 80px;
 }
 
-body::after {
-  background: radial-gradient(ellipse at center, transparent 65%, rgba(18,18,18,0.65) 100%) !important;
+[data-theme="neuglass"] body::after {
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(18, 18, 18, 0.65) 100%) !important;
 }
 
-.light body::before {
+html.light[data-theme="neuglass"] body::before {
   background: radial-gradient(circle at 50% 30%, rgba(148, 163, 184, 0.18) 0%, transparent 75%);
 }
 
-.light body::after {
+html.light[data-theme="neuglass"] body::after {
   background: radial-gradient(ellipse at center, transparent 65%, rgba(241, 245, 249, 0.65) 100%) !important;
 }
 
-/* ====================== NEUMORPHISM BASE (core look) ====================== */
-.glass,
-.slider-card,
-.tile,
-.scene-btn {
+[data-theme="neuglass"] .glass,
+[data-theme="neuglass"] .slider-card,
+[data-theme="neuglass"] .tile,
+[data-theme="neuglass"] .scene-btn {
   background: var(--glass-bg);
   border-radius: 24px;
   border: 1px solid var(--glass-border);
-  box-shadow: 
+  box-shadow:
     var(--glass-shadow),
     inset 0 1px 0 var(--glass-highlight),
     inset 0 -2px 0 var(--shadow-dark) !important;
-  border-radius: 24px;
   position: relative;
   overflow: hidden;
 }
 
-/* Subtle shine layers — essential for the Neumorphic 3D effect */
-.tile::before,
-.slider-card::before,
-.scene-btn::before {
+[data-theme="neuglass"] .tile::before,
+[data-theme="neuglass"] .slider-card::before,
+[data-theme="neuglass"] .scene-btn::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, transparent 50%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, transparent 50%);
   pointer-events: none;
   z-index: 1;
 }
 
-.tile::after,
-.slider-card::after,
-.scene-btn::after {
+[data-theme="neuglass"] .tile::after,
+[data-theme="neuglass"] .slider-card::after,
+[data-theme="neuglass"] .scene-btn::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -116,27 +109,25 @@ body::after {
   z-index: 2;
 }
 
-/* ====================== SCENES ====================== */
-.scene-btn.active {
+[data-theme="neuglass"] .scene-btn.active {
   background: var(--accent-color) !important;
-  box-shadow: 
+  box-shadow:
     0 8px 28px -8px var(--shadow-dark),
-    inset 0 1px 0 rgba(255,255,255,0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
     0 0 22px rgba(79, 195, 247, 0.18) !important;
 }
 
-/* ====================== SLIDERS ====================== */
-.slider-fill {
+[data-theme="neuglass"] .slider-fill {
   box-shadow: 0 0 10px var(--accent-glow) !important;
 }
 
-.slider-fill.bug-mode {
+[data-theme="neuglass"] .slider-fill.bug-mode {
   box-shadow: 0 0 30px var(--bug-fill-glow) !important;
 }
 
-.slider-thumb.bug-mode {
+[data-theme="neuglass"] .slider-thumb.bug-mode {
   border-color: var(--bug-color) !important;
-  box-shadow: 
+  box-shadow:
     4px 4px 8px var(--shadow-dark),
     -4px -4px 8px var(--shadow-light),
     inset 3px 3px 8px var(--slider-thumb-inner-light),
@@ -144,52 +135,47 @@ body::after {
     0 0 0 4px var(--bug-mode-glow) !important;
 }
 
-/* Title icon red in bug mode */
-.slider-card.bug-mode .slider-card-title i {
+[data-theme="neuglass"] .slider-card.bug-mode .slider-card-title i {
   color: var(--bug-color) !important;
   filter: drop-shadow(0 0 6px var(--bug-fill-glow)) !important;
 }
 
-/* ====================== TOGGLES ====================== */
-.toggle-pill,
-.relay-toggle {
+[data-theme="neuglass"] .toggle-pill,
+[data-theme="neuglass"] .relay-toggle {
   background: var(--slider-bg) !important;
-  box-shadow: 
-    inset 6px 6px 12px var(--shadow-dark), 
+  box-shadow:
+    inset 6px 6px 12px var(--shadow-dark),
     inset -6px -6px 12px var(--shadow-light) !important;
 }
 
-.toggle-pill.on,
-.relay-toggle.on {
+[data-theme="neuglass"] .toggle-pill.on,
+[data-theme="neuglass"] .relay-toggle.on {
   background: linear-gradient(90deg, var(--toggle-checked-color), var(--accent-hover)) !important;
-  box-shadow: 
-    inset 6px 6px 12px rgba(0,0,0,0.35),
-    inset -6px -6px 12px rgba(255,255,255,0.15) !important;
+  box-shadow:
+    inset 6px 6px 12px rgba(0, 0, 0, 0.35),
+    inset -6px -6px 12px rgba(255, 255, 255, 0.15) !important;
 }
 
-/* ====================== KNOB ====================== */
-.toggle-pill .toggle-knob,
-.relay-toggle .relay-knob {
-  box-shadow: 
-    3px 3px 8px rgba(0,0,0,0.4), 
-    -2px -2px 6px rgba(255,255,255,0.7) !important;
+[data-theme="neuglass"] .toggle-pill .toggle-knob,
+[data-theme="neuglass"] .relay-toggle .relay-knob {
+  box-shadow:
+    3px 3px 8px rgba(0, 0, 0, 0.4),
+    -2px -2px 6px rgba(255, 255, 255, 0.7) !important;
 }
 
-.toggle-pill.on .toggle-knob,
-.relay-toggle.on .relay-knob {
+[data-theme="neuglass"] .toggle-pill.on .toggle-knob,
+[data-theme="neuglass"] .relay-toggle.on .relay-knob {
   transform: translate(39px, -50%);
 }
 
-/* ====================== DISABLED STATES ====================== */
-.slider-card.rooftop-disabled {
+[data-theme="neuglass"] .slider-card.rooftop-disabled {
   opacity: 0.45;
   pointer-events: none;
   cursor: not-allowed;
 }
 
-/* ====================== THEME FLAIR ====================== */
-.tile:hover,
-.slider-card:hover,
-.scene-btn:hover {
+[data-theme="neuglass"] .tile:hover,
+[data-theme="neuglass"] .slider-card:hover,
+[data-theme="neuglass"] .scene-btn:hover {
   transform: translateY(-2px) !important;
 }

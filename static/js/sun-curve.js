@@ -13,12 +13,11 @@
  * This was extracted from the monolithic index.html script for the release.
  * All original behavior preserved.
  */
-(function () {
-  'use strict';
+import { PCCS } from './namespace.js';
 
-  const dom = (window.PCCS && window.PCCS.dom) || {};
-  const format = (window.PCCS && window.PCCS.format) || {};
-  const animate = (window.PCCS && window.PCCS.animate) || {};
+const dom = PCCS.dom || {};
+const format = PCCS.format || {};
+const animate = PCCS.animate || {};
 
   // ==================== INTERNAL STATE ====================
   let phaseInfo = { phase: 'Day', day_start: '—', evening_start: '—', sunrise: '—', sunset: '—' };
@@ -76,8 +75,7 @@
   };
 
   // Expose for debugging if needed
-  window.PCCS = window.PCCS || {};
-  window.PCCS.sunCurve = SunCurve;
+  PCCS.sunCurve = SunCurve;
 
   // ==================== INTERNAL IMPLEMENTATION ====================
 
@@ -399,5 +397,3 @@
       }
     }
   }
-
-})();

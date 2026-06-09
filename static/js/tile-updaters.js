@@ -2,11 +2,9 @@
  * PCCS Environmental Tile Updaters
  * Extracted from templates/index.html
  */
-(function () {
-  'use strict';
-  const PCCS = window.PCCS;
-  const S = PCCS.state;
-  function getSocket() { return PCCS.getSocket(); }
+import { PCCS, getSocket } from './namespace.js';
+
+const S = PCCS.state;
 
 // ==================== GPS, SENSORS, WEATHER ====================
 
@@ -340,4 +338,3 @@ async function fetchWeatherForecast(lat, lon) {
     fetchWeatherForecast,
     getWeatherIcon,
   };
-})();

@@ -1,0 +1,16 @@
+{
+  "name": "pccs-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:css": "node build.mjs --css-only",
+    "build:js": "node build.mjs --js-only",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "esbuild": "^0.25.5",
+    "tailwindcss": "^4.1.11"
+  }
+}
