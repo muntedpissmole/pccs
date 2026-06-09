@@ -315,6 +315,9 @@ def get_themes():
             if not fn.endswith('.css'):
                 continue
             base = fn[:-4]
+            # Root css/ holds base + page sheets (e.g. diag.css) — not themes
+            if os.path.basename(directory) == 'css' and base != 'base':
+                continue
             if base in seen:
                 continue
             seen.add(base)
@@ -448,13 +451,53 @@ def proxy_sonos_album_art():
         return "Error", 502
 
 
+# ====================== LIGHT INTENT ======================
+def _apply_light_change(data, *, source: str = "socket"):
+    if not data or 'name' not in data:
+        logger.warning(f"light_change ignored ({source}) — bad payload: {data!r}")
+        return None
+    name = data['name']
+    if name not in runtime.compiled.light_names:
+        logger.warning(f"light_change ignored ({source}) — unknown light: {name}")
+        return None
+    try:
+        target = max(0, min(100, int(data.get('brightness', 0))))
+    except (TypeError, ValueError):
+        logger.warning(f"light_change ignored ({source}) — invalid brightness: {data.get('brightness')!r}")
+        return None
+    mode = data.get('mode', 'white') if name in runtime.compiled.rgb_lights else None
+    runtime.set_light_intent(name, target, mode)
+    return runtime.get_ui_state()
+
+
+@app.route('/api/light', methods=['POST'])
+def api_light_change():
+    state = _apply_light_change(request.get_json(silent=True) or {}, source="http")
+    if state is None:
+        return {"ok": False}, 400
+    return {"ok": True, "state": state}
+
+
+@app.route('/api/scene', methods=['POST'])
+def api_set_scene():
+    data = request.get_json(silent=True) or {}
+    scene = data.get('scene')
+    if not scene or scene not in runtime.compiled.scenes:
+        return {"ok": False}, 400
+    runtime.set_scene(scene)
+    return {
+        "ok": True,
+        "state": runtime.get_ui_state(),
+        "ramp_ms": runtime.compiled.scene_ramp_ms,
+    }
+
+
 # ====================== SOCKETIO ======================
 @socketio.on('light_change')
 def handle_light_change(data):
-    name = data['name']
-    target = max(0, min(100, int(data.get('brightness', 0))))
-    mode = data.get('mode', 'white') if name in runtime.compiled.rgb_lights else None
-    runtime.set_light_intent(name, target, mode)
+    state = _apply_light_change(data, source="socket")
+    if state is not None:
+        emit('state_update', state)
 
 
 @socketio.on('relay_change')
@@ -467,6 +510,7 @@ def handle_set_scene(data):
     scene = data.get('scene')
     if scene:
         runtime.set_scene(scene)
+        emit('state_update', runtime.get_ui_state(), broadcast=True)
 
 
 @socketio.on('force_reed')

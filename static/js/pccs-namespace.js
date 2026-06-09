@@ -6,6 +6,6 @@
   'use strict';
   window.PCCS = window.PCCS || {};
   window.PCCS.getSocket = function () {
-    return window.socket || null;
+    return (window.PCCS.app && window.PCCS.app.socket) || window.socket || null;
   };
 })();

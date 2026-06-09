@@ -132,6 +132,11 @@ def _scene_resolve(light: str, world: WorldState, cfg: CompiledConfig) -> Option
     return None
 
 
+def is_scene_source(source: str) -> bool:
+    """True when a light level came from the active scene (incl. all_off, phase presets)."""
+    return source.startswith("scene")
+
+
 def _safety_clamp(light: str, resolved: ResolvedLight, world: WorldState, cfg: CompiledConfig) -> ResolvedLight:
     if light == "rooftop_tent" and resolved.brightness > 0:
         reed = cfg.light_to_reed.get("rooftop_tent", "rooftop_tent")
@@ -143,23 +148,24 @@ def _safety_clamp(light: str, resolved: ResolvedLight, world: WorldState, cfg: C
 def resolve_light(light: str, world: WorldState, cfg: CompiledConfig) -> ResolvedLight:
     """Explicit precedence stack (highest wins first).
 
-    1. Reed closed — reed-linked lights off (includes operator force via effective_reed_closed)
-    2. User intent — manual UI levels while context is valid
-    3. Active scene — one-shot scene activation levels
+    1. User intent — manual UI levels (honoured even when reed reads closed)
+    2. Reed closed — reed-linked automation off (includes operator force via effective_reed_closed)
+    3. Active scene — transient only while set_scene() is reconciling; never persisted
     4. Automation — ambient / reed phase tables
     5. Fallback — off
     6. Safety clamp — rooftop tent cannot be on when reed closed (hard guard)
     """
     reed = cfg.light_to_reed.get(light)
 
-    # 1. Reed closed
-    if reed and effective_reed_closed(world, reed, cfg):
-        return ResolvedLight(0, "white", "reed_closed")
-
-    # 2. User intent
+    # 1. User intent (safety clamp still applies — e.g. rooftop tent)
     intent = world.light_intents.get(light)
     if intent is not None:
-        return ResolvedLight(intent.brightness, intent.mode or "white", "user_intent").clamped()
+        resolved = ResolvedLight(intent.brightness, intent.mode or "white", "user_intent").clamped()
+        return _safety_clamp(light, resolved, world, cfg)
+
+    # 2. Reed closed
+    if reed and effective_reed_closed(world, reed, cfg):
+        return ResolvedLight(0, "white", "reed_closed")
 
     # 3. Scene
     scene_result = _scene_resolve(light, world, cfg)

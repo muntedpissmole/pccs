@@ -9,7 +9,6 @@ from actuators.arduino import ArduinoActuator
 from actuators.relays import RelayActuator
 from actuators.screens import ScreenActuator
 from engine.config_compile import compile_config
-from engine.policy import desired_outputs
 from engine.reconcile import Reconciler
 from engine.world import WorldStore
 from inputs.reeds import ReedInput
@@ -73,11 +72,12 @@ class PCCSRuntime:
             self.reconciler.reconcile(ramp_source=ramp_source)
 
     def _emit_state(self, state: dict):
-        if self.socketio:
-            try:
-                self.socketio.emit("state_update", state)
-            except Exception:
-                pass
+        if not self.socketio:
+            return
+        try:
+            self.socketio.emit("state_update", state, broadcast=True)
+        except Exception as e:
+            logger.debug(f"state_update broadcast failed: {e}")
 
     def _on_hardware_drift(self, drifts: list):
         from modules.toasts import toast_manager
@@ -138,24 +138,14 @@ class PCCSRuntime:
             logger.warning(f"Unknown scene: {scene_key}")
             return
 
-        if scene.get("all_off"):
-            self.world.clear_all_light_intents()
-            for light in self.compiled.light_names:
-                self.world.set_light_intent(light, 0, expires="until_phase_change")
+        # One-shot: command scene levels via a transient active_scene, then release.
+        # No intents are stored — reeds, automation, and manual UI take over afterward.
+        self.world.clear_all_light_intents()
+        self.world.set_active_scene(scene_key)
+        try:
+            self.reconcile(ramp_source="scene")
+        finally:
             self.world.clear_active_scene()
-        else:
-            self.world.set_active_scene(scene_key)
-            snap = self.world.snapshot()
-            out = desired_outputs(snap, self.compiled)
-            self.world.clear_active_scene()
-            for light, (brightness, mode) in out.lights.items():
-                source = out.light_sources.get(light, "")
-                if source.startswith("scene"):
-                    self.world.set_light_intent(
-                        light, brightness, mode, expires="until_phase_change"
-                    )
-
-        self.reconcile(ramp_source="scene")
 
         from modules.toasts import toast_manager
         if toast_manager and scene.get("name"):

@@ -272,6 +272,38 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(out.lights["kitchen_panel"][0], 5)
         self.assertEqual(out.light_sources["kitchen_panel"], "scene")
 
+    def test_stale_intents_block_transient_scene_snapshot(self):
+        """set_scene clears intents before reconciling so scene levels are not skipped."""
+        cfg = minimal_cfg()
+        zero_intents = {
+            name: LightIntent(0, expires="until_phase_change") for name in cfg.light_names
+        }
+        world = WorldState(
+            reeds=_default_reeds(open_names=["kitchen_panel"]),
+            phase="Evening",
+            active_scene="bedtime",
+            light_intents=zero_intents,
+        )
+        out = desired_outputs(world, cfg)
+        self.assertEqual(out.lights["kitchen_panel"][0], 0)
+        self.assertEqual(out.light_sources["kitchen_panel"], "user_intent")
+
+    def test_transient_scene_applies_when_intents_cleared(self):
+        cfg = minimal_cfg()
+        world = WorldStore(cfg.reed_names, cfg.light_names, [])
+        world.set_light_to_reed_map(cfg.light_to_reed)
+        world.set_phase("Evening", invalidate=False)
+        world.update_reeds(_default_reeds(open_names=["kitchen_panel"]))
+        for light in cfg.light_names:
+            world.set_light_intent(light, 0, expires="until_phase_change")
+
+        world.clear_all_light_intents()
+        world.set_active_scene("bedtime")
+        out = desired_outputs(world.snapshot(), cfg)
+
+        self.assertEqual(out.lights["kitchen_panel"][0], 5)
+        self.assertEqual(out.light_sources["kitchen_panel"], "scene")
+
     def test_scene_phase_reference(self):
         world = WorldState(
             reeds=_default_reeds(open_names=["rooftop_tent"]),
@@ -490,7 +522,17 @@ class PolicyTests(unittest.TestCase):
         )
         resolved = resolve_light("rooftop_tent", world, minimal_cfg())
         self.assertEqual(resolved.brightness, 0)
-        self.assertEqual(resolved.source, "reed_closed")
+        self.assertEqual(resolved.source, "safety_rooftop")
+
+    def test_user_intent_overrides_reed_closed(self):
+        world = WorldState(
+            reeds=_default_reeds(closed_names=["kitchen_bench", "kitchen_panel"]),
+            phase="Evening",
+            light_intents={"kitchen_bench": LightIntent(39, expires="until_reed_close")},
+        )
+        resolved = resolve_light("kitchen_bench", world, minimal_cfg())
+        self.assertEqual(resolved.brightness, 39)
+        self.assertEqual(resolved.source, "user_intent")
 
     # ── Relays ────────────────────────────────────────────────────────────
 
@@ -546,6 +588,149 @@ class PolicyTests(unittest.TestCase):
         out_closed = desired_outputs(closed_panel, cfg)
         self.assertTrue(out_open.screens["kitchen"])
         self.assertFalse(out_closed.screens["kitchen"])
+
+    def test_bedtime_scene_leaves_undefined_lights_on_automation_source(self):
+        world = WorldState(
+            reeds=_default_reeds(open_names=["kitchen_panel", "rear_drawer"]),
+            phase="Evening",
+            active_scene="bedtime",
+        )
+        out = desired_outputs(world, minimal_cfg())
+        self.assertEqual(out.light_sources["kitchen_panel"], "scene")
+        self.assertEqual(out.light_sources["rear_drawer"], "automation_reed")
+
+
+class SceneReconcileTests(unittest.TestCase):
+    def test_scene_reconcile_only_commands_scene_lights(self):
+        from engine.reconcile import Reconciler
+
+        class TrackingArduino:
+            def __init__(self):
+                self.commanded = []
+
+            def read_lights(self):
+                return {"rear_drawer": 50, "kitchen_panel": 40}, {}
+
+            def set_light(self, name, *args, **kwargs):
+                self.commanded.append(name)
+
+        class FakeRelays:
+            def read_relays(self):
+                return {}
+
+            def set_relay(self, *args, **kwargs):
+                pass
+
+        cfg = minimal_cfg()
+        world = WorldStore(cfg.reed_names, cfg.light_names, [])
+        world.set_light_to_reed_map(cfg.light_to_reed)
+        world.set_phase("Evening", invalidate=False)
+        world.update_reeds(_default_reeds(open_names=list(cfg.reed_names)))
+        world.update_observed_lights({"rear_drawer": 50, "kitchen_panel": 40, "accent": 0})
+
+        arduino = TrackingArduino()
+        rec = Reconciler(
+            world=world,
+            cfg=cfg,
+            arduino_actuator=arduino,
+            relay_actuator=FakeRelays(),
+        )
+        rec.reconcile(ramp_source="reed")
+        arduino.commanded.clear()
+
+        world.clear_all_light_intents()
+        world.set_active_scene("bedtime")
+        rec.reconcile(ramp_source="scene")
+
+        self.assertIn("kitchen_panel", arduino.commanded)
+        self.assertNotIn("rear_drawer", arduino.commanded)
+        self.assertEqual(rec._last_desired.lights["rear_drawer"][0], 50)
+
+    def test_all_off_scene_commands_every_light(self):
+        from engine.reconcile import Reconciler
+
+        class TrackingArduino:
+            def __init__(self):
+                self.commanded = []
+
+            def read_lights(self):
+                return {}, {}
+
+            def set_light(self, name, *args, **kwargs):
+                self.commanded.append(name)
+
+        class FakeRelays:
+            def read_relays(self):
+                return {}
+
+            def set_relay(self, *args, **kwargs):
+                pass
+
+        cfg = minimal_cfg()
+        world = WorldStore(cfg.reed_names, cfg.light_names, [])
+        world.set_light_to_reed_map(cfg.light_to_reed)
+        world.set_phase("Evening", invalidate=False)
+        world.update_reeds(_default_reeds(open_names=list(cfg.reed_names)))
+
+        arduino = TrackingArduino()
+        rec = Reconciler(
+            world=world,
+            cfg=cfg,
+            arduino_actuator=arduino,
+            relay_actuator=FakeRelays(),
+        )
+        world.set_active_scene("all_off")
+        rec.reconcile(ramp_source="scene")
+
+        self.assertEqual(set(arduino.commanded), set(cfg.light_names))
+
+    def test_ui_reconcile_only_commands_intent_light(self):
+        from engine.reconcile import Reconciler
+
+        class TrackingArduino:
+            def __init__(self):
+                self.commanded = []
+
+            def read_lights(self):
+                return {"kitchen_panel": 5, "accent": 5}, {"kitchen_panel": "white"}
+
+            def set_light(self, name, *args, **kwargs):
+                self.commanded.append(name)
+
+        class FakeRelays:
+            def read_relays(self):
+                return {}
+
+            def set_relay(self, *args, **kwargs):
+                pass
+
+        cfg = minimal_cfg()
+        world = WorldStore(cfg.reed_names, cfg.light_names, [])
+        world.set_light_to_reed_map(cfg.light_to_reed)
+        world.set_phase("Evening", invalidate=False)
+        world.update_reeds(_default_reeds(open_names=list(cfg.reed_names)))
+        world.update_observed_lights(
+            {"kitchen_panel": 5, "accent": 5},
+            {"kitchen_panel": "white"},
+        )
+
+        arduino = TrackingArduino()
+        rec = Reconciler(
+            world=world,
+            cfg=cfg,
+            arduino_actuator=arduino,
+            relay_actuator=FakeRelays(),
+        )
+
+        world.set_active_scene("bedtime")
+        rec.reconcile(ramp_source="scene")
+        arduino.commanded.clear()
+
+        world.set_light_intent("accent", 60)
+        rec.reconcile(ramp_source="ui")
+
+        self.assertEqual(arduino.commanded, ["accent"])
+        self.assertEqual(rec._last_desired.lights["kitchen_panel"][0], 5)
 
 
 if __name__ == "__main__":

@@ -5,23 +5,20 @@
   'use strict';
   const PCCS = window.PCCS;
 
-  function initSocket() {
-    const socket = io();
-    window.socket = socket;
-    return socket;
-  }
+  const socket = io();
+  window.socket = socket;
 
-  function onConnect(socket) {
+  function onConnect(sock) {
     PCCS.offline.hide();
-    if (typeof registerThemeListener === 'function') registerThemeListener(socket);
+    if (typeof registerThemeListener === 'function') registerThemeListener(sock);
     if (typeof loadCurrentTheme === 'function') loadCurrentTheme();
     if (typeof loadQuickThemes === 'function') loadQuickThemes();
     PCCS.scenes.loadScenes();
     PCCS.version.loadVersion();
     PCCS.sonos.requestSonosState();
-    socket.emit('get_network_status');
-    socket.emit('get_victron_state');
-    socket.emit('get_reeds');
+    sock.emit('get_network_status');
+    sock.emit('get_victron_state');
+    sock.emit('get_reeds');
     PCCS.darkMode.requestInitialDarkMode();
     setTimeout(() => {
       fetch('/api/network_status').then(r => r.json()).then(PCCS.tiles.updateNetworkTile).catch(() => {});
@@ -31,28 +28,27 @@
     }, 50);
   }
 
-  function registerHandlers(socket) {
-    PCCS.offline.register(socket);
-    PCCS.darkMode.register(socket);
-    PCCS.toasts.register(socket);
-    PCCS.sonos.register(socket);
+  function registerHandlers(sock) {
+    PCCS.offline.register(sock);
+    PCCS.darkMode.register(sock);
+    PCCS.toasts.register(sock);
+    PCCS.sonos.register(sock);
 
-    socket.on('lights_config', c => PCCS.lighting.onLightsConfig(c));
-    socket.on('state_update', s => PCCS.lighting.onStateUpdate(s));
-    socket.on('reed_update', p => PCCS.lighting.onReedUpdate(p));
-    socket.on('sensor_update', d => PCCS.tiles.updateSensors(d));
-    socket.on('gps_update', d => PCCS.tiles.updateGPS(d));
-    socket.on('phase_update', d => PCCS.tiles.updatePhaseInfo(d));
-    socket.on('network_update', d => PCCS.tiles.updateNetworkTile(d));
-    socket.on('victron_update', d => PCCS.victron.updatePowerTile(d));
+    sock.on('lights_config', c => PCCS.lighting.onLightsConfig(c));
+    sock.on('state_update', s => PCCS.lighting.onStateUpdate(s));
+    sock.on('reed_update', p => PCCS.lighting.onReedUpdate(p));
+    sock.on('sensor_update', d => PCCS.tiles.updateSensors(d));
+    sock.on('gps_update', d => PCCS.tiles.updateGPS(d));
+    sock.on('phase_update', d => PCCS.tiles.updatePhaseInfo(d));
+    sock.on('network_update', d => PCCS.tiles.updateNetworkTile(d));
+    sock.on('victron_update', d => PCCS.victron.updatePowerTile(d));
 
-    socket.on('connect', () => onConnect(socket));
+    sock.on('connect', () => onConnect(sock));
   }
 
-  function init() {
-    const socket = initSocket();
-    registerHandlers(socket);
+  registerHandlers(socket);
 
+  function initDom() {
     if (PCCS.sunCurve && typeof PCCS.sunCurve.init === 'function') {
       PCCS.sunCurve.init();
     }
@@ -80,8 +76,13 @@
       PCCS.version.loadVersion();
       PCCS.sonos.startProgressUpdater();
     };
+
   }
 
-  PCCS.app = { init };
-  document.addEventListener('DOMContentLoaded', init);
+  PCCS.app = { init: initDom, socket };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDom);
+  } else {
+    initDom();
+  }
 })();

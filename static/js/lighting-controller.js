@@ -8,6 +8,37 @@
   const S = PCCS.state;
   function getSocket() { return PCCS.getSocket(); }
 
+  function emitLightChange(payload) {
+    const socket = getSocket();
+    if (socket?.connected) {
+      socket.emit('light_change', payload);
+    } else {
+      console.warn('[PCCS] light_change socket unavailable — using HTTP fallback', payload);
+    }
+    fetch('/api/light', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.state) PCCS.lighting.onStateUpdate(data.state);
+      })
+      .catch(err => console.warn('[PCCS] light_change HTTP failed', err));
+    return true;
+  }
+
+  function emitRelayChange(name, on) {
+    const socket = getSocket();
+    if (!socket?.connected) {
+      console.warn('[PCCS] relay_change skipped — socket unavailable', name);
+      return false;
+    }
+    socket.emit('relay_change', { name, on });
+    return true;
+  }
+
 function getCurrentColumns() {
 		const container = document.getElementById('lighting-controls');
 		if (!container) return 1;
@@ -37,11 +68,14 @@ function getCurrentColumns() {
 // ==================== LIGHTING RENDERING ====================
 	function renderLightingControls() {
 		const container = document.getElementById('lighting-controls');
-		
+		if (!container) {
+			return false;
+		}
+
 		const currentHash = JSON.stringify(S.lightsConfig.map(l => l.name + l.type));
 		if (currentHash === S.lastRenderConfigHash && S.lightsConfig.length > 0) {
 			updateUIFromState();
-			return;
+			return true;
 		}
 		
 		S.lastRenderConfigHash = currentHash;
@@ -176,6 +210,7 @@ function getCurrentColumns() {
 		initSliders();
 
 		setTimeout(updateUIFromState, 100);
+		return true;
 	}
 
 	function toggleControl(el) {
@@ -196,7 +231,7 @@ function getCurrentColumns() {
 			const newState = !isCurrentlyOn;
 
 			updateLightUI(name, newState ? 1 : 0);
-			getSocket().emit('relay_change', { name: name, on: newState });
+			emitRelayChange(name, newState);
 			
 			setTimeout(() => updateLightUI(name, newState ? 1 : 0), 50);
 			return;
@@ -211,7 +246,7 @@ function getCurrentColumns() {
 			// Update UI immediately — a delayed update loses races with stale state_update.
 			updateLightUI(name, currentBrightness);
 
-			getSocket().emit('light_change', {
+			emitLightChange({
 				name,
 				brightness: currentBrightness,
 				mode: newMode,
@@ -226,7 +261,7 @@ function getCurrentColumns() {
 
 		updateLightUI(name, newBrightness);
 		S.currentState[name] = newBrightness;  // keep model in sync with just-set value
-		getSocket().emit('light_change', { name, brightness: newBrightness });
+		emitLightChange({ name, brightness: newBrightness });
 	}
 
 	function initUnifiedToggleListeners() {
@@ -306,6 +341,87 @@ function getCurrentColumns() {
 	}
 
 	// ==================== UPDATE UI FROM STATE ====================
+	function cancelSceneAnimations() {
+		Object.values(S.sceneAnimationCancels).forEach(cancel => {
+			if (typeof cancel === 'function') cancel();
+		});
+		S.sceneAnimationCancels = {};
+	}
+
+	function setSliderMotion(wrapper, enabled) {
+		if (!wrapper) return;
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const transition = enabled ? '' : 'none';
+		if (fill) fill.style.transition = transition;
+		if (thumb) thumb.style.transition = transition;
+	}
+
+	function applyStateToUI(newState, { animate = false, rampMs = S.SCENE_RAMP_MS } = {}) {
+		const protectedLights = new Set([...S.currentlyDragging]);
+		if (!animate) {
+			S.userJustSet.forEach(name => protectedLights.add(name));
+		}
+
+		S.lightsConfig.forEach(light => {
+			const modeKey = `${light.name}_mode`;
+			if (light.has_mode && newState[modeKey] && !protectedLights.has(light.name)) {
+				S.currentModes[light.name] = newState[modeKey];
+			}
+		});
+
+		if (!animate) {
+			Object.keys(newState).forEach(k => {
+				if (k.endsWith('_mode')) return;
+				if (!protectedLights.has(k)) S.currentState[k] = newState[k];
+			});
+			updateUIFromState();
+			return;
+		}
+
+		cancelSceneAnimations();
+
+		S.lightsConfig.forEach(light => {
+			if (protectedLights.has(light.name)) return;
+
+			const target = newState[light.name];
+			if (target === undefined) return;
+
+			if (light.type === 'relay') {
+				S.currentState[light.name] = !!target;
+				updateLightUI(light.name, !!target);
+				return;
+			}
+
+			const wrapper = document.querySelector(`.slider-wrapper[data-name="${light.name}"]`);
+			const start = parseInt(wrapper?.dataset.value, 10);
+			const from = Number.isFinite(start) ? start : (S.currentState[light.name] || 0);
+			const end = Math.max(0, Math.min(100, target || 0));
+			S.currentState[light.name] = end;
+
+			if (from === end) {
+				updateLightUI(light.name, end);
+				return;
+			}
+
+			setSliderMotion(wrapper, false);
+			S.sceneAnimationCancels[light.name] = PCCS.animate.run({
+				duration: rampMs,
+				onStep: (t) => {
+					const v = Math.round(from + (end - from) * t);
+					updateLightUI(light.name, v);
+				},
+				onComplete: () => {
+					updateLightUI(light.name, end);
+					setSliderMotion(wrapper, true);
+					delete S.sceneAnimationCancels[light.name];
+				},
+			});
+		});
+
+		updateRooftopTentControls();
+	}
+
 	function updateUIFromState() {
 		S.lightsConfig.forEach(light => {
 			if (S.currentlyDragging.has(light.name) || S.userJustSet.has(light.name)) {
@@ -322,8 +438,13 @@ function getCurrentColumns() {
 		updateRooftopTentControls();
 	}
 
-    // ==================== DRAG LOGIC ====================
+    // ==================== DRAG LOGIC (pointer events) ====================
+	let lastTouchPointerUp = 0;
+
 	function makeDraggable(wrapper) {
+		if (wrapper.dataset.pccsSliderBound === '1') return;
+		wrapper.dataset.pccsSliderBound = '1';
+
 		const inner = wrapper.querySelector('.slider-inner');
 		const fill = wrapper.querySelector('.slider-fill');
 		const thumb = wrapper.querySelector('.slider-thumb');
@@ -331,12 +452,14 @@ function getCurrentColumns() {
 		const valueEl = document.getElementById(`val-${name}`);
 
 		let isDragging = false;
+		let activePointerId = null;
 		let startX = 0;
 		let startY = 0;
+		let valueAtPointerStart = 0;
 
 		function updatePosition(clientX) {
 			const rect = inner.getBoundingClientRect();
-			let percent = Math.max(0, Math.min(100, 
+			const percent = Math.max(0, Math.min(100,
 				Math.round(((clientX - rect.left) / rect.width) * 100)
 			));
 
@@ -344,13 +467,6 @@ function getCurrentColumns() {
 			if (fill) fill.style.width = `${percent}%`;
 			if (thumb) thumb.style.left = `${percent}%`;
 			if (valueEl) valueEl.textContent = `${percent}%`;
-
-			// NOTE: We intentionally do *not* emit during drag.
-			// Only local visual update here (instant, no transition).
-			// The final committed value is emitted exactly once in endDrag.
-			// This prevents the "chunked ramps" problem where every intermediate
-			// drag position starts its own 1000ms ramp, making the total change
-			// take much longer than the configured UI ramp time.
 		}
 
 		function startDrag() {
@@ -359,95 +475,101 @@ function getCurrentColumns() {
 			wrapper.classList.add('dragging');
 			S.currentlyDragging.add(name);
 			S.userJustSet.delete(name);
-
-			// (no live emit during drag anymore; final value only on endDrag)
-
 			if (fill) fill.style.transition = 'none';
 			if (thumb) thumb.style.transition = 'none';
 		}
 
-		function endDrag() {
-			if (!isDragging) return;
+		function commitDrag(force) {
+			if (!force && !isDragging) return;
+
+			const final = parseInt(wrapper.dataset.value) || 0;
 			isDragging = false;
+			activePointerId = null;
 			wrapper.classList.remove('dragging');
 			S.currentlyDragging.delete(name);
 
-			const final = parseInt(wrapper.dataset.value) || 0;
+			S.userJustSet.add(name);
+			setTimeout(() => S.userJustSet.delete(name), S.JUST_SET_DURATION);
+			S.currentState[name] = final;
 			updateLightUI(name, final);
-			S.currentState[name] = final;  // keep the model in sync with the just-set value
 
-			// Always emit the exact final value on release. This guarantees the
-			// user-chosen level is commanded even if the last throttled move didn't
-			// trigger an emit (prevents "stuck at previous" and ensures prompt response).
 			const light = S.lightsConfig.find(l => l.name === name);
 			const payload = { name, brightness: final };
 			if (light?.has_mode && S.currentModes[name]) {
 				payload.mode = S.currentModes[name];
 			}
-			getSocket().emit('light_change', payload);
-
-			S.userJustSet.add(name);
-			setTimeout(() => S.userJustSet.delete(name), S.JUST_SET_DURATION);
+			emitLightChange(payload);
 		}
 
-		wrapper.addEventListener('touchstart', e => {
-			if (e.touches.length === 0) return;
-			const touch = e.touches[0];
-			startX = touch.clientX;
-			startY = touch.clientY;
+		wrapper.addEventListener('pointerdown', e => {
+			if (e.button !== 0) return;
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) return;
+			// Touchscreens fire synthetic mouse events after touch — ignore them.
+			if (e.pointerType === 'mouse' && Date.now() - lastTouchPointerUp < 600) return;
+
+			activePointerId = e.pointerId;
+			startX = e.clientX;
+			startY = e.clientY;
+			valueAtPointerStart = parseInt(wrapper.dataset.value) || 0;
 			isDragging = false;
-		}, { passive: true });
 
-		wrapper.addEventListener('touchmove', e => {
-			if (e.touches.length === 0) return;
-			const touch = e.touches[0];
-
-			// Safety interlock for rooftop tent (physical reed closed)
-			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
-				return;
+			if (e.pointerType === 'mouse') {
+				e.preventDefault();
+				wrapper.setPointerCapture(e.pointerId);
+				startDrag();
+				updatePosition(e.clientX);
 			}
+		});
 
-			const deltaX = Math.abs(touch.clientX - startX);
-			const deltaY = Math.abs(touch.clientY - startY);
+		wrapper.addEventListener('pointermove', e => {
+			if (e.pointerId !== activePointerId) return;
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) return;
+
+			const deltaX = Math.abs(e.clientX - startX);
+			const deltaY = Math.abs(e.clientY - startY);
 
 			if (!isDragging) {
-				if (deltaX > 12 && deltaX > deltaY * 1.5) {
-					e.preventDefault();
+				if (e.pointerType === 'mouse') {
 					startDrag();
-				} else if (deltaY > 10) {
+				} else if (deltaX > 10 && deltaX > deltaY * 1.5) {
+					e.preventDefault();
+					wrapper.setPointerCapture(e.pointerId);
+					startDrag();
+				} else {
 					return;
 				}
 			}
 
-			if (isDragging) {
-				e.preventDefault();
-				updatePosition(touch.clientX);
-			}
-		}, { passive: false });
-
-		wrapper.addEventListener('touchend', endDrag, { passive: true });
-		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
-
-		wrapper.addEventListener('mousedown', e => {
-			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
-				return; // safety interlock - physical reed closed
-			}
-			startX = e.clientX;
-			startDrag();
+			e.preventDefault();
 			updatePosition(e.clientX);
+		});
 
-			const onMove = ev => updatePosition(ev.clientX);
-			const onUp = () => {
-				document.removeEventListener('mousemove', onMove);
-				endDrag();
-			};
-			document.addEventListener('mousemove', onMove);
-			document.addEventListener('mouseup', onUp, { once: true });
+		wrapper.addEventListener('pointerup', e => {
+			if (e.pointerId !== activePointerId) return;
+			if (e.pointerType === 'touch') lastTouchPointerUp = Date.now();
+			try { wrapper.releasePointerCapture(e.pointerId); } catch (_) { /* ok */ }
+
+			const final = parseInt(wrapper.dataset.value) || 0;
+			const changed = isDragging || final !== valueAtPointerStart;
+			if (changed) commitDrag(true);
+			else {
+				isDragging = false;
+				activePointerId = null;
+			}
+		});
+
+		wrapper.addEventListener('pointercancel', e => {
+			if (e.pointerId !== activePointerId) return;
+			if (isDragging) commitDrag(true);
+			else {
+				isDragging = false;
+				activePointerId = null;
+			}
 		});
 	}
 
     function initSliders() {
-        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+        document.querySelectorAll('.slider-wrapper:not([data-pccs-slider-bound="1"])').forEach(makeDraggable);
     }
 
     // ==================== ROOFTOP TENT ====================
@@ -481,25 +603,26 @@ function getCurrentColumns() {
         const mode = S.currentState[`${light.name}_mode`];
         if (light.has_mode && mode) S.currentModes[light.name] = mode;
       });
-      renderLightingControls();
-      getSocket().emit('get_reeds');
+      if (!renderLightingControls()) {
+        const renderWhenReady = () => {
+          if (renderLightingControls()) {
+            document.removeEventListener('DOMContentLoaded', renderWhenReady);
+          }
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', renderWhenReady);
+        } else {
+          requestAnimationFrame(renderWhenReady);
+        }
+      }
+      const socket = getSocket();
+      if (socket?.connected) socket.emit('get_reeds');
       if (Object.keys(S.currentState).length > 0) updateUIFromState();
     },
     onStateUpdate(newState) {
-      const protectedLights = new Set([...S.currentlyDragging, ...S.userJustSet]);
-      Object.keys(newState).forEach(k => {
-        if (k.endsWith('_mode')) return;
-        if (!protectedLights.has(k)) S.currentState[k] = newState[k];
-      });
-      S.lightsConfig.forEach(light => {
-        const modeKey = `${light.name}_mode`;
-        if (light.has_mode && newState[modeKey]) {
-          if (!protectedLights.has(light.name)) {
-            S.currentModes[light.name] = newState[modeKey];
-          }
-        }
-      });
-      updateUIFromState();
+      const animate = S.sceneActivating;
+      S.sceneActivating = false;
+      applyStateToUI(newState, { animate, rampMs: S.SCENE_RAMP_MS });
     },
     onReedUpdate(payload) {
       S.currentReeds = payload.states || {};

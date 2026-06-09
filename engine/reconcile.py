@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .config_compile import CompiledConfig
 from .explain import build_explain_snapshot, source_label
 from .policy import DesiredOutputs, desired_outputs
+from .precedence import is_scene_source
 from .world import WorldStore
 
 logger = logging.getLogger("pccs")
@@ -45,6 +46,26 @@ class Reconciler:
         self._drift_grace_s = max(3.0, cfg.reed_ramp_ms / 1000.0 + 1.0)
         self._active_drifts: Dict[str, str] = {}
 
+    def _preserve_lights_except(self, desired: DesiredOutputs, world, affected: set) -> None:
+        """Keep untouched lights at their prior commanded or observed levels."""
+        for light in self.cfg.light_names:
+            if light in affected:
+                continue
+            if self._last_desired and light in self._last_desired.lights:
+                desired.lights[light] = self._last_desired.lights[light]
+                desired.light_sources[light] = self._last_desired.light_sources.get(
+                    light, "fallback"
+                )
+                if light in self.cfg.rgb_lights and light in self._last_desired.light_modes:
+                    desired.light_modes[light] = self._last_desired.light_modes[light]
+            elif light in world.observed_lights:
+                obs = world.observed_lights[light]
+                mode = world.observed_light_modes.get(light, "white")
+                desired.lights[light] = (obs, mode)
+                desired.light_sources[light] = "unchanged"
+                if light in self.cfg.rgb_lights:
+                    desired.light_modes[light] = mode
+
     def reconcile(self, ramp_source: str = "auto"):
         world = self.world.snapshot()
         desired = desired_outputs(world, cfg=self.cfg)
@@ -52,12 +73,19 @@ class Reconciler:
         self._last_ramp_source = ramp_source
         ramp_ms = self._ramp_ms(ramp_source)
         now = time.time()
+        scene_pass = ramp_source == "scene"
+        ui_pass = ramp_source == "ui"
 
         for light, (brightness, mode) in desired.lights.items():
+            source = desired.light_sources.get(light, "fallback")
+            if scene_pass and not is_scene_source(source):
+                continue
+            if ui_pass and light not in world.light_intents:
+                continue
+
             target_m = mode or "white"
             cmd_b, cmd_m = self._commanded_lights.get(light, (-1, ""))
             if cmd_b != brightness or (light in self.cfg.rgb_lights and cmd_m != target_m):
-                source = desired.light_sources.get(light, "fallback")
                 self.arduino.set_light(
                     light,
                     brightness,
@@ -70,6 +98,8 @@ class Reconciler:
                 self._commanded_at[light] = now
 
         for relay, on in desired.relays.items():
+            if ui_pass and relay not in world.relay_intents:
+                continue
             if self._commanded_relays.get(relay) != on:
                 rsource = "user_intent" if relay in world.relay_intents else "hardware_default"
                 self.relays.set_relay(relay, on, source=rsource, trigger=ramp_source)
@@ -81,6 +111,16 @@ class Reconciler:
                 if self._commanded_screens.get(screen) != awake:
                     self.screens.set_screen(screen, awake)
                     self._commanded_screens[screen] = awake
+
+        if scene_pass:
+            scene_lights = {
+                light
+                for light in self.cfg.light_names
+                if is_scene_source(desired.light_sources.get(light, ""))
+            }
+            self._preserve_lights_except(desired, world, scene_lights)
+        elif ui_pass:
+            self._preserve_lights_except(desired, world, set(world.light_intents.keys()))
 
         self._last_desired = desired
 

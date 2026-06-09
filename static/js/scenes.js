@@ -17,7 +17,34 @@
     setTimeout(() => {
       document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
     }, 750);
-    getSocket().emit('set_scene', { scene: sceneKey });
+
+    S.userJustSet.clear();
+    S.sceneActivating = true;
+
+    const socket = getSocket();
+    if (socket?.connected) {
+      socket.emit('set_scene', { scene: sceneKey });
+      return;
+    }
+
+    fetch('/api/scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene: sceneKey }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data?.state) {
+          S.sceneActivating = false;
+          return;
+        }
+        if (data.ramp_ms) S.SCENE_RAMP_MS = data.ramp_ms;
+        PCCS.lighting.onStateUpdate(data.state);
+      })
+      .catch(err => {
+        S.sceneActivating = false;
+        console.warn('[PCCS] set_scene HTTP failed', err);
+      });
   }
 
 	async function loadScenes() {

@@ -541,6 +541,7 @@ body::after {
   margin: 0 auto;
   cursor: grab;
   user-select: none;
+  touch-action: none;
 }
 
 .slider-inner {
