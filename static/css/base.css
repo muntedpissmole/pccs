@@ -373,13 +373,6 @@ body::after {
   transition: stroke-dashoffset 380ms cubic-bezier(0.34, 1.0, 0.64, 1),
               stroke 280ms ease;
 }
-#power-tile.stale {
-  opacity: 0.62;
-  transition: opacity 400ms ease;
-}
-#power-tile.stale #soc-gauge-container {
-  opacity: 0.75;
-}
 /* Light mode ring is a little darker for contrast */
 .light #power-tile #soc-progress {
   stroke: var(--accent-color);

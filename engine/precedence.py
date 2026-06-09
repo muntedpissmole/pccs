@@ -21,8 +21,10 @@ class ResolvedLight:
         return ResolvedLight(b, m, self.source)
 
 
-def _phase_key(world: WorldState) -> str:
-    p = str(world.phase_forced or world.phase).strip().lower()
+def _phase_key(world: WorldState) -> Optional[str]:
+    p = str(world.phase_forced or world.phase or "").strip().lower()
+    if not p:
+        return None
     return p if p in ("day", "evening", "night") else "evening"
 
 
@@ -70,6 +72,8 @@ def _scene_applies(light: str, world: WorldState, cfg: CompiledConfig) -> bool:
 
 def _automation_default(light: str, world: WorldState, cfg: CompiledConfig) -> ResolvedLight:
     phase = _phase_key(world)
+    if phase is None:
+        return ResolvedLight(0, "white", "phase_pending")
 
     if light in cfg.ambient_lights:
         if not any_reed_open(world, cfg):

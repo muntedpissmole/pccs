@@ -50,6 +50,7 @@ class PCCSRuntime:
             screen_actuator=self.screen_actuator,
             on_state_emit=self._emit_state,
             ramp_ms_for_source=self._ramp_ms_for_source,
+            on_drift=self._on_hardware_drift,
         )
 
         self.reed_input: Optional[ReedInput] = None
@@ -77,6 +78,28 @@ class PCCSRuntime:
                 self.socketio.emit("state_update", state)
             except Exception:
                 pass
+
+    def _on_hardware_drift(self, drifts: list):
+        from modules.toasts import toast_manager
+        if not toast_manager or not drifts:
+            return
+        if len(drifts) == 1:
+            d = drifts[0]
+            key = d.get("light") or d.get("relay") or "output"
+            toast_manager.warning(
+                d.get("detail", "hardware mismatch"),
+                title=f"Drift: {key}",
+                duration=8000,
+            )
+        else:
+            toast_manager.warning(
+                f"{len(drifts)} outputs differ from desired state",
+                title="Hardware drift",
+                duration=8000,
+            )
+
+    def get_explain_json(self) -> dict:
+        return self.reconciler.explain_snapshot()
 
     def effective_reed_states(self) -> dict:
         """Authoritative reed map for the main UI (forces override hardware)."""
@@ -172,16 +195,28 @@ class PCCSRuntime:
         snap = self.world.snapshot()
         return {"states": dict(snap.reeds), "forced": dict(snap.reed_forces)}
 
-    def get_reed_json(self) -> dict:
-        return self.get_reed_diag_json()
-
     def start_hardware(self):
+        """Init serial/GPIO and load reed state. No reconcile yet — phase comes first."""
         self.arduino.init_serial()
         self.gpio.init_devices()
 
         initial_reeds = {n: self.gpio.reed_states.get(n, True) for n in self.compiled.reed_names}
         self.world.update_reeds(initial_reeds)
+        self.reconciler.read_hardware()
 
+    def bootstrap_phase(self):
+        """Calculate real phase and write to world before any light automation runs."""
+        pm = self.phase_manager
+        if not pm:
+            logger.warning("🌗 Phase manager not attached — automation deferred")
+            return
+        use_fallback = not pm._has_valid_gps()
+        phase = pm.bootstrap_initial_phase(use_fallback=use_fallback)
+        self.world.set_phase(phase, pm.forced_phase, invalidate=False)
+        logger.info(f"🌗 Automation unlocked for phase: {phase}")
+
+    def finish_startup(self):
+        """Start reed polling and run the first reconcile (phase must already be set)."""
         self.reed_input = ReedInput(
             gpio_manager=self.gpio,
             reed_names=self.compiled.reed_names,
@@ -189,8 +224,6 @@ class PCCSRuntime:
             on_update=self.on_reeds_updated,
         )
         self.reed_input.start()
-
-        self.reconciler.read_hardware()
         self.reconcile(ramp_source="startup")
 
     def start_background_threads(self):
@@ -203,6 +236,7 @@ class PCCSRuntime:
             try:
                 if self.arduino.is_connected():
                     self.reconciler.read_hardware()
+                    self.reconciler.report_hardware_drift()
                     self._emit_state(self.get_ui_state())
             except Exception as e:
                 logger.debug(f"Hardware sync: {e}")

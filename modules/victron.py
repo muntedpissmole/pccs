@@ -34,8 +34,6 @@ class VictronManager:
         self.phase_manager = phase_manager
 
         # ====================== CONFIG ======================
-        self.enabled = config.getboolean('victron', 'enabled', fallback=False)
-
         self.shunt_address = (config.get('victron', 'shunt_address', fallback='') or '').strip().lower()
         self.shunt_key     = (config.get('victron', 'shunt_key',     fallback='') or '').strip()
 
@@ -45,9 +43,6 @@ class VictronManager:
         self.scan_interval = config.getfloat('victron', 'scan_interval', fallback=2.0)
         self.stale_timeout = config.getfloat('victron', 'stale_timeout', fallback=45.0)
 
-        self.battery_v_min = config.getfloat('victron', 'battery_voltage_min', fallback=10.5)
-        self.battery_v_max = config.getfloat('victron', 'battery_voltage_max', fallback=14.8)
-
         # Internal
         self._running = False
         self._ble_thread = None
@@ -56,7 +51,6 @@ class VictronManager:
         self._last_data_ts = 0.0
 
         self.state = {
-            "enabled": self.enabled,
             "stale": True,
             "soc": None,
             "voltage": None,
@@ -76,27 +70,23 @@ class VictronManager:
         if self.mppt_address and self.mppt_key:
             self.device_keys[self.mppt_address] = self.mppt_key
 
-        if not self.enabled:
-            logger.info("🔋 VictronManager disabled in config")
-            return
-
         if not self.device_keys:
-            logger.warning("🔋 Victron enabled but no shunt or mppt keys provided — manager will stay inert")
-            self.enabled = False
-            return
-
-        logger.info(
-            "🔋 VictronManager initialized (shunt=%s, mppt=%s, scan=%.1fs, stale=%.0fs)",
-            "yes" if self.shunt_address else "no",
-            "yes" if self.mppt_address else "no",
-            self.scan_interval,
-            self.stale_timeout,
-        )
+            logger.warning("🔋 Victron: no shunt or mppt keys configured — tile will stay stale until devices are added")
+        else:
+            logger.info(
+                "🔋 VictronManager initialized (shunt=%s, mppt=%s, scan=%.1fs, stale=%.0fs)",
+                "yes" if self.shunt_address else "no",
+                "yes" if self.mppt_address else "no",
+                self.scan_interval,
+                self.stale_timeout,
+            )
 
     # ====================== PUBLIC API ======================
 
     def start(self):
-        if not self.enabled or self._running:
+        if self._running:
+            return
+        if not self.device_keys:
             return
 
         self._running = True
@@ -123,7 +113,6 @@ class VictronManager:
     def get_state(self):
         """Return a copy of current state for socket / API consumers."""
         s = self.state.copy()
-        s["enabled"] = self.enabled
         s["stale"] = self._is_stale()
         if s.get("last_update") is None and self.state.get("last_update"):
             s["last_update"] = self.state["last_update"]
@@ -160,11 +149,8 @@ class VictronManager:
         """Main scanning loop using victron_ble.Scanner."""
         try:
             from victron_ble.scanner import Scanner
-            from victron_ble.exceptions import AdvertisementKeyMissingError, UnknownDeviceError
-            from victron_ble.devices import detect_device_type
         except ImportError as e:
-            logger.error("🔋 victron_ble (or bleak) not importable: %s — Victron disabled at runtime", e)
-            self.enabled = False
+            logger.error("🔋 victron_ble (or bleak) not importable: %s — BLE scanning unavailable", e)
             return
 
         scanner = Scanner()
@@ -370,10 +356,3 @@ class VictronManager:
         except Exception as e:
             logger.debug("🔋 Failed to emit victron_update: %s", e)
 
-    # ====================== OPTIONAL FUTURE HOOKS ======================
-
-    def force_refresh(self):
-        """Can be wired to a socket handler later if user wants a manual 'rescan' button."""
-        # Scanner is passive — we just clear the last timestamp so UI shows stale quickly
-        self._last_data_ts = 0.0
-        self._emit_if_needed(force=True)

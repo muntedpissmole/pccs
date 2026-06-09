@@ -8,14 +8,6 @@ from engine.world import WorldState, WorldStore
 from modules.config import config as pccs_config
 
 
-def _open_reeds(*names: str) -> dict:
-    return {n: False for n in names}
-
-
-def _closed_reeds(*names: str) -> dict:
-    return {n: True for n in names}
-
-
 def minimal_cfg() -> CompiledConfig:
     cfg = CompiledConfig()
     cfg.light_names = [
@@ -153,6 +145,12 @@ class PolicyTests(unittest.TestCase):
         out = desired_outputs(world, minimal_cfg())
         self.assertEqual(out.lights["rooftop_tent"][0], 0)
         self.assertEqual(out.light_sources["rooftop_tent"], "user_intent")
+
+    def test_no_phase_automation_deferred(self):
+        world = WorldState(reeds=_default_reeds(open_names=["rooftop_tent"]), phase="")
+        out = desired_outputs(world, minimal_cfg())
+        self.assertEqual(out.lights["rooftop_tent"][0], 0)
+        self.assertEqual(out.light_sources["rooftop_tent"], "phase_pending")
 
     def test_tent_close_then_open_gets_phase_level(self):
         world = WorldState(reeds=_default_reeds(open_names=["rooftop_tent"]), phase="Evening")

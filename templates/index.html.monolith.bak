@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The Pissmole Camper Control System</title>
+
+  <script src="{{ url_for('static', filename='tailwind.min.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon/favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon/favicon-16x16.png') }}">
+
+  <!-- Apple Touch Icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon/apple-touch-icon.png') }}">
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="{{ url_for('static', filename='favicon/site.webmanifest') }}">
+</head>
+<body class="bg-zinc-950 text-white min-h-screen flex flex-col">
+
+<div id="main-content" class="flex-1 p-4 md:p-4 xl:p-4 space-y-6">
+
+    <!-- OFFLINE OVERLAY -->
+	<div id="offline-overlay" 
+		 class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center pointer-events-none">
+			<div id="offline-banner" 
+           class="offline-banner text-white text-center py-6 px-10 rounded-2xl shadow-2xl flex items-center gap-5 text-lg font-medium tracking-wide mx-4">
+        <i class="fa-solid fa-circle-exclamation text-2xl animate-pulse"></i>
+        <div class="flex-1 text-left">
+          System Offline
+          <div class="text-sm opacity-90 font-normal mt-0.5">Waiting to reconnect...</div>
+        </div>
+        <div class="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin flex-shrink-0"></div>
+      </div>
+    </div>
+
+<!-- ====================== ENVIRONMENTAL ====================== -->
+
+	<div>
+	  <div class="section-header">
+		<h2 class="section-title">Environmental</h2>
+		<div class="section-line"></div>
+		
+		<!-- Fullscreen Toggle -->
+		<button onclick="toggleFullscreen()" 
+				class="fullscreen-btn ml-4 text-2xl accent-sky hover:text-white transition-all hover:scale-110 active:scale-95">
+		  <i id="fullscreen-icon" class="fa-solid fa-expand"></i>
+		</button>
+	  </div>
+    
+	<!-- STATUS TILES -->
+	<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+	
+	<!-- Combined Time & Sun (2 columns) -->
+	<div class="tile environmental-tile glass p-5 flex flex-col h-full col-span-2 lg:col-span-2" id="time-sun-tile">
+	  <div class="flex justify-between items-start flex-shrink-0">
+		<div>
+		  <p class="tile-value text-xl" id="tile-date">—</p>
+		</div>
+		<div class="flex items-center gap-2">
+		  <i class="fa-solid fa-clock text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Sun/Moon Arc Visualization -->
+	  <div class="flex-1">
+		<!-- Arc graphic container (relative for labels) -->
+		<div class="flex items-center justify-center py-2 -mt-1 relative">
+		  <div id="sun-curve" class="relative w-full h-[72px]">
+			<svg width="100%" height="100%" viewBox="0 0 700 72" class="absolute">
+			  
+			  <!-- Day Arc (Sunrise → Sunset) - now stretches with tile width -->
+			  <path id="day-path" 
+					d="M 62 52 Q 350 12 638 52" 
+					fill="none" 
+					stroke="#fbbf24" 
+					stroke-width="3.5" 
+					stroke-linecap="round"
+					stroke-opacity="0.85"/>
+
+			  <!-- Night Arc (Sunset → Sunrise) - now stretches with tile width -->
+			  <path id="night-path" 
+					d="M 62 52 Q 350 12 638 52" 
+					fill="none" 
+					stroke="#64748b" 
+					stroke-width="3" 
+					stroke-linecap="round"
+					stroke-opacity="0.6"/>
+
+			  <!-- Sun / Moon -->
+			  <circle id="sun-position" cx="50" cy="42" r="10.5" fill="#fbbf24"/>
+			  <circle id="sun-glow" cx="50" cy="42" r="15.5" fill="#fbbf24" opacity="0.28"/>
+			</svg>
+		  </div>
+
+		  <!-- Current phase boundary labels: always day phase start time on left (day-start-label),
+		       evening phase start time on right (evening-start-label). This is the logical layout for the
+		       date/time tile at all times (including day phase, where the day start is a morning time).
+		       Sun/moon travel + arcs use raw astro sunrise/sunset.
+		       Inset 10px from tile edges; vertically tuned to sit under the raised bezier ends. -->
+		  <div class="absolute left-2.5 right-2.5 flex justify-between pointer-events-none"
+			   style="top: 73%; transform: translateY(-50%);">
+			<span id="day-start-label" class="tile-meta" style="color: #fcd34d;">—</span>
+			<span id="evening-start-label" class="tile-meta" style="color: #94a3b8;">—</span>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Sunrise / Sunset + Time -->
+	  <div class="flex items-center justify-between text-sm pt-2 border-t border-[var(--glass-border)] mt-auto px-2.5">
+		<div class="flex items-center gap-2">
+		  <i class="fa-solid fa-sun text-amber-400"></i>
+		  <span id="sunrise" class="font-medium">—</span>
+		</div>
+		
+		<p class="tile-value text-2xl font-light tracking-tighter text-center" id="tile-time">—</p>
+		
+		<div class="flex items-center gap-2">
+		  <i class="fa-solid fa-moon text-sky-300"></i>
+		  <span id="sunset" class="font-medium">—</span>
+		</div>
+	  </div>
+	</div>
+
+	  <!-- Temperature -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<!-- Current Temp - aligned to top -->
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Current Temp</p>
+			<p class="tile-value" id="outside-temp">—°C</p>
+		  </div>
+		  <i class="fa-solid fa-temperature-half text-2xl accent-sky"></i>
+		</div>
+
+		<!-- Fridge - on the line below (as original), but value to the right of the "Fridge" text (horizontal, not stacked) -->
+		<div class="flex-1 flex items-center">
+		  <div class="flex justify-between w-full items-center">
+			<p class="tile-label">Fridge</p>
+			<p class="tile-value" id="fridge-temp">—°C</p>
+		  </div>
+		</div>
+
+		<!-- Min/Max - aligned to bottom -->
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Min/Max</p>
+			<div class="flex items-center gap-3">
+			  <p class="tile-value text-lg" id="temp-range">—° / —°</p>
+			</div>
+		  </div>
+		  <i id="weather-icon" class="fa-solid fa-cloud text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- Water -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Water</p>
+			<p class="tile-value" id="water-level">—%</p>
+		  </div>
+		  <i class="fa-solid fa-droplet text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto">
+		  <div class="relative">
+			<div class="h-3 bg-zinc-800/80 rounded-full overflow-hidden border border-[var(--glass-border)]">
+				<div id="water-fill" class="progress-fill"></div>
+			</div>
+			<div class="flex justify-between text-[10px] mt-1 px-1 font-mono scale-label">
+			  <div>0</div><div>50</div><div>100</div>
+			</div>
+		  </div>
+		  <div id="water-extra" class="text-xs text-white/50 mt-3 text-center font-mono"></div>
+		</div>
+	  </div>
+
+<!-- ==================== SONOS TILE (compact, 2-col top of Environmental) -->
+<div id="sonos-tile" class="tile environmental-tile glass p-3 flex flex-col col-span-2 lg:col-span-2 sonos-tile min-h-[148px]">
+
+  <div class="flex flex-col h-full">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center flex-shrink-0">
+      <p id="sonos-speaker-name" class="tile-label text-xs truncate font-medium">—</p>
+      <i class="fa-solid fa-music text-lg accent-sky flex-shrink-0"></i>
+    </div>
+
+    <!-- Track + Artist -->
+    <div class="mt-1 flex-1 min-h-0 flex flex-col justify-center overflow-hidden">
+      <p id="sonos-track" class="tile-value line-clamp-1 !leading-snug">Nothing playing</p>
+      <p id="sonos-artist" class="text-xs truncate mt-0.5">—</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="mt-1.5">
+      <div class="flex justify-between mb-0.5 leading-none">
+        <span id="sonos-time-elapsed" class="tile-meta">0:00</span>
+        <span id="sonos-time-remaining" class="tile-meta">-0:00</span>
+      </div>
+      <div class="relative h-1 bg-white/10 rounded-full overflow-hidden cursor-pointer" id="sonos-progress-container">
+        <div id="sonos-progress-bar" 
+             class="absolute h-full transition-all duration-300"
+             style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Controls + Volume -->
+    <div class="flex items-center gap-x-2 mt-2">
+      <!-- Transport -->
+      <div class="flex items-center gap-0.5">
+        <button onclick="sonosCommand('previous')" 
+                class="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-all active:scale-95">
+          <i class="fa-solid fa-backward text-base"></i>
+        </button>
+        
+        <button id="sonos-playpause-btn"
+                onclick="sonosCommand('playpause')"
+                class="w-9 h-9 flex items-center justify-center bg-white text-black rounded-xl hover:scale-105 active:scale-95 transition-all shadow mx-0.5">
+          <i id="sonos-play-icon" class="fa-solid fa-play text-lg ml-0.5"></i>
+        </button>
+        
+        <button onclick="sonosCommand('next')" 
+                class="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-all active:scale-95">
+          <i class="fa-solid fa-forward text-base"></i>
+        </button>
+      </div>
+
+      <!-- Volume -->
+      <div class="flex items-center gap-1.5 flex-1 min-w-0 pl-1">
+        <button id="sonos-mute-btn" onclick="toggleSonosMute()" 
+                class="text-base w-5 flex-shrink-0 text-white/60 hover:text-white transition-colors">
+          <i id="sonos-mute-icon" class="fa-solid fa-volume-high"></i>
+        </button>
+        
+        <input type="range" id="sonos-volume-slider" 
+               min="0" max="100" value="0"
+               class="flex-1 cursor-pointer"
+               oninput="sonosVolumeChange(this.value)"
+               disabled>
+        
+        <div id="sonos-volume-value" class="w-7 text-right font-mono text-[10px] font-medium tabular-nums">—</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+	  <!-- Battery & Solar tile - gauge now has its own column that can stretch vertically -->
+	  <div class="tile environmental-tile glass p-2.5 flex flex-col h-full col-span-2 lg:col-span-2 min-h-[148px]" id="power-tile">
+		<!-- Very compact header -->
+		<div class="flex justify-between items-center flex-shrink-0 mb-1">
+		  <p class="tile-label text-xs">Battery &amp; Solar</p>
+		  <i class="fa-solid fa-bolt-lightning text-base accent-sky"></i>
+		</div>
+
+		<!-- Main stretchy area: left = gauge (full available height), right = data -->
+		<div class="flex-1 flex gap-2.5 min-h-0">
+		  
+		  <!-- Gauge column - can expand toward the bottom of the tile -->
+		  <div class="flex items-center" style="width: 92px;">
+			<div class="relative w-[92px] h-[92px] flex-shrink-0" id="soc-gauge-container">
+			  <svg id="soc-gauge" width="92" height="92" class="w-[92px] h-[92px] -rotate-90" viewBox="0 0 92 92">
+				<!-- Background ring -->
+				<circle cx="46" cy="46" r="39" fill="none"
+						stroke="rgba(255,255,255,0.12)" stroke-width="6.5"/>
+				<!-- Progress ring -->
+				<circle id="soc-progress" cx="46" cy="46" r="39" fill="none"
+						stroke="var(--accent-color)" stroke-width="6.5" stroke-linecap="round"
+						stroke-dasharray="245.0" stroke-dashoffset="245.0"/>
+			  </svg>
+			  <!-- Big centered percentage with substantially more padding from the ring -->
+			  <div class="absolute inset-[14px] flex items-center justify-center pointer-events-none">
+				<span id="soc-percent" class="text-[24px] font-semibold tabular-nums leading-none tracking-tighter">—%</span>
+			  </div>
+			</div>
+		  </div>
+
+		  <!-- Right column: metrics + Today pinned to its own bottom -->
+		  <div class="flex-1 flex flex-col min-w-0">
+			<!-- Metrics - matches style of Network tile small data -->
+			<div class="flex-1 flex flex-col gap-0.5 text-sm">
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">V</span>
+				<span id="bat-voltage" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">TTG</span>
+				<span id="bat-ttg" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">Used</span>
+				<span id="bat-consumed" class="font-semibold font-mono">—</span>
+			  </div>
+			  <div class="flex justify-between items-baseline">
+				<span class="opacity-60">Solar</span>
+				<span id="sol-current" class="font-semibold font-mono">—</span>
+			  </div>
+			</div>
+
+			<!-- Today + charge state - only under the right column (secondary style) -->
+			<div class="text-[10px] font-medium border-t border-white/10 pt-1 mt-auto flex items-baseline justify-between">
+			  <div>
+				<span class="opacity-60">Today</span>
+				<span id="sol-today" class="tabular-nums font-semibold font-mono">—</span>
+			  </div>
+			  <div id="charge-state" class="opacity-50 font-normal tabular-nums">—</div>
+			</div>
+		  </div>
+
+		</div>
+	  </div>
+
+	  <!-- Satellites / Location -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <div>
+			<p class="tile-label">Satellites</p>
+			<p class="tile-value" id="satellites">— / —</p>
+		  </div>
+		  <i class="fa-solid fa-satellite-dish text-2xl accent-sky"></i>
+		</div>
+		<div class="mt-auto flex justify-between items-start">
+		  <div>
+			<p class="tile-label">Location</p>
+			<p class="tile-value" id="location">---</p>
+		  </div>
+		  <i class="fa-solid fa-location-dot text-2xl accent-sky"></i>
+		</div>
+	  </div>
+
+	  <!-- APPEARANCE / QUICK SETTINGS -->
+	  <div id="appearance-tile" class="tile environmental-tile glass p-5 flex flex-col">
+		<div class="flex justify-between items-start flex-shrink-0 mb-2">
+		  <div>
+			<p class="tile-label">Appearance</p>
+		  </div>
+		  <a href="/diag" class="text-2xl accent-sky hover:text-[var(--accent-color)] transition-colors cursor-pointer p-1 -m-1 rounded-xl hover:bg-white/10">
+			<i class="fa-solid fa-palette"></i>
+		  </a>
+		</div>
+
+		<div class="space-y-1.5">
+		  <div class="flex gap-1.5">
+			<button onclick="setDarkMode('dark')" id="btn-dark" class="mode-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 !text-sm rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-moon mode-icon text-sm"></i>
+			  <span class="font-medium">Dark</span>
+			</button>
+			<button onclick="setDarkMode('light')" id="btn-light" class="mode-btn flex-1 flex items-center justify-center gap-1.5 py-1.5 !text-sm rounded-2xl cursor-pointer transition-all active:scale-[0.97]">
+			  <i class="fa-solid fa-sun mode-icon text-sm"></i>
+			  <span class="font-medium">Light</span>
+			</button>
+		  </div>
+
+		  <div class="pt-2">
+			<select id="quick-theme-select" onchange="changeTheme(this.value)" class="w-full bg-[var(--control-bg)] border border-[var(--glass-border)] rounded-2xl px-2.5 py-1.5 !text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-colors cursor-pointer">
+			</select>
+		  </div>
+		</div>
+	  </div>
+
+	  <!-- Network (2 columns) -->
+	  <div class="tile environmental-tile glass p-5 flex flex-col h-full col-span-2 lg:col-span-2" id="network-tile">
+		<div class="flex justify-between items-start flex-shrink-0">
+		  <p class="tile-label">Network</p>
+		  <i class="fa-solid fa-network-wired text-2xl accent-sky"></i>
+		</div>
+
+		<!-- Two-column body: Internet (left) | Internal components (right) -->
+		<div class="flex-1 flex gap-3 min-h-0 pt-1">
+		  <!-- LEFT: Internet status + interface + speed -->
+		  <div class="flex-1 flex flex-col gap-0.5 pr-2 border-r border-[var(--glass-border)]">
+			<div class="flex items-center gap-1.5">
+			  <i id="net-inet-icon" class="fa-solid fa-globe fa-fw w-4 text-emerald-400"></i>
+			  <span id="net-inet-status" class="tile-value font-medium leading-none text-emerald-400">—</span>
+			</div>
+			<div class="text-[10px] opacity-70 mt-0.5">
+			  Via <span id="net-iface" class="font-medium">—</span>
+			</div>
+
+			<!-- Signal Quality row (styled like RHS) -->
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Signal:</span>
+			  <span id="net-signal" class="font-mono tabular-nums">—</span>
+			</div>
+
+			<!-- Speeds + Ping on one line, ping right-aligned -->
+			<div class="mt-auto flex items-center justify-between text-[10px] font-mono tabular-nums">
+			  <div class="flex items-center gap-1.5 opacity-70">
+			    <span>↓<span id="net-rx">—</span></span>
+			    <span>↑<span id="net-tx">—</span></span>
+			    <span class="opacity-50 text-[9px]">KB/s</span>
+			    <span id="net-link-speed" class="opacity-60 ml-1">—</span>
+			  </div>
+			  <div class="text-right">
+			    <span class="opacity-60">Latency</span> 
+			    <span id="net-ping" class="opacity-50">—</span>
+			  </div>
+			</div>
+		  </div>
+
+		  <!-- RIGHT: Core system info (Iteration 2) -->
+		  <div class="flex-1 flex flex-col gap-0.5 pl-1 text-sm">
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Core Temp:</span>
+			  <span id="net-core-temp" class="font-mono tabular-nums">—°C</span>
+			</div>
+			<div class="flex justify-between items-baseline">
+			  <span class="opacity-60">Uptime:</span>
+			  <span id="net-uptime" class="font-medium">—</span>
+			</div>
+			<div class="flex justify-between items-baseline mt-auto">
+			  <span class="opacity-60">Clients:</span>
+			  <span id="net-dhcp-clients" class="font-mono tabular-nums">—</span>
+			</div>
+		  </div>
+		</div>
+	  </div>
+	  
+	</div>
+  </div>
+
+  <!-- ====================== SCENES ====================== -->
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">Scenes</h2>
+      <div class="section-line"></div>
+    </div>
+    <div id="scenes-grid" class="grid grid-cols-3 gap-4"></div>
+  </div>
+
+  <!-- ====================== LIGHTING ====================== -->
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">Lighting</h2>
+      <div class="section-line"></div>
+    </div>
+    <div id="lighting-controls" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+<script src="/static/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
+<!-- Foundational utilities (Phase 1 of professional refactor) -->
+<script src="{{ url_for('static', filename='js/dom-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/format-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/animation-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sun-curve.js') }}"></script>
+<!-- PCCS Frontend Application Script
+     Professional release build.
+
+     Current state:
+     - Demo/debug code removed
+     - Three small shared utilities added (dom-helpers, format-utils, animation-utils)
+     - CSS theme architecture improved
+
+     The large inline script has been reduced (sun-curve system extracted in this pass).
+     Further major extractions (lighting, tiles, etc.) are planned as post-release work.
+     See FRONTEND.md for the intended direction.
+-->
+<script>
+    'use strict';
+
+    const socket = io();
+    // Expose globally so extracted modules (theme-manager, future extractions) can use it
+    window.socket = socket;
+
+    // ====================== LIVE DARK/LIGHT MODE ======================
+	function updateFooterModeIcon(mode) {
+		const icon = document.getElementById('footer-mode-icon');
+		if (!icon) return;
+		
+		if (mode === 'light') {
+			icon.classList.remove('fa-moon');
+			icon.classList.add('fa-sun');
+		} else {
+			icon.classList.remove('fa-sun');
+			icon.classList.add('fa-moon');
+		}
+	}
+
+    function applyDarkMode(data) {
+        const mode = data.mode;
+        const isForced = data.forced === true;
+
+        const html = document.documentElement;
+        html.classList.remove('dark', 'light');
+        html.classList.add(mode);
+		
+		updateFooterModeIcon(mode);
+
+        const themeText = document.getElementById('diag-theme-text');
+        const icon = document.getElementById('mode-icon');
+
+        if (themeText && icon) {
+            if (mode === 'light') {
+                themeText.textContent = isForced ? 'Force Dark Mode' : 'Switch to Dark Mode';
+                icon.classList.remove('fa-moon');
+                icon.classList.add('fa-sun');
+            } else {
+                themeText.textContent = isForced ? 'Force Light Mode' : 'Switch to Light Mode';
+                icon.classList.remove('fa-sun');
+                icon.classList.add('fa-moon');
+            }
+        }
+    }
+	
+	// Request initial dark mode on page load
+    function requestInitialDarkMode() {
+        if (socket.connected) {
+            socket.emit('get_current_dark_mode');
+        } else {
+            setTimeout(requestInitialDarkMode, 300);
+        }
+    }
+
+	window.toggleGlobalDarkMode = function() {
+		const html = document.documentElement;
+		const isCurrentlyLight = html.classList.contains('light');
+		const newMode = isCurrentlyLight ? 'dark' : 'light';
+		socket.emit('set_global_dark_mode', { mode: newMode });
+	};
+
+    // Theme management is now in static/js/theme-manager.js
+    // (keeps the giant inline script smaller and improves caching/separation)
+
+    // ====================== VERSION FETCH ======================
+    async function loadVersion() {
+        try {
+            const res = await fetch('/api/version');
+            const data = await res.json();
+            const versionEl = document.getElementById('footer-version');
+            if (versionEl) {
+                versionEl.textContent = `v${data.version || '?.?.?'}`;
+            }
+        } catch (e) {
+            console.warn('Could not load version', e);
+            document.getElementById('footer-version').textContent = 'v?.?.?';
+        }
+    }
+	
+	// Detects the current number of columns the grid is actually using
+	function getCurrentColumns() {
+		const container = document.getElementById('lighting-controls');
+		if (!container) return 1;
+
+		const style = window.getComputedStyle(container);
+		const gridTemplate = style.gridTemplateColumns || style.getPropertyValue('grid-template-columns');
+
+		if (gridTemplate.includes('repeat(1') || gridTemplate.split(' ').length === 1) return 1;
+		if (gridTemplate.includes('repeat(2') || gridTemplate.split(' ').length === 2) return 2;
+		if (gridTemplate.includes('repeat(3') || gridTemplate.split(' ').length === 3) return 3;
+
+		const children = container.children.length;
+		if (children > 0) {
+			const firstChild = container.children[0];
+			const containerRect = container.getBoundingClientRect();
+			const childRect = firstChild.getBoundingClientRect();
+			
+			if (containerRect.width > 0) {
+				const approxCols = Math.round(containerRect.width / (childRect.width + 16)); // + gap
+				return Math.max(1, Math.min(3, approxCols));
+			}
+		}
+
+		return 1;
+	}
+
+    // ====================== CORE STATE ======================
+    let currentState = {};
+    let currentModes = {};
+    let currentReeds = {};
+    let lightsConfig = [];
+	let lastRenderConfigHash = '';
+	
+    const currentlyDragging = new Set();
+    const userJustSet = new Set();
+    const JUST_SET_DURATION = 2800;
+
+    // ==================== OFFLINE HANDLER ====================
+    let offlineTimeout = null;
+
+    function showOfflineBanner() {
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        offlineTimeout = setTimeout(() => {
+            const overlay = document.getElementById('offline-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.style.pointerEvents = 'auto';
+            }
+            const mainContent = document.querySelector('.flex-1');
+            if (mainContent) mainContent.style.pointerEvents = 'none';
+        }, 800);
+    }
+
+    function hideOfflineBanner() {
+        if (offlineTimeout) clearTimeout(offlineTimeout);
+        offlineTimeout = null;
+        const overlay = document.getElementById('offline-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        const mainContent = document.querySelector('.flex-1');
+        if (mainContent) mainContent.style.pointerEvents = 'auto';
+    }
+
+	// ==================== LIGHTING RENDERING ====================
+	function renderLightingControls() {
+		const container = document.getElementById('lighting-controls');
+		
+		const currentHash = JSON.stringify(lightsConfig.map(l => l.name + l.type));
+		if (currentHash === lastRenderConfigHash && lightsConfig.length > 0) {
+			updateUIFromState();
+			return;
+		}
+		
+		lastRenderConfigHash = currentHash;
+
+		container.innerHTML = '';
+
+		const columns = getCurrentColumns();
+		
+		let i = 0;
+		while (i < lightsConfig.length) {
+			const light = lightsConfig[i];
+
+			const canPair = light.type === 'relay' &&
+							i + 1 < lightsConfig.length &&
+							lightsConfig[i + 1].type === 'relay';
+
+			let shouldPair = canPair;
+
+			if (canPair) {
+				if (columns === 1) {
+					shouldPair = false;
+				} else if (columns === 2) {
+					const isLastPair = (i + 2 === lightsConfig.length);
+					shouldPair = !isLastPair;
+				}
+			}
+
+			if (shouldPair) {
+				const relay1 = light;
+				const relay2 = lightsConfig[i + 1];
+
+				const html = `
+					<div class="slider-card glass paired-relay-card">
+						<div class="paired-relay-inner">
+							<!-- First relay -->
+							<div class="paired-relay-row">
+								<div class="slider-card-left">
+									<div class="slider-card-title">
+										<i class="fa-solid ${relay1.icon}"></i>
+										<span class="slider-label">${relay1.label}</span>
+									</div>
+								</div>
+								<div class="slider-card-right">
+									<div class="value-display" id="val-${relay1.name}">${(currentState[relay1.name] ? 'On' : 'Off')}</div>
+									<div class="relay-toggle ${currentState[relay1.name] ? 'on' : ''}" 
+										 data-name="${relay1.name}" 
+										 data-state="${currentState[relay1.name] ? 'on' : 'off'}">
+										<div class="relay-knob"></div>
+									</div>
+								</div>
+							</div>
+
+							<div class="paired-relay-divider"></div>
+
+							<!-- Second relay -->
+							<div class="paired-relay-row">
+								<div class="slider-card-left">
+									<div class="slider-card-title">
+										<i class="fa-solid ${relay2.icon}"></i>
+										<span class="slider-label">${relay2.label}</span>
+									</div>
+								</div>
+								<div class="slider-card-right">
+									<div class="value-display" id="val-${relay2.name}">${(currentState[relay2.name] ? 'On' : 'Off')}</div>
+									<div class="relay-toggle ${currentState[relay2.name] ? 'on' : ''}" 
+										 data-name="${relay2.name}" 
+										 data-state="${currentState[relay2.name] ? 'on' : 'off'}">
+										<div class="relay-knob"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>`;
+
+				container.innerHTML += html;
+				i += 2;
+				continue;
+			}
+
+			const isRelay = light.type === 'relay';
+			const currentVal = currentState[light.name] || 0;
+			const isOn = isRelay ? !!currentVal : false;
+
+			let html = `
+				<div class="slider-card glass">
+					<div class="slider-card-header">
+						<div class="slider-card-left">
+							<div class="slider-card-title">
+								<i class="fa-solid ${light.icon}"></i>
+								<span class="slider-label">${light.label}</span>
+							</div>
+						</div>
+						<div class="slider-card-right">
+							<div class="value-display" id="val-${light.name}">
+								${isRelay ? (isOn ? 'On' : 'Off') : '0%'}
+							</div>`;
+
+			if (isRelay) {
+				html += `
+							<div class="relay-toggle ${isOn ? 'on' : ''}" 
+								 data-name="${light.name}" 
+								 data-state="${isOn ? 'on' : 'off'}">
+								<div class="relay-knob"></div>
+							</div>`;
+			} else {
+				const extraClass = light.has_mode ? 'colour-toggle' : '';
+				html += `
+							<div class="toggle-pill ${extraClass}" data-name="${light.name}" data-state="off">
+								<div class="toggle-knob"></div>
+							</div>`;
+			}
+
+			html += `</div></div>`;
+
+			if (!isRelay) {
+				html += `
+					<div class="slider-wrapper" data-name="${light.name}" data-value="0" data-last-brightness="100">
+						<div class="slider-inner">
+							<div class="slider-track"></div>
+							<div class="slider-fill" style="width: 0%"></div>
+							<div class="slider-thumb" style="left: 0%"></div>
+						</div>
+					</div>`;
+			}
+
+			html += `</div>`;
+			container.innerHTML += html;
+			i++;
+		}
+
+		initUnifiedToggleListeners();
+		initSliders();
+
+		setTimeout(updateUIFromState, 100);
+	}
+
+	function toggleControl(el) {
+		const name = el.dataset.name;
+		const light = lightsConfig.find(l => l.name === name);
+		if (!light) return;
+
+		// Safety: rooftop tent reed closed → block all user interaction on frontend
+		if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+			return;
+		}
+
+		userJustSet.add(name);
+		setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+
+		if (light.type === 'relay') {
+			const isCurrentlyOn = el.dataset.state === 'on';
+			const newState = !isCurrentlyOn;
+
+			updateLightUI(name, newState ? 1 : 0);
+			socket.emit('relay_change', { name: name, on: newState });
+			
+			setTimeout(() => updateLightUI(name, newState ? 1 : 0), 50);
+			return;
+		}
+
+		if (light.has_mode) {
+			const currentMode = currentModes[name] || 'white';
+			const newMode = currentMode === 'white' ? 'red' : 'white';
+			currentModes[name] = newMode;
+
+			const currentBrightness = currentState[name] || 0;
+			
+			socket.emit('light_change', { 
+				name, 
+				brightness: currentBrightness, 
+				mode: newMode 
+			});
+			
+			setTimeout(() => updateLightUI(name, currentBrightness), 10);
+			return;
+		}
+
+		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+		const currentBrightness = wrapper ? parseInt(wrapper.dataset.value) || 0 : 0;
+		const isOn = el.dataset.state === 'on';
+		const newBrightness = isOn ? 0 : (parseInt(wrapper?.dataset.lastBrightness) || 100);
+
+		updateLightUI(name, newBrightness);
+		currentState[name] = newBrightness;  // keep model in sync with just-set value
+		socket.emit('light_change', { name, brightness: newBrightness });
+	}
+
+	function initUnifiedToggleListeners() {
+		const container = document.getElementById('lighting-controls');
+		
+		container.removeEventListener('click', handleLightingClick);
+		
+		function handleLightingClick(e) {
+			const toggle = e.target.closest('.relay-toggle, .toggle-pill');
+			if (!toggle) return;
+			
+			if (toggle.dataset.justClicked === 'true') return;
+			toggle.dataset.justClicked = 'true';
+			setTimeout(() => delete toggle.dataset.justClicked, 350);
+			
+			toggleControl(toggle);
+		}
+		
+		container.addEventListener('click', handleLightingClick);
+	}
+
+	function updateLightUI(name, value) {
+		const light = lightsConfig.find(l => l.name === name);
+		if (!light) return;
+
+		const toggles = document.querySelectorAll(`[data-name="${name}"]`);
+		const valueEl = document.getElementById(`val-${name}`);
+
+		if (light.type === 'relay') {
+			const isOn = !!value;
+
+			toggles.forEach(toggle => {
+				toggle.classList.toggle('on', isOn);
+				toggle.dataset.state = isOn ? 'on' : 'off';
+			});
+
+			if (valueEl) {
+				valueEl.textContent = isOn ? 'On' : 'Off';
+			}
+			return;
+		}
+
+		// ====================== DIMMERS / BUG MODE ======================
+		// When the rooftop tent reed is physically closed, the dedicated
+		// updateRooftopTentControls() already forces the UI to 0%.
+		// We still allow normal state syncs here (they're harmless).
+		const wrapper = document.querySelector(`.slider-wrapper[data-name="${name}"]`);
+		const fill = wrapper ? wrapper.querySelector('.slider-fill') : null;
+		const thumb = wrapper ? wrapper.querySelector('.slider-thumb') : null;
+		const brightness = Math.max(0, Math.min(100, value || 0));
+
+		if (wrapper) {
+			wrapper.dataset.value = brightness;
+			if (brightness > 0) wrapper.dataset.lastBrightness = brightness;
+
+			if (fill) fill.style.width = `${brightness}%`;
+			if (thumb) thumb.style.left = `${brightness}%`;
+			if (valueEl) valueEl.textContent = `${brightness}%`;
+		}
+
+		let isBugMode = false;
+		if (light.has_mode) {
+			isBugMode = (currentModes[name] || 'white') === 'red';
+		}
+
+		// Toggle pill
+		toggles.forEach(toggle => {
+			const shouldBeOn = light.has_mode ? isBugMode : (brightness > 0);
+			
+			toggle.classList.toggle('on', shouldBeOn);
+			toggle.classList.toggle('bug-mode', isBugMode);
+			toggle.dataset.state = shouldBeOn ? 'on' : 'off';
+
+			const card = toggle.closest('.slider-card');
+			if (card) card.classList.toggle('bug-mode', isBugMode);
+		});
+
+		// Slider visuals
+		if (wrapper) {
+			const card = wrapper.closest('.slider-card');
+			wrapper.classList.toggle('bug-mode', isBugMode);
+			if (fill) fill.classList.toggle('bug-mode', isBugMode);
+			if (thumb) thumb.classList.toggle('bug-mode', isBugMode);
+			if (card) card.classList.toggle('bug-mode', isBugMode);
+		}
+	}
+
+	// ==================== UPDATE UI FROM STATE ====================
+	function updateUIFromState() {
+		lightsConfig.forEach(light => {
+			if (currentlyDragging.has(light.name) || userJustSet.has(light.name)) {
+				return;
+			}
+
+			const val = currentState[light.name];
+			if (val === undefined) return;
+
+			// Always pass boolean for relays
+			updateLightUI(light.name, light.type === 'relay' ? !!val : (val || 0));
+		});
+
+		updateRooftopTentControls();
+	}
+
+    // ==================== DRAG LOGIC ====================
+	function makeDraggable(wrapper) {
+		const inner = wrapper.querySelector('.slider-inner');
+		const fill = wrapper.querySelector('.slider-fill');
+		const thumb = wrapper.querySelector('.slider-thumb');
+		const name = wrapper.dataset.name;
+		const valueEl = document.getElementById(`val-${name}`);
+
+		let isDragging = false;
+		let startX = 0;
+		let startY = 0;
+
+		function updatePosition(clientX) {
+			const rect = inner.getBoundingClientRect();
+			let percent = Math.max(0, Math.min(100, 
+				Math.round(((clientX - rect.left) / rect.width) * 100)
+			));
+
+			wrapper.dataset.value = percent;
+			if (fill) fill.style.width = `${percent}%`;
+			if (thumb) thumb.style.left = `${percent}%`;
+			if (valueEl) valueEl.textContent = `${percent}%`;
+
+			// NOTE: We intentionally do *not* emit during drag.
+			// Only local visual update here (instant, no transition).
+			// The final committed value is emitted exactly once in endDrag.
+			// This prevents the "chunked ramps" problem where every intermediate
+			// drag position starts its own 1000ms ramp, making the total change
+			// take much longer than the configured UI ramp time.
+		}
+
+		function startDrag() {
+			if (isDragging) return;
+			isDragging = true;
+			wrapper.classList.add('dragging');
+			currentlyDragging.add(name);
+			userJustSet.delete(name);
+
+			// (no live emit during drag anymore; final value only on endDrag)
+
+			if (fill) fill.style.transition = 'none';
+			if (thumb) thumb.style.transition = 'none';
+		}
+
+		function endDrag() {
+			if (!isDragging) return;
+			isDragging = false;
+			wrapper.classList.remove('dragging');
+			currentlyDragging.delete(name);
+
+			const final = parseInt(wrapper.dataset.value) || 0;
+			updateLightUI(name, final);
+			currentState[name] = final;  // keep the model in sync with the just-set value
+
+			// Always emit the exact final value on release. This guarantees the
+			// user-chosen level is commanded even if the last throttled move didn't
+			// trigger an emit (prevents "stuck at previous" and ensures prompt response).
+			const light = lightsConfig.find(l => l.name === name);
+			const payload = { name, brightness: final };
+			if (light?.has_mode && currentModes[name]) {
+				payload.mode = currentModes[name];
+			}
+			socket.emit('light_change', payload);
+
+			userJustSet.add(name);
+			setTimeout(() => userJustSet.delete(name), JUST_SET_DURATION);
+		}
+
+		wrapper.addEventListener('touchstart', e => {
+			if (e.touches.length === 0) return;
+			const touch = e.touches[0];
+			startX = touch.clientX;
+			startY = touch.clientY;
+			isDragging = false;
+		}, { passive: true });
+
+		wrapper.addEventListener('touchmove', e => {
+			if (e.touches.length === 0) return;
+			const touch = e.touches[0];
+
+			// Safety interlock for rooftop tent (physical reed closed)
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+				return;
+			}
+
+			const deltaX = Math.abs(touch.clientX - startX);
+			const deltaY = Math.abs(touch.clientY - startY);
+
+			if (!isDragging) {
+				if (deltaX > 12 && deltaX > deltaY * 1.5) {
+					e.preventDefault();
+					startDrag();
+				} else if (deltaY > 10) {
+					return;
+				}
+			}
+
+			if (isDragging) {
+				e.preventDefault();
+				updatePosition(touch.clientX);
+			}
+		}, { passive: false });
+
+		wrapper.addEventListener('touchend', endDrag, { passive: true });
+		wrapper.addEventListener('touchcancel', endDrag, { passive: true });
+
+		wrapper.addEventListener('mousedown', e => {
+			if (name === 'rooftop_tent' && isRooftopTentPhysicallyClosed()) {
+				return; // safety interlock - physical reed closed
+			}
+			startX = e.clientX;
+			startDrag();
+			updatePosition(e.clientX);
+
+			const onMove = ev => updatePosition(ev.clientX);
+			const onUp = () => {
+				document.removeEventListener('mousemove', onMove);
+				endDrag();
+			};
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp, { once: true });
+		});
+	}
+
+    function initSliders() {
+        document.querySelectorAll('.slider-wrapper').forEach(makeDraggable);
+    }
+
+    // ==================== ROOFTOP TENT ====================
+    function updateRooftopTentControls() {
+        const tentCard = document.querySelector('.slider-wrapper[data-name="rooftop_tent"]')?.closest('.slider-card');
+        if (!tentCard) return;
+        
+        const isClosed = currentReeds.rooftop_tent !== false;
+        
+        if (isClosed) {
+            tentCard.classList.add('rooftop-disabled');
+            updateLightUI('rooftop_tent', 0);
+        } else {
+            tentCard.classList.remove('rooftop-disabled');
+        }
+    }
+
+    function isRooftopTentPhysicallyClosed() {
+        return currentReeds.rooftop_tent !== false;
+    }
+
+    // ==================== GPS, SENSORS, WEATHER ====================
+    let hasValidGPSFix = false;
+    let gpsStatusReceived = false;
+
+	function updateGPS(data) { 
+		if (!data) return;
+
+		gpsStatusReceived = true;
+		const fixQuality = parseInt(data.fix_quality || 0);
+		hasValidGPSFix = fixQuality >= 1;
+
+		// Keep these unchanged
+		if (data.satellites !== undefined) {
+			document.getElementById('satellites').textContent = `${data.satellites || 0} / ${fixQuality}`;
+		}
+
+		const locationEl = document.getElementById('location');
+		if (locationEl) {
+			const suburb = (data.suburb || "").trim();
+			locationEl.textContent = suburb || (hasValidGPSFix ? "Acquiring position..." : "No GPS Fix");
+		}
+
+		// NEW: Use combined function
+		updateTimeAndSun(data);
+
+		// Curve module manages its own readiness
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updateCurveGeometry();
+		}
+
+		// Keep weather logic
+		if (hasValidGPSFix && data.latitude && data.longitude) {
+			const now = Date.now();
+			if (now - lastWeatherUpdate > WEATHER_INTERVAL_MS) {
+				lastWeatherUpdate = now;
+				fetchWeatherForecast(data.latitude, data.longitude);
+			}
+		}
+
+		// Keep styling
+		document.getElementById('tile-date').classList.toggle('text-amber-400', !hasValidGPSFix);
+		document.getElementById('tile-time').classList.toggle('text-amber-400', !hasValidGPSFix);
+	}
+
+    function stripLeadingZero(timeStr) {
+        return timeStr ? timeStr.replace(/^0(\d):/, '$1:') : "";
+    }
+
+	let lastWeatherUpdate = 0;
+    const WEATHER_INTERVAL_MS = 3600 * 1000;
+
+	function updateClock() {
+		// Only show local browser time + * when the backend has explicitly confirmed no GPS fix.
+		// Before we hear from the backend, or when it reports a valid fix, do not show the warning asterisk.
+		if (gpsStatusReceived && hasValidGPSFix) return;
+
+		const now = new Date();
+		const dayName = now.toLocaleDateString('en-AU', { weekday: 'short' });
+		const day = now.getDate();
+		const month = now.toLocaleDateString('en-AU', { month: 'short' });
+		
+		const showWarning = gpsStatusReceived && !hasValidGPSFix;
+		const dateSuffix = showWarning ? ' *' : '';
+		const timeSuffix = showWarning ? ' *' : '';
+		
+		document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}${dateSuffix}`;
+		
+		let hours = now.getHours();
+		let minutes = now.getMinutes().toString().padStart(2, '0');
+		const ampm = hours >= 12 ? 'PM' : 'AM';
+		hours = hours % 12 || 12;
+		
+		document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}${timeSuffix}`;
+	}
+
+	function updateSensors(data) {
+		if (!data) return;
+
+		// ==================== WATER GAUGE ====================
+		if (data.water_percent !== undefined) {
+			const percent = Math.max(0, Math.min(100, Math.round(data.water_percent)));
+			
+			const levelEl = document.getElementById('water-level');
+			if (levelEl) levelEl.textContent = `${percent}%`;
+
+			const fill = document.getElementById('water-fill');
+			if (fill) {
+				const currentWidth = parseFloat(fill.style.width) || 0;
+
+				// Only reset + animate if value actually changed significantly
+				if (Math.abs(currentWidth - percent) > 1) {
+					fill.style.transition = 'none';
+					fill.style.width = `${currentWidth}%`;   // keep current visual
+					void fill.offsetWidth;                   // force reflow
+
+					fill.style.transition = 'width 700ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+				} else {
+					// Small changes → smooth transition only
+					fill.style.transition = 'width 400ms ease-out';
+				}
+
+				fill.style.width = `${percent}%`;
+
+				if (percent < 25) {
+					fill.classList.add('low');
+				} else {
+					fill.classList.remove('low');
+				}
+			}
+
+			const extraEl = document.getElementById('water-extra');
+			if (extraEl && data.water_litres !== undefined) {
+				extraEl.textContent = `Fresh: ${Math.round(data.water_litres)} L`;
+			}
+		}
+
+		// ==================== TEMPERATURE ====================
+		if (data.temp_c !== undefined && data.temp_c !== null) {
+			const tempEl = document.getElementById('outside-temp');
+			if (tempEl) {
+				tempEl.textContent = `${Math.round(data.temp_c)}°C`;
+			}
+		}
+
+		if (data.fridge_temp_c !== undefined && data.fridge_temp_c !== null) {
+			const fridgeEl = document.getElementById('fridge-temp');
+			if (fridgeEl) {
+				fridgeEl.textContent = `${Math.round(data.fridge_temp_c)}°C`;
+			}
+		} else {
+			const fridgeEl = document.getElementById('fridge-temp');
+			if (fridgeEl) {
+				fridgeEl.textContent = '—°C';
+			}
+		}
+	}
+	
+	// ====================== COMBINED TIME & SUN ======================
+	function updateTimeAndSun(data) {
+		if (!data) return;
+
+		// Date
+		if (data.date) {
+			let dayName = '', day = '', month = '';
+			const dateStr = data.date.trim();
+
+			// Try robust manual parse for known backend formats first
+			// Format 1: "Monday, 12 May 2025"
+			let m = dateStr.match(/^([A-Za-z]+),\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+			if (m) {
+				dayName = m[1].slice(0, 3);
+				day = m[2];
+				month = m[3].slice(0, 3);
+			} else {
+				// Format 2: "2025-05-12" or let Date try
+				const dateObj = new Date(dateStr);
+				if (!isNaN(dateObj.getTime())) {
+					dayName = dateObj.toLocaleDateString('en-AU', { weekday: 'short' });
+					day = dateObj.getDate();
+					month = dateObj.toLocaleDateString('en-AU', { month: 'short' });
+				}
+			}
+			if (dayName && day && month) {
+				document.getElementById('tile-date').textContent = `${dayName} ${day} ${month}`;
+			}
+		}
+
+		// Time
+		if (data.local_time) {
+			const mins = parseTimeToMinutes(data.local_time);
+			if (mins != null) {
+				let hours = Math.floor(mins / 60);
+				const minutes = (mins % 60).toString().padStart(2, '0');
+				const ampm = hours >= 12 ? 'PM' : 'AM';
+				hours = hours % 12 || 12;
+				document.getElementById('tile-time').textContent = `${hours}:${minutes} ${ampm}`;
+			}
+		}
+
+		// Sunrise / Sunset (raw astronomical times - bottom labels)
+		if (data.sunrise) {
+			const sunriseTime = stripLeadingZero(data.sunrise);
+			const sunriseEl = document.getElementById('sunrise');
+			if (sunriseEl) sunriseEl.textContent = sunriseTime;
+		}
+		if (data.sunset) {
+			const sunsetTime = stripLeadingZero(data.sunset);
+			const sunsetEl = document.getElementById('sunset');
+			if (sunsetEl) sunsetEl.textContent = sunsetTime;
+		}
+
+		// Curve logic now lives in sun-curve.js
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updateCurveGeometry();
+			window.PCCS.sunCurve.animateSunPosition(data.sunrise, data.sunset, data.local_time);
+		}
+	}
+
+	// Phase + curve logic now lives in static/js/sun-curve.js
+	function updatePhaseInfo(data) {
+		if (window.PCCS && window.PCCS.sunCurve) {
+			window.PCCS.sunCurve.updatePhaseInfo(data);
+		}
+	}
+
+	// ==================== NETWORK TILE (Iteration 2) ====================
+	function updateNetworkTile(data) {
+		if (!data) return;
+		const inet = (data.internet || {});
+		const right = (data.right || {});
+
+		// LEFT half (internet)
+		const statusEl = document.getElementById('net-inet-status');
+		const iconEl = document.getElementById('net-inet-icon');
+		const ifaceEl = document.getElementById('net-iface');
+		const rxEl = document.getElementById('net-rx');
+		const txEl = document.getElementById('net-tx');
+		const linkEl = document.getElementById('net-link-speed');
+		const pingEl = document.getElementById('net-ping');
+		const signalEl = document.getElementById('net-signal');
+
+		const connected = !!inet.connected;
+		const statusText = connected ? 'Online' : 'Offline';
+		const statusColor = connected ? 'text-emerald-400' : 'text-red-400';
+		const icon = connected ? 'fa-globe' : 'fa-exclamation-triangle';
+
+		if (statusEl) {
+			statusEl.textContent = statusText;
+			statusEl.className = `tile-value font-medium leading-none ${statusColor}`;
+		}
+		if (iconEl) {
+			iconEl.className = `fa-solid ${icon} fa-fw w-4 ${statusColor}`;
+		}
+		if (ifaceEl) {
+			ifaceEl.textContent = inet.friendly_name || '—';
+		}
+		if (signalEl) {
+			// Show whatever quality info the backend provides (e.g. "87%" or "Excellent" or "—")
+			signalEl.textContent = inet.signal_quality || '—';
+		}
+		if (rxEl) rxEl.textContent = (inet.rx_kbps != null) ? `${inet.rx_kbps}` : '—';
+		if (txEl) txEl.textContent = (inet.tx_kbps != null) ? `${inet.tx_kbps}` : '—';
+		if (linkEl) {
+			linkEl.textContent = inet.link_speed_mbps ? `${inet.link_speed_mbps}M` : '';
+		}
+
+		// Ping (left side, right-aligned in the speed row)
+		if (pingEl) {
+			const ms = inet.ping_ms;
+			const pstatus = inet.ping_status || 'unknown';
+
+			let colorClass = 'opacity-60';
+			if (pstatus === 'good') colorClass = 'text-emerald-400';
+			else if (pstatus === 'slow') colorClass = 'text-amber-400';
+			else if (pstatus === 'fail') colorClass = 'text-red-400';
+
+			if (ms != null && ms !== undefined) {
+				pingEl.innerHTML = `<span class="${colorClass}">${ms}ms</span>`;
+			} else {
+				pingEl.innerHTML = `<span class="opacity-50">—</span>`;
+			}
+		}
+
+		// RIGHT half (new Iteration 2 layout)
+		const tempEl = document.getElementById('net-core-temp');
+		const uptimeEl = document.getElementById('net-uptime');
+		const clientsEl = document.getElementById('net-dhcp-clients');
+
+		if (tempEl) {
+			const t = right.core_temp_c;
+			tempEl.textContent = (t != null) ? `${t}°C` : '—°C';
+		}
+		if (uptimeEl) {
+			uptimeEl.textContent = right.uptime || '—';
+		}
+		if (clientsEl) {
+			const c = right.dhcp_clients;
+			clientsEl.textContent = (c != null) ? c : '—';
+		}
+	}
+
+	// parseTimeToMinutes moved to format-utils.js (with fallback inside sun-curve.js)
+
+	// updatePhaseCurveLabels now lives inside sun-curve.js
+
+	// All sun/moon curve logic (geometry, animation, phase labels) has been extracted
+	// to static/js/sun-curve.js as part of the professional refactor.
+	// Old monolithic implementation removed. See PCCS.sunCurve.* for the current code.
+	
+    async function fetchWeatherForecast(lat, lon) {
+        try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&current_weather=true&timezone=auto`;
+            const res = await fetch(url, { cache: 'no-store' });
+            const data = await res.json();
+
+            if (data.daily) {
+                const max = Math.round(data.daily.temperature_2m_max[0]);
+                const min = Math.round(data.daily.temperature_2m_min[0]);
+                document.getElementById('temp-range').textContent = `${min}° / ${max}°`;
+            }
+
+            const weatherIcon = document.getElementById('weather-icon');
+            if (data.current_weather && weatherIcon) {
+                const code = data.current_weather.weathercode;
+                const isDay = data.current_weather.is_day === 1;
+                weatherIcon.className = `fa-solid ${getWeatherIcon(code, isDay)} text-2xl accent-sky`;
+            }
+        } catch (e) {
+            console.warn('Weather fetch failed:', e);
+        }
+    }
+
+    function getWeatherIcon(code, isDay) {
+        const icons = {
+            0: isDay ? 'fa-sun' : 'fa-moon',
+            1: isDay ? 'fa-sun' : 'fa-moon',
+            2: 'fa-cloud', 3: 'fa-cloud',
+            45: 'fa-smog', 48: 'fa-smog',
+            51: 'fa-cloud-rain', 53: 'fa-cloud-rain', 55: 'fa-cloud-rain',
+            61: 'fa-cloud-showers-heavy', 63: 'fa-cloud-showers-heavy', 65: 'fa-cloud-showers-heavy',
+            71: 'fa-snowflake', 73: 'fa-snowflake', 75: 'fa-snowflake',
+            80: 'fa-cloud-showers-heavy', 81: 'fa-cloud-showers-heavy', 82: 'fa-cloud-showers-heavy',
+            95: 'fa-bolt', 96: 'fa-bolt', 99: 'fa-bolt'
+        };
+        return icons[code] || 'fa-cloud';
+    }
+
+    // ==================== SCENES ====================
+    function setScene(scene) {
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.scene === scene);
+        });
+
+        setTimeout(() => {
+            document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+        }, 750);
+
+        socket.emit('set_scene', { scene });
+    }
+
+    // ==================== SOCKET LISTENERS ====================
+	socket.on('lights_config', (config) => {
+		lightsConfig = config || [];
+		renderLightingControls();
+		// Belt-and-suspenders: ensure we have the latest reed states (for
+		// rooftop tent interlock etc.) right after the lighting DOM exists.
+		socket.emit('get_reeds');
+		if (Object.keys(currentState).length > 0) updateUIFromState();
+	});
+
+    socket.on('state_update', (newState) => {
+        // Protect lights that the user just manually set (via drag or toggle) from being
+        // overwritten by server state pushes (e.g. from other connects, background sync,
+        // or in-flight previous ramps). This prevents the "optimistic set, then reset to old,
+        // then slow ramp" behavior.
+        const protectedLights = new Set([...currentlyDragging, ...userJustSet]);
+        Object.keys(newState).forEach(k => {
+            if (!protectedLights.has(k)) {
+                currentState[k] = newState[k];
+            }
+        });
+
+        lightsConfig.forEach(light => {
+            if (light.has_mode && newState[`${light.name}_mode`]) {
+                currentModes[light.name] = newState[`${light.name}_mode`];
+            }
+        });
+
+        updateUIFromState();
+    });
+
+    socket.on('reed_update', (payload) => {
+        currentReeds = payload.states || {};
+        updateRooftopTentControls();
+    });
+
+    socket.on('sensor_update', updateSensors);
+    socket.on('gps_update', updateGPS);
+    socket.on('phase_update', updatePhaseInfo);
+    socket.on('network_update', updateNetworkTile);
+    socket.on('victron_update', updatePowerTile);
+	
+    // ====================== DARK MODE ======================
+    socket.on('global_dark_mode_update', function(data) {
+        applyDarkMode(data);
+    });
+	
+	socket.emit('get_current_dark_mode');
+
+    // ==================== SOCKET CONNECTION ====================
+	socket.on('connect', () => {
+		hideOfflineBanner();
+		registerThemeListener();
+		loadCurrentTheme();
+		loadQuickThemes();
+		loadScenes();
+		loadVersion();
+		requestSonosState();
+		// Network tile (internet + component health)
+		socket.emit('get_network_status');
+		socket.emit('get_victron_state');
+		socket.emit('get_reeds');
+		// Fallback REST fetch in case socket timing is odd on first load
+		setTimeout(() => {
+			fetch('/api/network_status').then(r => r.json()).then(updateNetworkTile).catch(() => {});
+		}, 1200);
+		// Curve module self-initializes; this is a light nudge
+		setTimeout(() => {
+			if (window.PCCS && window.PCCS.sunCurve) window.PCCS.sunCurve.updateCurveGeometry();
+		}, 50);
+	});
+
+	// Sun curve module handles its own early geometry + resize listeners.
+	// We just trigger init after the module has loaded.
+	if (window.PCCS && window.PCCS.sunCurve && typeof window.PCCS.sunCurve.init === 'function') {
+		window.PCCS.sunCurve.init();
+	}
+
+    socket.on('disconnect', () => showOfflineBanner());
+    socket.on('connect_error', () => showOfflineBanner());
+
+	// ==================== DYNAMIC SCENES ====================
+	let currentScenes = [];
+
+	async function loadScenes() {
+		try {
+			const res = await fetch('/api/scenes');
+			const data = await res.json();
+			currentScenes = data.scenes || [];
+			renderScenes();
+		} catch (e) {
+			console.error('Failed to load scenes', e);
+		}
+	}
+
+	// ==================== SCENES ====================
+	function renderScenes() {
+		const container = document.getElementById('scenes-grid');
+		if (!container) return;
+
+		container.innerHTML = '';
+
+		currentScenes.forEach(scene => {
+			const btn = document.createElement('button');
+			btn.className = `scene-btn flex flex-col items-center justify-center py-6 rounded-2xl transition-all active:scale-95 ${scene.all_off ? 'all-off-btn' : ''}`;
+			btn.dataset.scene = scene.key;
+
+			if (scene.description) {
+				btn.title = scene.description;
+			}
+
+			btn.innerHTML = `
+				<i class="fa-solid ${scene.icon} text-2xl mb-3"></i>
+				<span class="font-medium text-sm tracking-wide">${scene.name}</span>
+			`;
+
+			btn.addEventListener('click', () => setScene(scene.key));
+			container.appendChild(btn);
+		});
+
+		fixLastRowStretching(container);
+	}
+
+function fixLastRowStretching(container) {
+    const total = currentScenes.length;
+    if (total <= 3) return;
+
+    const remainder = total % 3;
+    if (remainder === 0) return;
+
+    const buttons = Array.from(container.children);
+    const lastRowStart = total - remainder;
+
+    // Remove any previous last-row wrappers
+    container.querySelectorAll('.last-row').forEach(el => {
+        const kids = Array.from(el.children);
+        kids.forEach(kid => container.appendChild(kid));
+        el.remove();
+    });
+
+    if (remainder === 1) {
+        // Single button → full width
+        buttons[lastRowStart].style.gridColumn = '1 / -1';
+    } 
+    else if (remainder === 2) {
+        // Two buttons → wrap in flex container for perfect equal width
+        const btn1 = buttons[lastRowStart];
+        const btn2 = buttons[lastRowStart + 1];
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'last-row';
+        wrapper.style.gridColumn = '1 / -1';   // take full row
+
+        wrapper.appendChild(btn1);
+        wrapper.appendChild(btn2);
+
+        container.appendChild(wrapper);
+    }
+}
+
+	window.setScene = function(sceneKey) {
+		document.querySelectorAll('.scene-btn').forEach(btn => {
+			btn.classList.toggle('active', btn.dataset.scene === sceneKey);
+		});
+
+		setTimeout(() => {
+			document.querySelectorAll('.scene-btn').forEach(btn => btn.classList.remove('active'));
+		}, 750);
+
+		socket.emit('set_scene', { scene: sceneKey });
+	};
+
+    // ==================== INIT ====================
+    window.onload = function() {
+		updateClock();
+        setInterval(updateClock, 10000);
+
+        registerThemeListener();
+        loadCurrentTheme();
+        loadVersion();
+		
+		startProgressUpdater();
+
+        document.querySelectorAll('.scene-btn').forEach(btn => {
+            btn.addEventListener('click', () => setScene(btn.dataset.scene));
+        });
+
+        // ====================== RESIZE HANDLER FOR RELAY LAYOUT ======================
+        let lastColumnCount = getCurrentColumns();
+
+		function handleResizeForLighting() {
+			const newCols = getCurrentColumns();
+			if (newCols !== lastColumnCount && lightsConfig.length > 0) {
+				lastColumnCount = newCols;
+				renderLightingControls();
+			}
+		}
+
+        window.addEventListener('resize', handleResizeForLighting);
+
+        setTimeout(() => {
+            lastColumnCount = getCurrentColumns();
+        }, 300);
+        
+    };
+	
+	function setDarkMode(mode) {
+		socket.emit('set_global_dark_mode', { mode });
+	}
+
+	function updateActiveModeButton(mode) {
+		document.getElementById('btn-dark').classList.toggle('active', mode === 'dark');
+		document.getElementById('btn-light').classList.toggle('active', mode === 'light');
+	}
+
+	// Socket listeners
+	socket.on('global_dark_mode_update', data => updateActiveModeButton(data.mode));
+
+	// Theme select sync is also handled by theme-manager.js; this is a lightweight backup
+	socket.on('global_theme_update', data => {
+		const select = document.getElementById('quick-theme-select');
+		if (select && data.theme) select.value = data.theme;
+	});
+	
+    // ====================== TOAST SYSTEM ======================
+    function createToast(data) {
+        const { id, message, type = "info", duration = 5000, title, persistent = false } = data || {};
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        let icon = 'fa-info-circle';
+        if (type === 'success') icon = 'fa-check-circle';
+        else if (type === 'warning') icon = 'fa-exclamation-triangle';
+        else if (type === 'error') icon = 'fa-circle-xmark';
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.id = id || 'toast-' + Date.now();
+
+		toast.innerHTML = `
+			<i class="fa-solid ${icon} text-2xl flex-shrink-0 mt-0.5"></i>
+			<div class="toast-content flex-1 min-w-0">
+				${title ? `<div class="toast-title">${title}</div>` : ''}
+				<div class="toast-message">${message}</div>
+			</div>
+			<button class="text-xl leading-none self-start mt-0.5" aria-label="Close">
+				<i class="fa-solid fa-xmark"></i>
+			</button>
+		`;
+
+        container.appendChild(toast);
+
+        requestAnimationFrame(() => toast.classList.add('show'));
+
+        const closeBtn = toast.querySelector('button');
+        closeBtn.addEventListener('click', () => dismissToast(toast));
+
+        toast.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) dismissToast(toast);
+        });
+
+        if (!persistent && duration > 0) {
+            setTimeout(() => dismissToast(toast), duration);
+        }
+    }
+
+    function dismissToast(toast) {
+        if (!toast || !toast.parentNode) return;
+        toast.style.transition = 'opacity 0.95s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.95s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+
+        toast.addEventListener('transitionend', () => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, { once: true });
+    }
+
+    socket.on('toast', function(data) {
+        createToast(data);
+    });
+
+<!-- ==================== SONOS SOCKET LISTENERS ==================== -->
+socket.on('sonos_speakers', function(data) {
+    if (data.current) {
+        currentActiveSonosSpeaker = data.current;
+    }
+});
+
+socket.on('sonos_update', function(state) {
+    if (!state) return;
+    
+    // Only process updates for the currently active speaker on the main dashboard
+    // Allow through states without speaker (e.g. no devices) so we can disable volume etc.
+    if (currentActiveSonosSpeaker && state.speaker && state.speaker !== currentActiveSonosSpeaker) {
+        return;
+    }
+
+    updateSonosUI(state);
+});
+
+let currentActiveSonosSpeaker = null;
+let currentSonosState = {};
+let progressInterval = null;
+
+// Format seconds → MM:SS
+function formatTime(seconds) {
+  if (!seconds || isNaN(seconds)) return "0:00";
+  const min = Math.floor(seconds / 60);
+  const sec = Math.floor(seconds % 60);
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+function updateSonosUI(state) {
+    currentSonosState = state || {};
+
+    const hasSpeaker = !!(state && state.speaker);
+    const isEnabled = !!(state && state.enabled !== false);
+
+    if (!hasSpeaker || !isEnabled) {
+        // No devices or disabled: show disabled volume, leave other fields at initial '—' / 'Nothing playing' etc.
+        const volSlider = document.getElementById('sonos-volume-slider');
+        const volValue = document.getElementById('sonos-volume-value');
+        if (volSlider) {
+            volSlider.disabled = true;
+            volSlider.value = 0;
+        }
+        if (volValue) volValue.textContent = '—';
+        return;
+    }
+    
+  const hasAlbumArt = !!(state && state.album_art && state.album_art.trim() !== '');
+
+  // Album Art + Overlay
+  const artEl = document.getElementById('sonos-album-art');
+  const overlayEl = document.getElementById('sonos-overlay');
+  if (artEl) {
+    artEl.style.backgroundImage = hasAlbumArt 
+      ? `url('${state.album_art}')` 
+      : 'none';
+    artEl.style.backgroundColor = hasAlbumArt ? '' : '#1f2937';
+  }
+  if (overlayEl) {
+    overlayEl.style.opacity = hasAlbumArt ? '1' : '0';
+  }
+
+  document.getElementById('sonos-speaker-name').textContent = state.speaker || '—';
+
+  // Track info
+  document.getElementById('sonos-track').textContent = state.track || 'Nothing playing';
+  document.getElementById('sonos-artist').textContent = state.artist || (state.album || '\u00A0');
+
+  // Play/Pause icon
+  const playIcon = document.getElementById('sonos-play-icon');
+  if (playIcon) {
+    playIcon.classList.toggle('fa-play', !state.is_playing);
+    playIcon.classList.toggle('fa-pause', !!state.is_playing);
+  }
+
+  // Volume
+  const volSlider = document.getElementById('sonos-volume-slider');
+  const volValue = document.getElementById('sonos-volume-value');
+  if (volSlider) {
+    if (state.volume !== undefined && state.volume !== null) {
+      volSlider.disabled = false;
+      volSlider.value = state.volume;
+      if (volValue) volValue.textContent = `${state.volume}%`;
+    } else {
+      volSlider.disabled = true;
+      volSlider.value = 0;
+      if (volValue) volValue.textContent = '—';
+    }
+  }
+
+  // Mute
+  const muteIcon = document.getElementById('sonos-mute-icon');
+  if (muteIcon) {
+    muteIcon.classList.toggle('fa-volume-mute', !!state.mute);
+    muteIcon.classList.toggle('fa-volume-high', !state.mute);
+  }
+
+  // Progress Bar
+  updateProgressBar(state);
+}
+
+function updateProgressBar(state) {
+  const progressBar = document.getElementById('sonos-progress-bar');
+  const elapsedEl = document.getElementById('sonos-time-elapsed');
+  const remainingEl = document.getElementById('sonos-time-remaining');
+
+  if (!progressBar) return;
+
+  const position = state.position || 0;     // seconds elapsed
+  const duration = state.duration || 0;     // total seconds
+
+  if (duration <= 0) {
+    progressBar.style.width = '0%';
+    elapsedEl.textContent = '0:00';
+    remainingEl.textContent = '-0:00';
+    return;
+  }
+
+  const percent = Math.min(100, Math.max(0, (position / duration) * 100));
+  progressBar.style.width = `${percent}%`;
+
+  elapsedEl.textContent = formatTime(position);
+  remainingEl.textContent = `-${formatTime(duration - position)}`;
+}
+
+// Optimistic live progress
+function startProgressUpdater() {
+  if (progressInterval) clearInterval(progressInterval);
+  
+  progressInterval = setInterval(() => {
+    if (currentSonosState.is_playing && currentSonosState.duration) {
+      currentSonosState.position = (currentSonosState.position || 0) + 1;
+      if (currentSonosState.position > currentSonosState.duration) {
+        currentSonosState.position = currentSonosState.duration;
+      }
+      updateProgressBar(currentSonosState);
+    }
+  }, 1000);
+}
+
+function sonosVolumeChange(volume) {
+    const volValue = document.getElementById('sonos-volume-value');
+    if (volValue) volValue.textContent = `${volume}%`;
+    
+    socket.emit('sonos_command', { 
+        command: 'volume', 
+        value: parseInt(volume) 
+    });
+}
+
+function requestSonosState() {
+    if (socket.connected) {
+        socket.emit('sonos_request_state');
+    } else {
+        setTimeout(requestSonosState, 300);
+    }
+}
+
+// ====================== SONOS CONTROLS ======================
+function sonosCommand(command) {
+    if (!socket.connected) {
+        console.warn("Socket not connected");
+        return;
+    }
+
+    socket.emit('sonos_command', { command: command });
+    
+    // Optimistic UI feedback
+    if (command === 'playpause') {
+        const playIcon = document.getElementById('sonos-play-icon');
+        if (playIcon) {
+            const isPlaying = playIcon.classList.contains('fa-pause');
+            playIcon.classList.toggle('fa-play', isPlaying);
+            playIcon.classList.toggle('fa-pause', !isPlaying);
+        }
+    }
+}
+
+function toggleSonosMute() {
+    const muteBtn = document.getElementById('sonos-mute-btn');
+    if (!muteBtn) return;
+    
+    socket.emit('sonos_command', { command: 'mute' });
+    
+    // Optimistic toggle
+    const icon = document.getElementById('sonos-mute-icon');
+    if (icon) {
+        const isMuted = icon.classList.contains('fa-volume-mute');
+        icon.classList.toggle('fa-volume-mute', !isMuted);
+        icon.classList.toggle('fa-volume-high', isMuted);
+    }
+}
+
+// Progress bar click seeking
+document.getElementById('sonos-progress-container').addEventListener('click', function(e) {
+    const rect = this.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    
+    socket.emit('sonos_command', { 
+        command: 'seek', 
+        value: percent 
+    });
+});
+
+// ====================== FULLSCREEN TOGGLE ======================
+// ==================== VICTRON / POWER TILE (Battery + Solar) ====================
+function formatTTG(mins) {
+  if (mins === null || mins === undefined || mins <= 0) return '—';
+  if (mins >= 65000) return '∞';           // Victron "infinite / charging" sentinel
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+  return `${m}m`;
+}
+
+function updatePowerTile(data) {
+  if (!data) return;
+  const tile = document.getElementById('power-tile');
+  if (!tile) return;
+
+  const isEnabled = data.enabled !== false;
+  const isStale = !!data.stale || !isEnabled;
+
+  tile.classList.toggle('stale', isStale);
+
+  // SoC gauge + big percentage (with % unit)
+  const soc = (data.soc != null) ? Math.max(0, Math.min(100, Math.round(data.soc))) : null;
+  const socEl = document.getElementById('soc-percent');
+  const progress = document.getElementById('soc-progress');
+  if (socEl) socEl.textContent = (soc != null) ? soc + '%' : '—';
+  if (progress) {
+    const circ = 245.0; // 2 * PI * 39 (for 92px gauge, r=39)
+    const offset = (soc != null) ? circ * (1 - (soc / 100)) : circ;
+    progress.setAttribute('stroke-dashoffset', offset.toFixed(1));
+    progress.setAttribute('stroke', isStale ? 'rgba(163,163,172,0.55)' : 'var(--accent-color)');
+  }
+
+  // Voltage
+  const vEl = document.getElementById('bat-voltage');
+  if (vEl) {
+    if (data.voltage != null) {
+      vEl.textContent = `${parseFloat(data.voltage).toFixed(1)}V`;
+    } else {
+      vEl.textContent = '—';
+    }
+  }
+
+  // Time-to-go
+  const ttgEl = document.getElementById('bat-ttg');
+  if (ttgEl) ttgEl.textContent = formatTTG(data.time_to_go_mins);
+
+  // Consumed Ah (show sign, 1 decimal)
+  const consEl = document.getElementById('bat-consumed');
+  if (consEl) {
+    if (data.consumed_ah != null) {
+      const sign = data.consumed_ah > 0 ? '+' : '';
+      consEl.textContent = `${sign}${parseFloat(data.consumed_ah).toFixed(1)}Ah`;
+    } else {
+      consEl.textContent = '—';
+    }
+  }
+
+  // Solar current (the "current generated" value) — prefer solar_current_a, fall back gracefully
+  const solEl = document.getElementById('sol-current');
+  if (solEl) {
+    const a = (data.solar_current_a != null) ? data.solar_current_a : data.current_a;
+    if (a != null) {
+      solEl.textContent = `${parseFloat(a).toFixed(1)}A`;
+    } else {
+      solEl.textContent = '—';
+    }
+  }
+
+  // Total generated today (kWh from MPPT yield_today)
+  const todayEl = document.getElementById('sol-today');
+  if (todayEl) {
+    if (data.yield_today_kwh != null) {
+      todayEl.textContent = `${parseFloat(data.yield_today_kwh).toFixed(2)} kWh`;
+    } else {
+      todayEl.textContent = '—';
+    }
+  }
+
+  // Charge state (small, bottom right)
+  const csEl = document.getElementById('charge-state');
+  if (csEl) {
+    csEl.textContent = (data.charge_state && isEnabled) ? data.charge_state : (isEnabled ? '' : 'disabled');
+  }
+}
+
+function toggleFullscreen() {
+  const icon = document.getElementById('fullscreen-icon');
+  
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(() => {
+      icon.classList.remove('fa-expand');
+      icon.classList.add('fa-compress');
+    }).catch(err => console.warn('Fullscreen failed:', err));
+  } else {
+    document.exitFullscreen().then(() => {
+      icon.classList.remove('fa-compress');
+      icon.classList.add('fa-expand');
+    });
+  }
+}
+
+// Optional: Sync icon if user exits fullscreen with ESC key
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('fullscreen-icon');
+  if (icon) {
+    if (document.fullscreenElement) {
+      icon.classList.remove('fa-expand');
+      icon.classList.add('fa-compress');
+    } else {
+      icon.classList.remove('fa-compress');
+      icon.classList.add('fa-expand');
+    }
+  }
+});
+	
+</script>
+</body>
+</html>

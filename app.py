@@ -8,9 +8,6 @@ import os
 import logging
 import sys
 import json
-import psutil
-import platform
-import socket
 import subprocess
 from datetime import datetime
 
@@ -146,29 +143,81 @@ _PING_CACHE_TTL = 35
 
 
 # ====================== NETWORK HELPERS ======================
+def _format_uptime(delta):
+    """Convert a timedelta into a short human string like '14d 3h' or '2h 17m'."""
+    if not delta:
+        return None
+    total_seconds = int(delta.total_seconds())
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    minutes = (total_seconds % 3600) // 60
+    if days > 0:
+        return f"{days}d {hours}h"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 def build_network_status():
+    """Assemble the payload consumed by the Network tile."""
     payload = {
         "internet": {
             "connected": False,
             "friendly_name": "No Internet",
             "rx_kbps": 0.0,
             "tx_kbps": 0.0,
+            "ping_ms": None,
+            "ping_status": "unknown",
             "signal_quality": None,
             "link_speed_mbps": None,
         },
-        "components": {},
+        "right": {
+            "core_temp_c": None,
+            "uptime": None,
+            "dhcp_clients": 0,
+        },
+        "timestamp": None,
     }
+
     try:
-        ping_ms, status = _get_cached_ping()
-        payload["internet"]["connected"] = status in ("good", "slow")
-        payload["internet"]["friendly_name"] = "Internet" if payload["internet"]["connected"] else "No Internet"
-        payload["internet"]["ping_ms"] = ping_ms
-        payload["internet"]["ping_status"] = status
+        net = system_manager.get_network_status()
+        inet = net.get("internet", {})
+        payload["internet"].update({
+            "connected": inet.get("connected", False),
+            "friendly_name": inet.get("friendly_name", "No Internet"),
+            "rx_kbps": inet.get("rx_kbps", 0.0),
+            "tx_kbps": inet.get("tx_kbps", 0.0),
+            "signal_quality": inet.get("signal_quality"),
+            "link_speed_mbps": inet.get("link_speed_mbps"),
+        })
+        payload["timestamp"] = net.get("last_updated")
+    except Exception as e:
+        logger.debug(f"build_network_status net error: {e}")
+
+    try:
+        payload["right"]["core_temp_c"] = system_manager._get_cpu_temp()
     except Exception:
         pass
 
-    payload["components"]["arduino"] = {"online": runtime.arduino.is_connected()}
-    payload["components"]["gps"] = {"online": bool(gps and gps.serial)}
+    try:
+        payload["right"]["dhcp_clients"] = len(system_manager.dhcp_clients_cache)
+    except Exception:
+        pass
+
+    try:
+        start_time = getattr(app, '_start_time', None)
+        if start_time:
+            payload["right"]["uptime"] = _format_uptime(datetime.now() - start_time)
+    except Exception:
+        pass
+
+    try:
+        ping_ms, ping_status = _get_cached_ping()
+        payload["internet"]["ping_ms"] = ping_ms
+        payload["internet"]["ping_status"] = ping_status
+    except Exception:
+        pass
+
     return payload
 
 
@@ -238,6 +287,12 @@ def gps_json():
 def reed_json():
     """Diagnostics REST — raw hardware reeds + force overrides."""
     return runtime.get_reed_diag_json()
+
+
+@app.route('/api/explain')
+def explain_json():
+    """Policy decision snapshot: desired vs observed, sources, drift."""
+    return runtime.get_explain_json()
 
 
 @app.route('/reeds/resync', methods=['POST'])
@@ -510,10 +565,10 @@ def handle_sonos_request_state():
 
 @socketio.on('get_victron_state')
 def handle_get_victron_state():
-    if victron and getattr(victron, 'enabled', False):
+    if victron:
         emit('victron_update', victron.get_state())
     else:
-        emit('victron_update', {'enabled': False})
+        emit('victron_update', {'stale': True})
 
 
 @socketio.on('get_network_status')
@@ -582,6 +637,7 @@ def cleanup():
 if __name__ == "__main__":
     logger.info("✅ System starting (desired-state engine)...")
 
+    app._start_time = datetime.now()
     runtime.start_hardware()
 
     gps = GPSModule(config, socketio)
@@ -595,6 +651,11 @@ if __name__ == "__main__":
 
     gps.init_gps()
     gps.init_geolocator()
+
+    # Phase before first reconcile — avoids guessing Evening on open reeds at boot
+    runtime.bootstrap_phase()
+    runtime.finish_startup()
+
     sensor_manager.start()
     phase_manager.start()
 
@@ -618,9 +679,8 @@ if __name__ == "__main__":
     try:
         from modules.victron import VictronManager
         victron = VictronManager(socketio, config, phase_manager=phase_manager)
-        if victron.enabled:
-            victron.start()
-            phase_manager.register_night_listener(victron.reset_daily_generation)
+        victron.start()
+        phase_manager.register_night_listener(victron.reset_daily_generation)
     except Exception as e:
         logger.error(f"Victron init failed: {e}")
         victron = None

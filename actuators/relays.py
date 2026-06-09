@@ -12,7 +12,9 @@ class RelayActuator:
         self._names = relay_names
         self._observed: Dict[str, bool] = {n: False for n in relay_names}
 
-    def set_relay(self, name: str, on: bool):
+    def set_relay(self, name: str, on: bool, *, source: str = "", trigger: str = ""):
+        from engine.explain import format_relay_command
+
         device = self._gpio.get_relay(name)
         if not device:
             return
@@ -22,7 +24,11 @@ class RelayActuator:
             else:
                 device.off()
             self._observed[name] = on
-            logger.info(f"💡 {name} turned {'ON' if on else 'OFF'}")
+            logger.info(
+                format_relay_command(
+                    name, on, source or "hardware_default", trigger
+                )
+            )
         except Exception as e:
             logger.error(f"Relay {name} failed: {e}")
 

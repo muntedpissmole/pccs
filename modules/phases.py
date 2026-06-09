@@ -32,7 +32,6 @@ class PhaseManager:
         self.config = config
         self.gps = gps_module
         self.socketio = socketio
-        self.reed_manager = None
         self.on_phase_change = None  # optional callback(phase, forced_phase, invalidate)
         self.dark_mode_config = dark_mode_config
         
@@ -84,6 +83,26 @@ class PhaseManager:
 
         logger.info("🌗 PhaseManager initialized")
         logger.info(f"🌙 Night phase starts at {self.night_start_hour}:00")
+
+    def bootstrap_initial_phase(self, use_fallback: bool = False) -> str:
+        """Calculate phase at startup without reconcile callbacks (world sync is separate)."""
+        self._calculate_and_cache_times()
+        if self.forced_phase is not None:
+            new_phase = self.forced_phase
+        else:
+            new_phase = self._calculate_phase(use_fallback)
+
+        new_phase = str(new_phase).strip().title()
+        if new_phase == "Waiting":
+            new_phase = "Day"
+
+        if self.current_phase != new_phase:
+            logger.info(
+                f"🌗 Initial phase: {self.current_phase or 'unset'} → {new_phase}"
+            )
+        self.current_phase = new_phase
+        self._last_broadcast_phase = new_phase
+        return new_phase
 
     def start(self):
         if self.running:
@@ -438,8 +457,6 @@ class PhaseManager:
                         self.forced_phase,
                         True,
                     )
-                elif self.reed_manager:
-                    self.reed_manager.reapply_all_reed_lights(self)
                 self._last_broadcast_phase = self.current_phase
 
         except Exception as e:

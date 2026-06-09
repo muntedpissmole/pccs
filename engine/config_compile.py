@@ -173,6 +173,12 @@ def compile_config(cfg) -> CompiledConfig:
                 "icon": parts[5] if len(parts) > 5 else "fa-display",
             }
 
+    from .config_validate import validate_compiled_config
+
+    warnings = validate_compiled_config(cfg, out)
+    for w in warnings:
+        logger.warning(f"Config: {w}")
+
     return out
 
 
