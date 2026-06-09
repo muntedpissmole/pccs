@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Use user-local Node when system npm is not installed (common on the Pi).
+export PATH="${HOME}/.local/node/bin:${PATH}"
+cd "$(dirname "$0")"
+exec npm "$@"

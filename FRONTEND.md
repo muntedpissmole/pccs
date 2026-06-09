@@ -6,9 +6,9 @@
 
 ```bash
 cd frontend
-npm install
-npm run build          # Tailwind CSS + dashboard + diag bundles
-npm run watch          # Rebuild JS bundles on source changes
+./run install
+./run run build          # Tailwind CSS + dashboard + diag bundles
+./run run watch          # Rebuild JS bundles on source changes
 ```
 
 Outputs (committed for Pi deploy without Node):
@@ -17,7 +17,41 @@ Outputs (committed for Pi deploy without Node):
 - `static/js/bundle/dashboard.js` — main UI
 - `static/js/bundle/diag.js` — diagnostics page
 
-Requires Node 20+ (`frontend/package.json`). On a machine without system npm, a user-local install under `~/.local/node` works.
+Requires Node 20+ (`frontend/package.json`). On the Pi, Node lives at `~/.local/node/bin` — use the `frontend/run` helper (or add that directory to your `PATH`).
+
+```bash
+# Optional one-time shell fix (then npm/npx work everywhere):
+echo 'export PATH="$HOME/.local/node/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+## E2E smoke tests (Playwright)
+
+**One-time system setup** (Playwright cannot launch Chromium without these libs):
+
+```bash
+cd frontend
+sudo ./scripts/install-playwright-deps.sh
+```
+
+Then:
+
+```bash
+cd frontend
+./run install
+./run exec playwright install chromium   # once per machine
+./run run test:e2e                       # 6 browser tests
+```
+
+**No browser / libs not installed yet?** Run the HTTP-only smoke check:
+
+```bash
+./run run test:smoke
+```
+
+Without `./run`, prefix commands manually: `PATH="$HOME/.local/node/bin:$PATH" npm …`
+
+Tests use a lightweight Node server (`frontend/e2e/server.mjs`) with stub REST APIs and an injected mock Socket.IO client — no Python backend or hardware required. `test:e2e` covers dashboard theme reveal, lighting render/`state_update`, scenes grid, offline overlay, and diag page boot.
 
 ## Module layout (sources)
 
@@ -82,7 +116,7 @@ static/js/
 - [x] Extract `templates/diag.html` the same way (~1,400 lines)
 - [x] CSS: finish theme token cleanup (4 themes still full-override)
 - [x] ES modules + build step for Tailwind purge
-- [ ] Playwright smoke tests for socket-driven UI
+- [x] Playwright smoke tests for socket-driven UI
 
 ## Manual test checklist (after any frontend change)
 
